@@ -70,7 +70,7 @@ class Contact {
   @Column(nullable = false)
   String type;
 
-  @Column(nullable = false)
+  @Column(name = "contact_value", nullable = false)
   String value;
 
   protected Contact() {}
