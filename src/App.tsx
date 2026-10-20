@@ -196,7 +196,7 @@ function Schedule({ role, appointments, apiOnline, onBooking, onPatient, onVisit
       </Box>
       <Box className="toolbar">
         <Box className="date-nav"><IconButton size="small">‹</IconButton><Typography sx={{ fontWeight: 700 }}>20 октября, вторник</Typography><IconButton size="small">›</IconButton></Box>
-        <Stack direction="row" spacing={1} alignItems="center"><Chip size="small" label={apiOnline ? 'API подключён' : 'Демо-режим'} color={apiOnline ? 'success' : 'default'} variant="outlined" /><Button variant="outlined" startIcon={<ScheduleRounded />}>Сегодня</Button><Button variant="contained" startIcon={<AddRounded />} onClick={onBooking}>Новая запись</Button></Stack>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}><Chip size="small" label={apiOnline ? 'API подключён' : 'Демо-режим'} color={apiOnline ? 'success' : 'default'} variant="outlined" /><Button variant="outlined" startIcon={<ScheduleRounded />}>Сегодня</Button><Button variant="contained" startIcon={<AddRounded />} onClick={onBooking}>Новая запись</Button></Stack>
       </Box>
       <Box className="schedule-card">
         <Box className="doctor-heading">
