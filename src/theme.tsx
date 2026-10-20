@@ -68,6 +68,7 @@ export function ClinicThemeProvider({ children }: { children: ReactNode }) {
   )
 }
 
+// oxlint-disable-next-line react/only-export-components
 export function useColorMode() {
   const value = useContext(ColorModeContext)
   if (!value) throw new Error('useColorMode must be used inside ClinicThemeProvider')
