@@ -55,7 +55,9 @@ body { margin: 0; min-width: 320px; background: var(--bg); transition: backgroun
 button, input, textarea { font: inherit; }
 .app-shell { min-height: 100vh; display: flex; background: var(--bg); }
 .desktop-sidebar { width: 258px; flex: 0 0 258px; }
-.sidebar { width: 258px; height: 100vh; position: fixed; padding: 28px 18px 20px; display: flex; flex-direction: column; background: var(--paper); border-right: 1px solid var(--border); }
+.sidebar { width: 258px; height: 100vh; position: fixed; z-index: 30; padding: 28px 18px 20px; display: flex; flex-direction: column; background: var(--paper); border-right: 1px solid var(--border); }
+.sidebar-in-drawer, .MuiDrawer-paper .sidebar { position: relative; z-index: 1; width: 258px; height: 100%; min-height: 100vh; }
+.MuiDrawer-paper { width: 258px; }
 .brand { display: flex; align-items: center; gap: 12px; padding: 0 8px 30px; }
 .brand-mark { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 13px; color: white; background: #176b5b; }
 .brand-name { font-weight: 800 !important; line-height: 1.1 !important; }

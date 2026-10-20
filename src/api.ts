@@ -19,10 +19,27 @@ export type PatientItem = {
 const API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8081/api/v1'
 const headers = { 'Content-Type': 'application/json', 'X-Demo-Role': 'DOCTOR' }
 
+const PETROV_ID = '00000000-0000-0000-0000-000000000201'
+
 const names: Record<string, string> = {
   '00000000-0000-0000-0000-000000000101': 'Анна Михайлова',
   '00000000-0000-0000-0000-000000000102': 'Дмитрий Волков',
   '00000000-0000-0000-0000-000000000103': 'Мария Соколова',
+}
+
+export class ApiError extends Error {
+  readonly status: number
+  readonly code: string
+
+  constructor(message: string, status: number, code: string) {
+    super(message)
+    this.status = status
+    this.code = code
+  }
+}
+
+export function rememberPatient(id: string, name: string) {
+  if (id && name) names[id] = name
 }
 
 export async function loadSchedule(): Promise<ScheduleItem[]> {
@@ -49,7 +66,11 @@ export async function loadPatients(): Promise<PatientItem[]> {
   const response = await fetch(`${API}/patients`, { headers })
   if (!response.ok) throw new Error('patients unavailable')
   const rows = await response.json()
-  return rows.map(toPatient)
+  return rows.map((row: Record<string, unknown>) => {
+    const patient = toPatient(row)
+    rememberPatient(patient.id, patient.name)
+    return patient
+  })
 }
 
 export async function createPatient(input: { fullName: string; birthDate: string; phone: string }): Promise<PatientItem> {
@@ -59,7 +80,9 @@ export async function createPatient(input: { fullName: string; birthDate: string
     body: JSON.stringify({ ...input, consentVersion: 'v1.2', consentBasis: 'SIGNED_FORM' }),
   })
   if (!response.ok) throw new Error('patient create failed')
-  return toPatient(await response.json())
+  const patient = toPatient(await response.json())
+  rememberPatient(patient.id, patient.name)
+  return patient
 }
 
 function toPatient(row: Record<string, unknown>): PatientItem {
@@ -74,19 +97,42 @@ function toPatient(row: Record<string, unknown>): PatientItem {
   }
 }
 
-export async function createDemoBooking() {
+export async function createAppointment(input: {
+  patientId: string
+  patientName: string
+  date: string
+  time: string
+  minutes: number
+  serviceName: string
+}) {
+  rememberPatient(input.patientId, input.patientName)
+  const start = new Date(`${input.date}T${input.time}:00Z`)
+  if (Number.isNaN(start.getTime())) throw new ApiError('Некорректные дата или время', 400, 'INVALID_INTERVAL')
+  const end = new Date(start.getTime() + input.minutes * 60_000)
   const response = await fetch(`${API}/appointments`, {
     method: 'POST',
     headers,
     body: JSON.stringify({
-      patientId: '00000000-0000-0000-0000-000000000103',
-      practitionerId: '00000000-0000-0000-0000-000000000201',
-      startsAt: '2026-10-20T13:00:00Z',
-      endsAt: '2026-10-20T13:30:00Z',
-      serviceName: 'Повторный приём',
+      patientId: input.patientId,
+      practitionerId: PETROV_ID,
+      startsAt: start.toISOString(),
+      endsAt: end.toISOString(),
+      serviceName: input.serviceName,
     }),
   })
-  if (!response.ok) throw new Error('booking failed')
+  if (!response.ok) {
+    let message = 'Не удалось создать запись'
+    let code = 'ERROR'
+    try {
+      const body = await response.json()
+      message = body.message || message
+      code = body.code || code
+    } catch {
+      message = response.status === 409 ? 'Интервал врача уже занят' : message
+    }
+    throw new ApiError(message, response.status, code)
+  }
+  return response.json()
 }
 
 export async function signDemoVisit(diagnosis: string, recommendations: string) {

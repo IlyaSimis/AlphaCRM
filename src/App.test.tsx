@@ -1,10 +1,18 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { ClinicThemeProvider } from './theme'
 
 const renderApp = () => render(<ClinicThemeProvider><App /></ClinicThemeProvider>)
+
+function jsonResponse(body: unknown, status = 200) {
+  return { ok: status >= 200 && status < 300, status, json: async () => body }
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 beforeEach(() => {
   localStorage.clear()
@@ -22,16 +30,77 @@ beforeEach(() => {
 })
 
 describe('основные сценарии', () => {
+  it('открывает список пациентов и карточку выбранного человека', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
+    const user = userEvent.setup()
+    renderApp()
+    await user.click(screen.getByRole('button', { name: 'Пациенты' }))
+    expect(screen.getByRole('heading', { name: 'Поиск пациента' })).toBeInTheDocument()
+    await user.click(screen.getByText('Дмитрий Волков'))
+    expect(screen.getByRole('heading', { name: 'Дмитрий Волков' })).toBeInTheDocument()
+    expect(screen.getByText('+7 903 782-44-16')).toBeInTheDocument()
+  })
+
   it('создаёт запись из расписания', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
     const user = userEvent.setup()
     renderApp()
     await user.click(screen.getByRole('button', { name: /новая запись/i }))
     expect(screen.getByRole('dialog')).toHaveTextContent('Новая запись')
+    await waitFor(() => expect(screen.getByLabelText('Время')).toHaveValue('13:00'))
+    fireEvent.change(screen.getByLabelText('Время'), { target: { value: '15:45' } })
     await user.click(screen.getByRole('button', { name: /создать запись/i }))
+    expect(await screen.findByText('15:45')).toBeInTheDocument()
+    expect(screen.getByText('Демо-режим: запись видна только до обновления страницы')).toBeInTheDocument()
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 
+  it('оставляет форму открытой, если выбранное время уже занято', async () => {
+    const anna = {
+      id: '00000000-0000-0000-0000-000000000101',
+      fullName: 'Анна Михайлова',
+      birthDate: '1991-05-14',
+      contacts: [{ type: 'PHONE', value: '+79160000000' }],
+      consents: [{ revokedAt: null }],
+    }
+    let appointments: Array<Record<string, string>> = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? 'GET'
+      if (String(url).includes('/patients')) return jsonResponse([anna])
+      if (String(url).includes('/appointments') && method === 'POST') {
+        const body = JSON.parse(String(init?.body))
+        if (appointments.some((item) => item.startsAt === body.startsAt)) {
+          return jsonResponse({ code: 'SLOT_ALREADY_BOOKED', message: 'Интервал врача уже занят' }, 409)
+        }
+        const created = { id: 'appt-1', ...body, status: 'BOOKED', version: 0 }
+        appointments = [...appointments, created]
+        return jsonResponse(created, 201)
+      }
+      if (String(url).includes('/appointments')) return jsonResponse(appointments)
+      return jsonResponse({}, 404)
+    }))
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByText('API подключён')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /новая запись/i }))
+    await waitFor(() => expect(screen.getByLabelText('Время')).toHaveValue('13:00'))
+    fireEvent.change(screen.getByLabelText('Время'), { target: { value: '16:10' } })
+    await user.click(screen.getByRole('button', { name: /создать запись/i }))
+    expect(await screen.findByText('16:10')).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: /новая запись/i }))
+    await waitFor(() => expect(screen.getByLabelText('Время')).toHaveValue('13:00'))
+    fireEvent.change(screen.getByLabelText('Время'), { target: { value: '16:10' } })
+    expect(screen.getByLabelText('Время')).toHaveValue('16:10')
+    await user.click(screen.getByRole('button', { name: /создать запись/i }))
+    expect(await screen.findByText('Интервал врача уже занят')).toBeInTheDocument()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(screen.getAllByText('16:10')).toHaveLength(1)
+  })
+
   it('добавляет пациента в список', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
     const user = userEvent.setup()
     renderApp()
     await user.click(screen.getByRole('button', { name: 'Пациенты' }))
