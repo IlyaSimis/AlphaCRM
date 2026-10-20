@@ -31,6 +31,17 @@ describe('основные сценарии', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 
+  it('добавляет пациента в список', async () => {
+    const user = userEvent.setup()
+    renderApp()
+    await user.click(screen.getByRole('button', { name: 'Пациенты' }))
+    await user.click(screen.getByRole('button', { name: /новый пациент/i }))
+    await user.clear(screen.getByLabelText('ФИО'))
+    await user.type(screen.getByLabelText('ФИО'), 'Ирина Белова')
+    await user.click(screen.getByRole('button', { name: /сохранить пациента/i }))
+    expect(await screen.findByText('Ирина Белова')).toBeInTheDocument()
+  })
+
   it('скрывает клинические данные от регистратора', async () => {
     const user = userEvent.setup()
     renderApp()

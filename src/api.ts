@@ -49,17 +49,29 @@ export async function loadPatients(): Promise<PatientItem[]> {
   const response = await fetch(`${API}/patients`, { headers })
   if (!response.ok) throw new Error('patients unavailable')
   const rows = await response.json()
-  return rows.map((row: Record<string, unknown>) => {
-    const contacts = row.contacts as Array<{ type: string; value: string }>
-    const consents = row.consents as Array<{ revokedAt?: string }>
-    return {
-      id: row.id as string,
-      name: row.fullName as string,
-      birth: formatDate(row.birthDate as string),
-      phone: contacts.find((contact) => contact.type === 'PHONE')?.value ?? '—',
-      consent: consents.some((consent) => !consent.revokedAt) ? 'Действует' : 'Требует обновления',
-    }
+  return rows.map(toPatient)
+}
+
+export async function createPatient(input: { fullName: string; birthDate: string; phone: string }): Promise<PatientItem> {
+  const response = await fetch(`${API}/patients`, {
+    method: 'POST',
+    headers: { ...headers, 'X-Demo-Role': 'REGISTRAR' },
+    body: JSON.stringify({ ...input, consentVersion: 'v1.2', consentBasis: 'SIGNED_FORM' }),
   })
+  if (!response.ok) throw new Error('patient create failed')
+  return toPatient(await response.json())
+}
+
+function toPatient(row: Record<string, unknown>): PatientItem {
+  const contacts = row.contacts as Array<{ type: string; value: string }>
+  const consents = row.consents as Array<{ revokedAt?: string }>
+  return {
+    id: row.id as string,
+    name: row.fullName as string,
+    birth: formatDate(row.birthDate as string),
+    phone: contacts.find((contact) => contact.type === 'PHONE')?.value ?? '—',
+    consent: consents.some((consent) => !consent.revokedAt) ? 'Действует' : 'Требует обновления',
+  }
 }
 
 export async function createDemoBooking() {

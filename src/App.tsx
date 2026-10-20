@@ -43,6 +43,7 @@ import {
 } from '@mui/material'
 import {
   createDemoBooking,
+  createPatient,
   loadPatients,
   loadSchedule,
   signDemoVisit,
@@ -75,6 +76,8 @@ function App() {
   const [query, setQuery] = useState('')
   const [drawer, setDrawer] = useState(false)
   const [booking, setBooking] = useState(false)
+  const [patientDialog, setPatientDialog] = useState(false)
+  const [notice, setNotice] = useState('')
   const [saved, setSaved] = useState(false)
   const [signed, setSigned] = useState(false)
   const [signDialog, setSignDialog] = useState(false)
@@ -154,9 +157,9 @@ function App() {
         </Box>
         <Box className="content">
           {page === 'schedule' && <Schedule role={role} appointments={scheduleItems} apiOnline={apiOnline} onBooking={() => setBooking(true)} onPatient={() => navigate('patient')} onVisit={() => navigate('visit')} />}
-          {page === 'patients' && <Patients query={query} setQuery={setQuery} patients={visiblePatients} onPatient={() => navigate('patient')} />}
+          {page === 'patients' && <Patients query={query} setQuery={setQuery} patients={visiblePatients} onPatient={() => navigate('patient')} onCreate={() => setPatientDialog(true)} />}
           {page === 'patient' && <PatientCard role={role} onBack={() => navigate('patients')} onVisit={() => navigate('visit')} />}
-          {page === 'visit' && <Visit signed={signed} diagnosis={diagnosis} prescription={prescription} setDiagnosis={setDiagnosis} setPrescription={setPrescription} onSave={() => setSaved(true)} onSign={() => setSignDialog(true)} />}
+          {page === 'visit' && <Visit signed={signed} diagnosis={diagnosis} prescription={prescription} setDiagnosis={setDiagnosis} setPrescription={setPrescription} onSave={() => { setNotice('Изменения сохранены'); setSaved(true) }} onSign={() => setSignDialog(true)} />}
         </Box>
       </Box>
 
@@ -170,6 +173,7 @@ function App() {
           }
         }
         setBooking(false)
+        setNotice('Изменения сохранены')
         setSaved(true)
       }} />
       <Dialog open={signDialog} onClose={() => setSignDialog(false)} maxWidth="sm" fullWidth>
@@ -188,10 +192,29 @@ function App() {
           }
           setSigned(true)
           setSignDialog(false)
+          setNotice('Документ подписан и заблокирован')
           setSaved(true)
         }}>Подписать и заблокировать</Button></DialogActions>
       </Dialog>
-      <Snackbar open={saved} autoHideDuration={2500} onClose={() => setSaved(false)} message={signed ? 'Документ подписан и заблокирован' : 'Изменения сохранены'} />
+      <PatientDialog open={patientDialog} onClose={() => setPatientDialog(false)} onSave={async (input) => {
+        if (apiOnline) {
+          try {
+            const created = await createPatient(input)
+            setPatientItems((items) => [created, ...items])
+            setNotice('Пациент сохранён')
+          } catch {
+            setApiOnline(false)
+            setPatientItems((items) => [{ id: crypto.randomUUID(), name: input.fullName, birth: input.birthDate.split('-').reverse().join('.'), phone: input.phone, consent: 'Действует' }, ...items])
+            setNotice('Сервер недоступен: пациент виден только до обновления страницы')
+          }
+        } else {
+          setPatientItems((items) => [{ id: crypto.randomUUID(), name: input.fullName, birth: input.birthDate.split('-').reverse().join('.'), phone: input.phone, consent: 'Действует' }, ...items])
+          setNotice('Демо-режим: пациент виден только до обновления страницы')
+        }
+        setPatientDialog(false)
+        setSaved(true)
+      }} />
+      <Snackbar open={saved} autoHideDuration={2500} onClose={() => setSaved(false)} message={notice} />
     </Box>
   )
 }
@@ -237,10 +260,10 @@ function Metric({ value, label, note, accent = false }: { value: string; label: 
   return <Box className={`metric ${accent ? 'accent' : ''}`}><Typography className="metric-value">{value}</Typography><Box><Typography sx={{ fontWeight: 700 }}>{label}</Typography><Typography sx={{ fontSize: 12, color: 'text.secondary' }}>{note}</Typography></Box></Box>
 }
 
-function Patients({ query, setQuery, patients, onPatient }: { query: string; setQuery: (v: string) => void; patients: Patient[]; onPatient: () => void }) {
+function Patients({ query, setQuery, patients, onPatient, onCreate }: { query: string; setQuery: (v: string) => void; patients: Patient[]; onPatient: () => void; onCreate: () => void }) {
   return (
     <>
-      <Box className="section-intro"><Box><Typography variant="h4" sx={{ fontWeight: 750 }}>Поиск пациента</Typography><Typography sx={{ color: 'text.secondary' }}>По телефону, ФИО или дате рождения</Typography></Box><Button variant="contained" startIcon={<AddRounded />}>Новый пациент</Button></Box>
+      <Box className="section-intro"><Box><Typography variant="h4" sx={{ fontWeight: 750 }}>Поиск пациента</Typography><Typography sx={{ color: 'text.secondary' }}>По телефону, ФИО или дате рождения</Typography></Box><Button variant="contained" startIcon={<AddRounded />} onClick={onCreate}>Новый пациент</Button></Box>
       <TextField fullWidth value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Например, Анна Михайлова или +7 916..." slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchRounded /></InputAdornment> } }} />
       <Box className="data-boundary"><ShieldOutlined /><Box><Typography sx={{ fontWeight: 700 }}>Административное представление</Typography><Typography sx={{ fontSize: 13 }}>Здесь доступны только контакты, согласия и записи. Диагнозы и содержание приёмов не включены в этот экран.</Typography></Box></Box>
       <Box className="patient-results">
@@ -336,6 +359,26 @@ function Visit({ signed, diagnosis, prescription, setDiagnosis, setPrescription,
 function EditIcon() { return <Box component="span" sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: 'currentColor' }} /> }
 function FormSection({ number, title, children }: { number: string; title: string; children: React.ReactNode }) {
   return <Box className="form-section"><Box className="form-section-title"><Typography>{number}</Typography><Typography sx={{ fontWeight: 750 }}>{title}</Typography></Box>{children}</Box>
+}
+
+function PatientDialog({ open, onClose, onSave }: { open: boolean; onClose: () => void; onSave: (input: { fullName: string; birthDate: string; phone: string }) => void }) {
+  const [fullName, setFullName] = useState('Ирина Белова')
+  const [birthDate, setBirthDate] = useState('1994-03-12')
+  const [phone, setPhone] = useState('+7 903 111-22-33')
+  return <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <DialogTitle>Новый пациент</DialogTitle>
+    <DialogContent>
+      <Stack spacing={2} sx={{ mt: 1 }}>
+        <TextField label="ФИО" value={fullName} onChange={(event) => setFullName(event.target.value)} />
+        <TextField label="Дата рождения" type="date" value={birthDate} onChange={(event) => setBirthDate(event.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
+        <TextField label="Телефон" value={phone} onChange={(event) => setPhone(event.target.value)} />
+      </Stack>
+    </DialogContent>
+    <DialogActions>
+      <Button onClick={onClose}>Отмена</Button>
+      <Button variant="contained" disabled={!fullName.trim() || !birthDate || !phone.trim()} onClick={() => onSave({ fullName: fullName.trim(), birthDate, phone: phone.trim() })}>Сохранить пациента</Button>
+    </DialogActions>
+  </Dialog>
 }
 
 function BookingDialog({ open, onClose, onSave }: { open: boolean; onClose: () => void; onSave: () => void }) {
