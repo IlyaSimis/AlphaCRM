@@ -1,10 +1,25 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { ThemeProvider, createTheme } from '@mui/material/styles'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { ClinicThemeProvider } from './theme'
 
-const renderApp = () => render(<ThemeProvider theme={createTheme()}><App /></ThemeProvider>)
+const renderApp = () => render(<ClinicThemeProvider><App /></ClinicThemeProvider>)
+
+beforeEach(() => {
+  localStorage.clear()
+  document.documentElement.removeAttribute('data-theme')
+  window.matchMedia = vi.fn().mockImplementation(() => ({
+    matches: false,
+    media: '',
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }))
+})
 
 describe('основные сценарии', () => {
   it('создаёт запись из расписания', async () => {
@@ -37,5 +52,33 @@ describe('основные сценарии', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(screen.getByText(/документ подписан 20\.10\.2026/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /создать дополнение/i })).toBeInTheDocument()
+  })
+
+  it('переключает тему и сохраняет выбор', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await user.click(screen.getByRole('button', { name: 'Включить тёмную тему' }))
+
+    await waitFor(() => expect(document.documentElement).toHaveAttribute('data-theme', 'dark'))
+    expect(localStorage.getItem('quiet-clinic-color-mode')).toBe('dark')
+    expect(screen.getByRole('button', { name: 'Включить светлую тему' })).toBeInTheDocument()
+  })
+
+  it('использует системную тёмную тему при первом запуске', async () => {
+    window.matchMedia = vi.fn().mockImplementation(() => ({
+      matches: true,
+      media: '(prefers-color-scheme: dark)',
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }))
+
+    renderApp()
+
+    await waitFor(() => expect(document.documentElement).toHaveAttribute('data-theme', 'dark'))
   })
 })

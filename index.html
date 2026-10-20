@@ -1,10 +1,22 @@
 <!doctype html>
-<html lang="en">
+<html lang="ru">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      (() => {
+        const stored = localStorage.getItem('quiet-clinic-color-mode')
+        const mode = stored === 'light' || stored === 'dark'
+          ? stored
+          : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        document.documentElement.dataset.theme = mode
+        document.documentElement.style.colorScheme = mode
+      })()
+    </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>clinic-prototype</title>
+    <meta name="theme-color" content="#0d1514" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f5f7f6" media="(prefers-color-scheme: light)" />
+    <title>Тихая клиника</title>
   </head>
   <body>
     <div id="root"></div>

@@ -8,6 +8,8 @@ import {
   EventNoteRounded,
   HealthAndSafetyRounded,
   LockOutlined,
+  DarkModeRounded,
+  LightModeRounded,
   MenuRounded,
   PeopleAltRounded,
   PersonSearchRounded,
@@ -36,6 +38,7 @@ import {
   Snackbar,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import {
@@ -46,6 +49,7 @@ import {
   type PatientItem,
   type ScheduleItem,
 } from './api'
+import { useColorMode } from './theme'
 
 type Page = 'schedule' | 'patients' | 'patient' | 'visit'
 type Role = 'Регистратор' | 'Врач'
@@ -65,6 +69,7 @@ const demoPatients: Patient[] = [
 ]
 
 function App() {
+  const { mode, toggle } = useColorMode()
   const [page, setPage] = useState<Page>('schedule')
   const [role, setRole] = useState<Role>('Врач')
   const [query, setQuery] = useState('')
@@ -116,7 +121,7 @@ function App() {
         <Box><Typography sx={{ fontWeight: 700, fontSize: 13 }}>Данные разделены</Typography><Typography sx={{ fontSize: 12 }}>Доступ к клинической карте — только при участии в лечении</Typography></Box>
       </Box>
       <Box className="profile">
-        <Avatar sx={{ bgcolor: '#d9eee8', color: '#176b5b' }}>ЕС</Avatar>
+        <Avatar sx={{ bgcolor: 'action.selected', color: 'primary.main' }}>ЕС</Avatar>
         <Box sx={{ minWidth: 0, flex: 1 }}><Typography noWrap sx={{ fontWeight: 700, fontSize: 14 }}>Елена Смирнова</Typography><Typography sx={{ color: 'text.secondary', fontSize: 12 }}>{role}</Typography></Box>
       </Box>
     </Box>
@@ -133,6 +138,11 @@ function App() {
           <IconButton className="mobile-menu" onClick={() => setDrawer(true)}><MenuRounded /></IconButton>
           <Box><Typography className="eyebrow">{page === 'visit' ? 'КЛИНИЧЕСКИЙ КОНТУР · ДОСТУП РАЗРЕШЁН' : 'ВТОРНИК, 20 ОКТЯБРЯ'}</Typography><Typography variant="h5" sx={{ fontWeight: 750 }}>{title}</Typography></Box>
           <Box className="role-switch">
+            <Tooltip title={mode === 'light' ? 'Включить тёмную тему' : 'Включить светлую тему'}>
+              <IconButton onClick={toggle} aria-label={mode === 'light' ? 'Включить тёмную тему' : 'Включить светлую тему'}>
+                {mode === 'light' ? <DarkModeRounded /> : <LightModeRounded />}
+              </IconButton>
+            </Tooltip>
             <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>Режим просмотра</Typography>
             <FormControl size="small">
               <Select value={role} onChange={(e) => { setRole(e.target.value as Role); navigate('schedule') }} aria-label="Роль пользователя">
@@ -251,7 +261,7 @@ function PatientCard({ role, onBack, onVisit }: { role: Role; onBack: () => void
     <>
       <Button onClick={onBack} sx={{ mb: 2 }}>← К результатам поиска</Button>
       <Box className="patient-header">
-        <Avatar sx={{ width: 64, height: 64, bgcolor: '#d9eee8', color: '#176b5b', fontSize: 22 }}>АМ</Avatar>
+        <Avatar sx={{ width: 64, height: 64, bgcolor: 'action.selected', color: 'primary.main', fontSize: 22 }}>АМ</Avatar>
         <Box><Typography variant="h4" sx={{ fontWeight: 750 }}>Анна Михайлова</Typography><Typography sx={{ color: 'text.secondary' }}>14 мая 1991 · 35 лет · P-10482</Typography></Box>
         <Chip icon={<CheckCircleRounded />} label="Согласие действует" color="success" variant="outlined" />
       </Box>
