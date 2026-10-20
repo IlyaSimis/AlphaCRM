@@ -75,7 +75,7 @@ button, input, textarea { font: inherit; }
 .topbar { height: 88px; padding: 16px 36px; border-bottom: 1px solid var(--border); background: var(--paper-translucent); display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 5; backdrop-filter: blur(8px); }
 .eyebrow { font-size: 10px !important; font-weight: 800 !important; letter-spacing: .08em !important; color: var(--muted); margin-bottom: 2px !important; }
 .role-switch { display: flex; align-items: center; gap: 12px; }
-.role-switch .MuiSelect-select { min-width: 110px; }
+.role-switch .MuiSelect-select { min-width: 148px; }
 .mobile-menu { display: none !important; }
 .content { max-width: 1240px; margin: 0 auto; padding: 30px 36px 60px; }
 .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
@@ -83,7 +83,8 @@ button, input, textarea { font: inherit; }
 .metric.accent { background: var(--accent-bg); border-color: var(--accent-border); }
 .metric-value { font-size: 30px !important; line-height: 1 !important; font-weight: 800 !important; color: var(--active-text); }
 .toolbar { display: flex; justify-content: space-between; align-items: center; margin: 28px 0 14px; }
-.date-nav { display: flex; align-items: center; gap: 8px; }
+.date-nav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.date-nav .MuiTextField-root { width: 168px; }
 .schedule-card, .panel, .patient-results { background: var(--paper); border: 1px solid var(--border); border-radius: 15px; }
 .doctor-heading { display: flex; align-items: center; gap: 13px; padding: 18px 22px; border-bottom: 1px solid var(--border-soft); }
 .doctor-heading .MuiChip-root { margin-left: auto; }
@@ -91,9 +92,9 @@ button, input, textarea { font: inherit; }
 .appointment { min-height: 74px; display: flex; align-items: center; border-bottom: 1px solid var(--border-soft); gap: 16px; padding: 7px 8px; }
 .time { width: 55px; }
 .status-line { height: 40px; width: 3px; border-radius: 3px; background: #5d8ee7; }
-.status-line.green { background: #3b9c7c; }.status-line.orange { background: #daa64d; }
+.status-line.green { background: #3b9c7c; }.status-line.orange { background: #daa64d; }.status-line.muted { background: var(--label); }
 .appointment-info { flex: 1; cursor: pointer; min-width: 140px; }
-.status-chip.green { background: var(--green-chip-bg); color: var(--green-chip-text); }.status-chip.blue { background: var(--blue-chip-bg); color: var(--blue-chip-text); }.status-chip.orange { background: var(--orange-chip-bg); color: var(--orange-chip-text); }
+.status-chip.green { background: var(--green-chip-bg); color: var(--green-chip-text); }.status-chip.blue { background: var(--blue-chip-bg); color: var(--blue-chip-text); }.status-chip.orange { background: var(--orange-chip-bg); color: var(--orange-chip-text); }.status-chip.muted { background: var(--hover); color: var(--muted); }
 .free-slot { min-height: 62px; display: grid; grid-template-columns: 55px 1fr auto; align-items: center; gap: 18px; padding: 5px 8px; }
 .free-slot .MuiDivider-root { border-style: dashed; }
 .section-intro { display: flex; justify-content: space-between; align-items: end; margin-bottom: 22px; }
@@ -112,7 +113,7 @@ button, input, textarea { font: inherit; }
 .panel-label { display: block; margin-bottom: 20px !important; }
 .panel-title-row { display: flex; justify-content: space-between; color: var(--muted); }
 .info-row { margin: 15px 0; }
-.next-appointment { display: flex; gap: 12px; background: var(--privacy-bg); border-radius: 10px; padding: 13px; margin-top: 10px; color: var(--privacy-text); }
+.next-appointment { display: flex; align-items: center; gap: 12px; background: var(--privacy-bg); border-radius: 10px; padding: 13px; margin-top: 10px; color: var(--privacy-text); }
 .history-item { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--border-soft); }
 .locked-state { min-height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: var(--muted); gap: 9px; padding: 22px; }
 .locked-state svg { font-size: 40px; color: var(--label); }

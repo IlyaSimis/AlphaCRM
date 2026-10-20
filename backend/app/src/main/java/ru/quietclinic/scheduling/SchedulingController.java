@@ -2,6 +2,7 @@ package ru.quietclinic.scheduling;
 
 import static ru.quietclinic.platform.PlatformConfig.actorId;
 import static ru.quietclinic.platform.PlatformConfig.conflict;
+import static ru.quietclinic.platform.PlatformConfig.notFound;
 import static ru.quietclinic.platform.PlatformConfig.requireRole;
 
 import jakarta.persistence.Column;
@@ -22,6 +23,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -160,22 +162,43 @@ public class SchedulingController {
 
   @GetMapping("/appointments")
   @Transactional(readOnly = true)
-  List<AppointmentView> schedule(@RequestParam LocalDate date) {
-    requireRole("REGISTRAR", "DOCTOR", "NURSE", "CASHIER", "MANAGER");
+  List<AppointmentView> schedule(
+      @RequestParam LocalDate date, @RequestParam(required = false) UUID patientId) {
+    requireRole("ADMINISTRATOR", "DOCTOR", "NURSE", "CASHIER", "MANAGER");
     var from = date.atStartOfDay().toInstant(ZoneOffset.UTC);
     return appointments
         .findByStartsAtGreaterThanEqualAndStartsAtLessThanOrderByStartsAt(
             from, date.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC))
         .stream()
+        .filter(appointment -> patientId == null || appointment.patientId.equals(patientId))
         .map(this::view)
         .toList();
+  }
+
+  @PostMapping("/appointments/{id}/cancel")
+  @Transactional
+  AppointmentView cancel(@PathVariable UUID id) {
+    requireRole("ADMINISTRATOR");
+    var appointment = appointments.findById(id).orElseThrow(() -> notFound("Запись не найдена"));
+    if ("CANCELLED".equals(appointment.status)) {
+      throw conflict("ALREADY_CANCELLED", "Запись уже отменена");
+    }
+    appointment.status = "CANCELLED";
+    audit.record(
+        actorId(), "APPOINTMENT_CANCELLED", "APPOINTMENT", appointment.id, "ALLOWED", "cancel");
+    outbox.enqueue(
+        "NOTIFICATION",
+        "APPOINTMENT",
+        appointment.id,
+        "{\"template\":\"appointment-cancelled\",\"neutral\":true}");
+    return view(appointment);
   }
 
   @PostMapping("/appointments")
   @ResponseStatus(HttpStatus.CREATED)
   @Transactional
   AppointmentView create(@Valid @RequestBody CreateAppointmentRequest request) {
-    requireRole("REGISTRAR", "DOCTOR");
+    requireRole("ADMINISTRATOR", "DOCTOR");
     if (!request.endsAt().isAfter(request.startsAt())) {
       throw conflict("INVALID_INTERVAL", "Конец записи должен быть позже начала");
     }

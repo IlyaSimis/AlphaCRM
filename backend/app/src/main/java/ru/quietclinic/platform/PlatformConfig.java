@@ -101,6 +101,10 @@ class DomainException extends RuntimeException {
   static DomainException forbidden(String message) {
     return new DomainException("ACCESS_DENIED", message, HttpStatus.FORBIDDEN);
   }
+
+  static DomainException notFound(String message) {
+    return new DomainException("NOT_FOUND", message, HttpStatus.NOT_FOUND);
+  }
 }
 
 @RestControllerAdvice
@@ -149,5 +153,9 @@ public final class PlatformConfig {
 
   public static RuntimeException forbidden(String message) {
     return DomainException.forbidden(message);
+  }
+
+  public static RuntimeException notFound(String message) {
+    return DomainException.notFound(message);
   }
 }

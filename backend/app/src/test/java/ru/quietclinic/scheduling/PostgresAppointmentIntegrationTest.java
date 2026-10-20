@@ -52,14 +52,14 @@ class PostgresAppointmentIntegrationTest {
 
     mvc.perform(
             post("/api/v1/appointments")
-                .header("X-Demo-Role", "REGISTRAR")
+                .header("X-Demo-Role", "ADMINISTRATOR")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(first))
         .andExpect(status().isCreated());
 
     mvc.perform(
             post("/api/v1/appointments")
-                .header("X-Demo-Role", "REGISTRAR")
+                .header("X-Demo-Role", "ADMINISTRATOR")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(overlap))
         .andExpect(status().isConflict())

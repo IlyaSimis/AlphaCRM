@@ -149,7 +149,7 @@ public class PatientsController {
   @GetMapping
   @Transactional(readOnly = true)
   List<PatientView> search(@RequestParam(defaultValue = "") String query) {
-    requireRole("REGISTRAR", "DOCTOR", "NURSE", "CASHIER", "MANAGER");
+    requireRole("ADMINISTRATOR", "DOCTOR", "NURSE", "CASHIER", "MANAGER");
     var result =
         (query.isBlank()
                 ? patients.findAll()
@@ -164,7 +164,7 @@ public class PatientsController {
   @ResponseStatus(HttpStatus.CREATED)
   @Transactional
   PatientView create(@Valid @RequestBody CreatePatientRequest request) {
-    requireRole("REGISTRAR");
+    requireRole("ADMINISTRATOR");
     var patient = new Patient(request.fullName(), request.birthDate());
     patient.contacts.add(new Contact(patient, "PHONE", request.phone()));
     patient.consents.add(new Consent(patient, request.consentVersion(), request.consentBasis()));

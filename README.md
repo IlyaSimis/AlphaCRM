@@ -129,7 +129,7 @@ Dev credentials `quiet_clinic / quiet_clinic` и demo KMS key допустимы
 ## Demo auth
 
 ```bash
-curl -H 'X-Demo-Role: REGISTRAR' \
+curl -H 'X-Demo-Role: ADMINISTRATOR' \
   'http://127.0.0.1:8081/api/v1/patients'
 
 curl -H 'X-Demo-Role: DOCTOR' \
@@ -137,7 +137,7 @@ curl -H 'X-Demo-Role: DOCTOR' \
   'http://127.0.0.1:8081/api/v1/appointments?date=2026-10-20'
 ```
 
-Роли: `REGISTRAR`, `DOCTOR`, `NURSE`, `CASHIER`, `MANAGER`. Клинический доступ дополнительно требует активную `care_relationship`.
+Роли: `ADMINISTRATOR`, `DOCTOR`, `NURSE`, `CASHIER`, `MANAGER`. Клинический доступ дополнительно требует активную `care_relationship`. Отмена записи доступна только роли `ADMINISTRATOR`.
 
 ## Проверки
 

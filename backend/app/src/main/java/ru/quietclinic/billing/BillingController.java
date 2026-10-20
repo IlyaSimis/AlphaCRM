@@ -145,7 +145,7 @@ public class BillingController {
   @ResponseStatus(HttpStatus.CREATED)
   @Transactional
   BillingView createCharge(@Valid @RequestBody ChargeRequest request) {
-    requireRole("CASHIER", "REGISTRAR");
+    requireRole("CASHIER", "ADMINISTRATOR");
     var charge =
         charges.save(
             new Charge(request.appointmentId(), request.amountMinor(), request.currency()));

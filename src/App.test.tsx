@@ -111,15 +111,65 @@ describe('основные сценарии', () => {
     expect(await screen.findByText('Ирина Белова')).toBeInTheDocument()
   })
 
-  it('скрывает клинические данные от регистратора', async () => {
+  it('скрывает клинические данные от администратора', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
     const user = userEvent.setup()
     renderApp()
     await user.click(screen.getByLabelText('Роль пользователя'))
-    await user.click(screen.getByRole('option', { name: 'Регистратор' }))
+    await user.click(screen.getByRole('option', { name: 'Администратор' }))
     await user.click(screen.getByRole('button', { name: 'Пациенты' }))
     await user.click(screen.getByText('Анна Михайлова'))
     expect(screen.getByText('Клинические данные недоступны')).toBeInTheDocument()
+    expect(screen.getByText(/Роль «Администратор» не имеет доступа/)).toBeInTheDocument()
     expect(screen.queryByText(/Тревожно-депрессивная/)).not.toBeInTheDocument()
+  })
+
+  it('переключает день расписания и показывает запись на выбранную дату', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
+    const user = userEvent.setup()
+    renderApp()
+    expect(screen.getByText('Анна Михайлова')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Следующий день' }))
+    expect(screen.getByLabelText('День расписания')).toHaveValue('2026-10-21')
+    expect(screen.queryByText('Анна Михайлова')).not.toBeInTheDocument()
+    expect(screen.getByText('На этот день записей нет')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /новая запись/i }))
+    fireEvent.change(screen.getByLabelText('Дата'), { target: { value: '2026-10-22' } })
+    fireEvent.change(screen.getByLabelText('Время'), { target: { value: '14:20' } })
+    await user.click(screen.getByRole('button', { name: /создать запись/i }))
+    expect(await screen.findByText('14:20')).toBeInTheDocument()
+    expect(screen.getByLabelText('День расписания')).toHaveValue('2026-10-22')
+    expect(screen.queryByText('Дмитрий Волков')).not.toBeInTheDocument()
+  })
+
+  it('даёт выбрать день в карточке пациента отдельно от расписания', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
+    const user = userEvent.setup()
+    renderApp()
+    await user.click(screen.getByRole('button', { name: 'Пациенты' }))
+    await user.click(screen.getByText('Дмитрий Волков'))
+    expect(screen.getByText(/10:10/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Следующий день пациента' }))
+    expect(screen.getByLabelText('День пациента')).toHaveValue('2026-10-21')
+    expect(screen.getByText('На этот день записей нет')).toBeInTheDocument()
+    expect(screen.queryByText(/10:10/)).not.toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('День пациента'), { target: { value: '2026-10-20' } })
+    expect(screen.getByText(/10:10/)).toBeInTheDocument()
+  })
+
+  it('отменяет запись только у администратора', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
+    const user = userEvent.setup()
+    renderApp()
+    expect(screen.queryByRole('button', { name: /отменить запись/i })).not.toBeInTheDocument()
+    await user.click(screen.getByLabelText('Роль пользователя'))
+    await user.click(screen.getByRole('option', { name: 'Администратор' }))
+    await user.click(screen.getByRole('button', { name: 'Отменить запись 10:10 Дмитрий Волков' }))
+    expect(await screen.findByText('Демо-режим: отмена видна только до обновления страницы')).toBeInTheDocument()
+    expect(screen.getByText('Отменена')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Отменить запись 10:10 Дмитрий Волков' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Отменить запись 09:00 Анна Михайлова' })).toBeInTheDocument()
   })
 
   it('подписывает и блокирует врачебный документ', async () => {

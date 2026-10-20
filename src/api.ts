@@ -1,5 +1,6 @@
 export type ScheduleItem = {
   id?: string
+  date: string
   time: string
   duration: string
   name: string
@@ -42,24 +43,29 @@ export function rememberPatient(id: string, name: string) {
   if (id && name) names[id] = name
 }
 
-export async function loadSchedule(): Promise<ScheduleItem[]> {
-  const response = await fetch(`${API}/appointments?date=2026-10-20`, { headers })
+export async function loadSchedule(date: string, patientId?: string): Promise<ScheduleItem[]> {
+  const query = new URLSearchParams({ date })
+  if (patientId) query.set('patientId', patientId)
+  const response = await fetch(`${API}/appointments?${query}`, { headers })
   if (!response.ok) throw new Error('schedule unavailable')
   const rows = await response.json()
-  return rows.map((row: Record<string, string>) => {
-    const start = new Date(row.startsAt)
-    const end = new Date(row.endsAt)
-    const minutes = Math.round((end.getTime() - start.getTime()) / 60000)
-    return {
-      id: row.id,
-      time: start.toISOString().slice(11, 16),
-      duration: `${minutes} мин`,
-      name: names[row.patientId] ?? 'Пациент',
-      type: row.serviceName,
-      status: statusLabel(row.status),
-      tone: row.status === 'ARRIVED' ? 'green' : 'blue',
-    }
-  })
+  return rows.map((row: Record<string, string>) => toScheduleItem(row, date))
+}
+
+function toScheduleItem(row: Record<string, string>, date: string): ScheduleItem {
+  const start = new Date(row.startsAt)
+  const end = new Date(row.endsAt)
+  const minutes = Math.round((end.getTime() - start.getTime()) / 60000)
+  return {
+    id: row.id,
+    date,
+    time: start.toISOString().slice(11, 16),
+    duration: `${minutes} мин`,
+    name: names[row.patientId] ?? 'Пациент',
+    type: row.serviceName,
+    status: statusLabel(row.status),
+    tone: row.status === 'ARRIVED' ? 'green' : row.status === 'CANCELLED' ? 'muted' : row.status === 'BOOKED' ? 'orange' : 'blue',
+  }
 }
 
 export async function loadPatients(): Promise<PatientItem[]> {
@@ -76,7 +82,7 @@ export async function loadPatients(): Promise<PatientItem[]> {
 export async function createPatient(input: { fullName: string; birthDate: string; phone: string }): Promise<PatientItem> {
   const response = await fetch(`${API}/patients`, {
     method: 'POST',
-    headers: { ...headers, 'X-Demo-Role': 'REGISTRAR' },
+    headers: { ...headers, 'X-Demo-Role': 'ADMINISTRATOR' },
     body: JSON.stringify({ ...input, consentVersion: 'v1.2', consentBasis: 'SIGNED_FORM' }),
   })
   if (!response.ok) throw new Error('patient create failed')
@@ -135,6 +141,26 @@ export async function createAppointment(input: {
   return response.json()
 }
 
+export async function cancelAppointment(id: string) {
+  const response = await fetch(`${API}/appointments/${id}/cancel`, {
+    method: 'POST',
+    headers: { ...headers, 'X-Demo-Role': 'ADMINISTRATOR' },
+  })
+  if (!response.ok) {
+    let message = 'Не удалось отменить запись'
+    let code = 'ERROR'
+    try {
+      const body = await response.json()
+      message = body.message || message
+      code = body.code || code
+    } catch {
+      message = response.status === 404 ? 'Запись не найдена' : message
+    }
+    throw new ApiError(message, response.status, code)
+  }
+  return response.json()
+}
+
 export async function signDemoVisit(diagnosis: string, recommendations: string) {
   const encounterResponse = await fetch(`${API}/clinical/encounters`, {
     method: 'POST',
@@ -162,7 +188,7 @@ export async function signDemoVisit(diagnosis: string, recommendations: string) 
 }
 
 function statusLabel(status: string) {
-  return ({ ARRIVED: 'Прибыл', CONFIRMED: 'Подтверждён', BOOKED: 'Ожидает' } as Record<string, string>)[status] ?? status
+  return ({ ARRIVED: 'Прибыл', CONFIRMED: 'Подтверждён', BOOKED: 'Ожидает', CANCELLED: 'Отменена' } as Record<string, string>)[status] ?? status
 }
 
 function formatDate(value: string) {
