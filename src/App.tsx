@@ -14,7 +14,7 @@ import {
   ScheduleRounded,
   SearchRounded,
   ShieldOutlined,
-  Stethoscope,
+  MedicalServicesRounded,
 } from '@mui/icons-material'
 import {
   Alert,
@@ -36,7 +36,6 @@ import {
   Snackbar,
   Stack,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material'
 
@@ -86,18 +85,18 @@ function App() {
         <Box><Typography className="brand-name">Тихая клиника</Typography><Typography className="brand-caption">медицинская система</Typography></Box>
       </Box>
       <Typography className="nav-label">РАБОЧЕЕ ПРОСТРАНСТВО</Typography>
-      <Stack gap={0.7}>
+      <Stack spacing={0.7}>
         <button className={`nav-item ${page === 'schedule' ? 'active' : ''}`} onClick={() => navigate('schedule')}><CalendarMonthRounded />Расписание</button>
         <button className={`nav-item ${page === 'patients' || page === 'patient' ? 'active' : ''}`} onClick={() => navigate('patients')}><PeopleAltRounded />Пациенты</button>
-        {role === 'Врач' && <button className={`nav-item ${page === 'visit' ? 'active' : ''}`} onClick={() => navigate('visit')}><Stethoscope />Мои приёмы</button>}
+        {role === 'Врач' && <button className={`nav-item ${page === 'visit' ? 'active' : ''}`} onClick={() => navigate('visit')}><MedicalServicesRounded />Мои приёмы</button>}
       </Stack>
       <Box className="privacy-note">
         <ShieldOutlined />
-        <Box><Typography fontWeight={700} fontSize={13}>Данные разделены</Typography><Typography fontSize={12}>Доступ к клинической карте — только при участии в лечении</Typography></Box>
+        <Box><Typography sx={{ fontWeight: 700, fontSize: 13 }}>Данные разделены</Typography><Typography sx={{ fontSize: 12 }}>Доступ к клинической карте — только при участии в лечении</Typography></Box>
       </Box>
       <Box className="profile">
         <Avatar sx={{ bgcolor: '#d9eee8', color: '#176b5b' }}>ЕС</Avatar>
-        <Box sx={{ minWidth: 0, flex: 1 }}><Typography fontWeight={700} fontSize={14} noWrap>Елена Смирнова</Typography><Typography color="text.secondary" fontSize={12}>{role}</Typography></Box>
+        <Box sx={{ minWidth: 0, flex: 1 }}><Typography noWrap sx={{ fontWeight: 700, fontSize: 14 }}>Елена Смирнова</Typography><Typography sx={{ color: 'text.secondary', fontSize: 12 }}>{role}</Typography></Box>
       </Box>
     </Box>
   )
@@ -111,9 +110,9 @@ function App() {
       <Box component="main" className="main">
         <Box className="topbar">
           <IconButton className="mobile-menu" onClick={() => setDrawer(true)}><MenuRounded /></IconButton>
-          <Box><Typography className="eyebrow">{page === 'visit' ? 'КЛИНИЧЕСКИЙ КОНТУР · ДОСТУП РАЗРЕШЁН' : 'ВТОРНИК, 20 ОКТЯБРЯ'}</Typography><Typography variant="h5" fontWeight={750}>{title}</Typography></Box>
+          <Box><Typography className="eyebrow">{page === 'visit' ? 'КЛИНИЧЕСКИЙ КОНТУР · ДОСТУП РАЗРЕШЁН' : 'ВТОРНИК, 20 ОКТЯБРЯ'}</Typography><Typography variant="h5" sx={{ fontWeight: 750 }}>{title}</Typography></Box>
           <Box className="role-switch">
-            <Typography fontSize={12} color="text.secondary">Режим просмотра</Typography>
+            <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>Режим просмотра</Typography>
             <FormControl size="small">
               <Select value={role} onChange={(e) => { setRole(e.target.value as Role); navigate('schedule') }} aria-label="Роль пользователя">
                 <MenuItem value="Врач">Врач</MenuItem>
@@ -135,7 +134,7 @@ function App() {
         <DialogTitle>Подписать медицинский документ?</DialogTitle>
         <DialogContent>
           <Alert severity="warning" icon={<LockOutlined />}>После подписания эту версию нельзя изменить или удалить. Исправления оформляются отдельным дополнением.</Alert>
-          <Typography mt={2} fontSize={14} color="text.secondary">Будут сохранены автор, точное время, версия шаблона и контрольный хеш документа.</Typography>
+          <Typography sx={{ mt: 2, fontSize: 14, color: 'text.secondary' }}>Будут сохранены автор, точное время, версия шаблона и контрольный хеш документа.</Typography>
         </DialogContent>
         <DialogActions><Button onClick={() => setSignDialog(false)}>Вернуться</Button><Button variant="contained" onClick={() => { setSigned(true); setSignDialog(false); setSaved(true) }}>Подписать и заблокировать</Button></DialogActions>
       </Dialog>
@@ -153,28 +152,28 @@ function Schedule({ role, onBooking, onPatient, onVisit }: { role: Role; onBooki
         <Metric value="1" label="ожидает оформления" note="приём завершён" accent />
       </Box>
       <Box className="toolbar">
-        <Box className="date-nav"><IconButton size="small">‹</IconButton><Typography fontWeight={700}>20 октября, вторник</Typography><IconButton size="small">›</IconButton></Box>
-        <Stack direction="row" gap={1}><Button variant="outlined" startIcon={<ScheduleRounded />}>Сегодня</Button><Button variant="contained" startIcon={<AddRounded />} onClick={onBooking}>Новая запись</Button></Stack>
+        <Box className="date-nav"><IconButton size="small">‹</IconButton><Typography sx={{ fontWeight: 700 }}>20 октября, вторник</Typography><IconButton size="small">›</IconButton></Box>
+        <Stack direction="row" spacing={1}><Button variant="outlined" startIcon={<ScheduleRounded />}>Сегодня</Button><Button variant="contained" startIcon={<AddRounded />} onClick={onBooking}>Новая запись</Button></Stack>
       </Box>
       <Box className="schedule-card">
         <Box className="doctor-heading">
           <Avatar sx={{ bgcolor: '#244d48' }}>АП</Avatar>
-          <Box><Typography fontWeight={750}>Александр Петров</Typography><Typography fontSize={13} color="text.secondary">Психиатр · кабинет 204</Typography></Box>
+          <Box><Typography sx={{ fontWeight: 750 }}>Александр Петров</Typography><Typography sx={{ fontSize: 13, color: 'text.secondary' }}>Психиатр · кабинет 204</Typography></Box>
           <Chip label="09:00–18:00" size="small" variant="outlined" />
         </Box>
         <Box className="appointment-list">
           {appointments.map((item, index) => (
             <Box className="appointment" key={item.time}>
-              <Box className="time"><Typography fontWeight={750}>{item.time}</Typography><Typography fontSize={12} color="text.secondary">{item.duration}</Typography></Box>
+              <Box className="time"><Typography sx={{ fontWeight: 750 }}>{item.time}</Typography><Typography sx={{ fontSize: 12, color: 'text.secondary' }}>{item.duration}</Typography></Box>
               <Box className={`status-line ${item.tone}`} />
               <Box className="appointment-info" onClick={onPatient} role="button" tabIndex={0}>
-                <Typography fontWeight={700}>{item.name}</Typography><Typography fontSize={13} color="text.secondary">{item.type}</Typography>
+                <Typography sx={{ fontWeight: 700 }}>{item.name}</Typography><Typography sx={{ fontSize: 13, color: 'text.secondary' }}>{item.type}</Typography>
               </Box>
               <Chip label={item.status} size="small" className={`status-chip ${item.tone}`} />
               {role === 'Врач' && index === 0 ? <Button size="small" variant="contained" onClick={onVisit}>Начать приём</Button> : <IconButton size="small" onClick={onPatient}><ChevronRightRounded /></IconButton>}
             </Box>
           ))}
-          <Box className="free-slot"><Typography color="text.secondary">13:00</Typography><Divider /><Button size="small" onClick={onBooking}>+ Записать на свободное время</Button></Box>
+          <Box className="free-slot"><Typography sx={{ color: 'text.secondary' }}>13:00</Typography><Divider /><Button size="small" onClick={onBooking}>+ Записать на свободное время</Button></Box>
         </Box>
       </Box>
     </>
@@ -182,23 +181,23 @@ function Schedule({ role, onBooking, onPatient, onVisit }: { role: Role; onBooki
 }
 
 function Metric({ value, label, note, accent = false }: { value: string; label: string; note: string; accent?: boolean }) {
-  return <Box className={`metric ${accent ? 'accent' : ''}`}><Typography className="metric-value">{value}</Typography><Box><Typography fontWeight={700}>{label}</Typography><Typography fontSize={12} color="text.secondary">{note}</Typography></Box></Box>
+  return <Box className={`metric ${accent ? 'accent' : ''}`}><Typography className="metric-value">{value}</Typography><Box><Typography sx={{ fontWeight: 700 }}>{label}</Typography><Typography sx={{ fontSize: 12, color: 'text.secondary' }}>{note}</Typography></Box></Box>
 }
 
 function Patients({ query, setQuery, patients, onPatient }: { query: string; setQuery: (v: string) => void; patients: Patient[]; onPatient: () => void }) {
   return (
     <>
-      <Box className="section-intro"><Box><Typography variant="h4" fontWeight={750}>Поиск пациента</Typography><Typography color="text.secondary">По телефону, ФИО или дате рождения</Typography></Box><Button variant="contained" startIcon={<AddRounded />}>Новый пациент</Button></Box>
-      <TextField fullWidth value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Например, Анна Михайлова или +7 916..." InputProps={{ startAdornment: <InputAdornment position="start"><SearchRounded /></InputAdornment> }} />
-      <Box className="data-boundary"><ShieldOutlined /><Box><Typography fontWeight={700}>Административное представление</Typography><Typography fontSize={13}>Здесь доступны только контакты, согласия и записи. Диагнозы и содержание приёмов не включены в этот экран.</Typography></Box></Box>
+      <Box className="section-intro"><Box><Typography variant="h4" sx={{ fontWeight: 750 }}>Поиск пациента</Typography><Typography sx={{ color: 'text.secondary' }}>По телефону, ФИО или дате рождения</Typography></Box><Button variant="contained" startIcon={<AddRounded />}>Новый пациент</Button></Box>
+      <TextField fullWidth value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Например, Анна Михайлова или +7 916..." slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchRounded /></InputAdornment> } }} />
+      <Box className="data-boundary"><ShieldOutlined /><Box><Typography sx={{ fontWeight: 700 }}>Административное представление</Typography><Typography sx={{ fontSize: 13 }}>Здесь доступны только контакты, согласия и записи. Диагнозы и содержание приёмов не включены в этот экран.</Typography></Box></Box>
       <Box className="patient-results">
         {patients.length ? patients.map((patient) => <Box className="patient-row" key={patient.id} onClick={onPatient}>
           <Avatar>{patient.name.split(' ').map((part) => part[0]).join('')}</Avatar>
-          <Box className="patient-main"><Typography fontWeight={750}>{patient.name}</Typography><Typography fontSize={13} color="text.secondary">Дата рождения: {patient.birth}</Typography></Box>
-          <Box><Typography fontSize={12} color="text.secondary">Телефон</Typography><Typography fontSize={14}>{patient.phone}</Typography></Box>
+          <Box className="patient-main"><Typography sx={{ fontWeight: 750 }}>{patient.name}</Typography><Typography sx={{ fontSize: 13, color: 'text.secondary' }}>Дата рождения: {patient.birth}</Typography></Box>
+          <Box><Typography sx={{ fontSize: 12, color: 'text.secondary' }}>Телефон</Typography><Typography sx={{ fontSize: 14 }}>{patient.phone}</Typography></Box>
           <Chip label={patient.consent} size="small" color={patient.consent === 'Действует' ? 'success' : 'warning'} variant="outlined" />
           <ChevronRightRounded color="disabled" />
-        </Box>) : <Box className="empty"><PersonSearchRounded /><Typography fontWeight={700}>Пациенты не найдены</Typography><Typography color="text.secondary">Проверьте запрос или создайте новую карточку</Typography></Box>}
+        </Box>) : <Box className="empty"><PersonSearchRounded /><Typography sx={{ fontWeight: 700 }}>Пациенты не найдены</Typography><Typography sx={{ color: 'text.secondary' }}>Проверьте запрос или создайте новую карточку</Typography></Box>}
       </Box>
     </>
   )
@@ -210,7 +209,7 @@ function PatientCard({ role, onBack, onVisit }: { role: Role; onBack: () => void
       <Button onClick={onBack} sx={{ mb: 2 }}>← К результатам поиска</Button>
       <Box className="patient-header">
         <Avatar sx={{ width: 64, height: 64, bgcolor: '#d9eee8', color: '#176b5b', fontSize: 22 }}>АМ</Avatar>
-        <Box><Typography variant="h4" fontWeight={750}>Анна Михайлова</Typography><Typography color="text.secondary">14 мая 1991 · 35 лет · P-10482</Typography></Box>
+        <Box><Typography variant="h4" sx={{ fontWeight: 750 }}>Анна Михайлова</Typography><Typography sx={{ color: 'text.secondary' }}>14 мая 1991 · 35 лет · P-10482</Typography></Box>
         <Chip icon={<CheckCircleRounded />} label="Согласие действует" color="success" variant="outlined" />
       </Box>
       <Box className="patient-columns">
@@ -219,18 +218,18 @@ function PatientCard({ role, onBack, onVisit }: { role: Role; onBack: () => void
           <Info label="Телефон" value="+7 916 245-18-72" />
           <Info label="Электронная почта" value="a.mikhailova@example.ru" />
           <Info label="Предпочтительный канал" value="SMS · нейтральный шаблон" />
-          <Divider /><Typography fontWeight={700} mt={2}>Ближайшая запись</Typography>
-          <Box className="next-appointment"><EventNoteRounded /><Box><Typography fontWeight={700}>Сегодня, 09:00</Typography><Typography fontSize={13}>Александр Петров · первичный приём</Typography></Box></Box>
+          <Divider /><Typography sx={{ fontWeight: 700, mt: 2 }}>Ближайшая запись</Typography>
+          <Box className="next-appointment"><EventNoteRounded /><Box><Typography sx={{ fontWeight: 700 }}>Сегодня, 09:00</Typography><Typography sx={{ fontSize: 13 }}>Александр Петров · первичный приём</Typography></Box></Box>
         </Box>
         <Box className="panel clinical-panel">
           <Box className="panel-title-row"><Typography className="panel-label">КЛИНИЧЕСКИЙ КОНТУР</Typography><LockOutlined fontSize="small" /></Box>
           {role === 'Врач' ? <>
             <Alert severity="success">Доступ разрешён: вы назначены на сегодняшний визит.</Alert>
-            <Typography fontWeight={700} mt={2}>История документов</Typography>
-            <Box className="history-item"><Box><Typography fontWeight={650}>Первичный осмотр</Typography><Typography fontSize={13} color="text.secondary">20 октября 2026 · черновик</Typography></Box><Button size="small" onClick={onVisit}>Открыть</Button></Box>
-            <Box className="history-item"><Box><Typography fontWeight={650}>Консультация</Typography><Typography fontSize={13} color="text.secondary">18 сентября 2026 · подписано</Typography></Box><Chip size="small" icon={<LockOutlined />} label="Заблокирован" /></Box>
+            <Typography sx={{ fontWeight: 700, mt: 2 }}>История документов</Typography>
+            <Box className="history-item"><Box><Typography sx={{ fontWeight: 650 }}>Первичный осмотр</Typography><Typography sx={{ fontSize: 13, color: 'text.secondary' }}>20 октября 2026 · черновик</Typography></Box><Button size="small" onClick={onVisit}>Открыть</Button></Box>
+            <Box className="history-item"><Box><Typography sx={{ fontWeight: 650 }}>Консультация</Typography><Typography sx={{ fontSize: 13, color: 'text.secondary' }}>18 сентября 2026 · подписано</Typography></Box><Chip size="small" icon={<LockOutlined />} label="Заблокирован" /></Box>
           </> : <>
-            <Box className="locked-state"><LockOutlined /><Typography fontWeight={750}>Клинические данные недоступны</Typography><Typography fontSize={14}>Роль «Регистратор» не имеет доступа к жалобам, диагнозам, назначениям и медицинским документам.</Typography></Box>
+            <Box className="locked-state"><LockOutlined /><Typography sx={{ fontWeight: 750 }}>Клинические данные недоступны</Typography><Typography sx={{ fontSize: 14 }}>Роль «Регистратор» не имеет доступа к жалобам, диагнозам, назначениям и медицинским документам.</Typography></Box>
           </>}
         </Box>
       </Box>
@@ -239,14 +238,14 @@ function PatientCard({ role, onBack, onVisit }: { role: Role; onBack: () => void
 }
 
 function Info({ label, value }: { label: string; value: string }) {
-  return <Box className="info-row"><Typography color="text.secondary" fontSize={13}>{label}</Typography><Typography fontWeight={600}>{value}</Typography></Box>
+  return <Box className="info-row"><Typography sx={{ color: 'text.secondary', fontSize: 13 }}>{label}</Typography><Typography sx={{ fontWeight: 600 }}>{value}</Typography></Box>
 }
 
 function Visit({ signed, diagnosis, prescription, setDiagnosis, setPrescription, onSave, onSign }: { signed: boolean; diagnosis: string; prescription: string; setDiagnosis: (v: string) => void; setPrescription: (v: string) => void; onSave: () => void; onSign: () => void }) {
   return (
     <>
       <Box className="visit-banner">
-        <Box><Typography className="eyebrow">ПЕРВИЧНЫЙ ПРИЁМ · 09:00–09:50</Typography><Typography variant="h4" fontWeight={750}>Анна Михайлова</Typography><Typography color="text.secondary">35 лет · карта P-10482</Typography></Box>
+        <Box><Typography className="eyebrow">ПЕРВИЧНЫЙ ПРИЁМ · 09:00–09:50</Typography><Typography variant="h4" sx={{ fontWeight: 750 }}>Анна Михайлова</Typography><Typography sx={{ color: 'text.secondary' }}>35 лет · карта P-10482</Typography></Box>
         <Chip icon={signed ? <LockOutlined /> : <EditIcon />} label={signed ? 'Подписан · заблокирован' : 'Черновик · версия 4'} color={signed ? 'success' : 'warning'} variant="outlined" />
       </Box>
       {signed && <Alert severity="success" icon={<LockOutlined />} sx={{ mb: 2 }}>Документ подписан 20.10.2026 в 10:06 врачом А. Петровым. Изменение исходной версии недоступно.</Alert>}
@@ -267,13 +266,13 @@ function Visit({ signed, diagnosis, prescription, setDiagnosis, setPrescription,
         </Box>
         <Box>
           <Box className="panel sticky-summary">
-            <Typography fontWeight={750}>Документ приёма</Typography>
+            <Typography sx={{ fontWeight: 750 }}>Документ приёма</Typography>
             <Info label="Шаблон" value="Первичный осмотр · v2.4" />
             <Info label="Автор" value="Александр Петров" />
             <Info label="Последнее сохранение" value="10:02" />
             <Divider />
-            <Typography fontSize={12} color="text.secondary" mt={2}>Подписание зафиксирует ровно показанную версию и контрольный хеш.</Typography>
-            {!signed ? <Stack gap={1.2} mt={2}><Button variant="outlined" onClick={onSave}>Сохранить черновик</Button><Button variant="contained" startIcon={<LockOutlined />} onClick={onSign}>Проверить и подписать</Button></Stack> : <Button fullWidth variant="outlined" sx={{ mt: 2 }}>Создать дополнение</Button>}
+            <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 2 }}>Подписание зафиксирует ровно показанную версию и контрольный хеш.</Typography>
+            {!signed ? <Stack spacing={1.2} sx={{ mt: 2 }}><Button variant="outlined" onClick={onSave}>Сохранить черновик</Button><Button variant="contained" startIcon={<LockOutlined />} onClick={onSign}>Проверить и подписать</Button></Stack> : <Button fullWidth variant="outlined" sx={{ mt: 2 }}>Создать дополнение</Button>}
           </Box>
         </Box>
       </Box>
@@ -283,16 +282,16 @@ function Visit({ signed, diagnosis, prescription, setDiagnosis, setPrescription,
 
 function EditIcon() { return <Box component="span" sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: 'currentColor' }} /> }
 function FormSection({ number, title, children }: { number: string; title: string; children: React.ReactNode }) {
-  return <Box className="form-section"><Box className="form-section-title"><Typography>{number}</Typography><Typography fontWeight={750}>{title}</Typography></Box>{children}</Box>
+  return <Box className="form-section"><Box className="form-section-title"><Typography>{number}</Typography><Typography sx={{ fontWeight: 750 }}>{title}</Typography></Box>{children}</Box>
 }
 
 function BookingDialog({ open, onClose, onSave }: { open: boolean; onClose: () => void; onSave: () => void }) {
   return <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
     <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>Новая запись <IconButton onClick={onClose}><CloseRounded /></IconButton></DialogTitle>
     <DialogContent>
-      <Stack gap={2} mt={1}>
+      <Stack spacing={2} sx={{ mt: 1 }}>
         <TextField label="Пациент" defaultValue="Анна Михайлова" />
-        <Stack direction={{ xs: 'column', sm: 'row' }} gap={2}><TextField label="Дата" type="date" defaultValue="2026-10-20" InputLabelProps={{ shrink: true }} fullWidth /><TextField label="Время" type="time" defaultValue="13:00" InputLabelProps={{ shrink: true }} fullWidth /></Stack>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}><TextField label="Дата" type="date" defaultValue="2026-10-20" slotProps={{ inputLabel: { shrink: true } }} fullWidth /><TextField label="Время" type="time" defaultValue="13:00" slotProps={{ inputLabel: { shrink: true } }} fullWidth /></Stack>
         <TextField select label="Врач" defaultValue="petrov"><MenuItem value="petrov">Александр Петров</MenuItem><MenuItem value="lebedeva">Ольга Лебедева</MenuItem></TextField>
         <TextField select label="Услуга" defaultValue="repeat"><MenuItem value="repeat">Повторный приём · 30 мин</MenuItem><MenuItem value="first">Первичный приём · 50 мин</MenuItem></TextField>
         <Alert severity="info">Пациенту будет отправлено нейтральное сообщение без указания профиля клиники и цели визита.</Alert>

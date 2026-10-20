@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider, createTheme } from '@mui/material/styles'
 import { describe, expect, it } from 'vitest'
@@ -13,7 +13,7 @@ describe('основные сценарии', () => {
     await user.click(screen.getByRole('button', { name: /новая запись/i }))
     expect(screen.getByRole('dialog')).toHaveTextContent('Новая запись')
     await user.click(screen.getByRole('button', { name: /создать запись/i }))
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 
   it('скрывает клинические данные от регистратора', async () => {
@@ -34,6 +34,7 @@ describe('основные сценарии', () => {
     await user.click(screen.getByRole('button', { name: /проверить и подписать/i }))
     expect(screen.getByText(/после подписания эту версию нельзя изменить/i)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /подписать и заблокировать/i }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(screen.getByText(/документ подписан 20\.10\.2026/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /создать дополнение/i })).toBeInTheDocument()
   })
