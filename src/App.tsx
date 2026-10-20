@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   AddRounded,
   CalendarMonthRounded,
@@ -38,19 +38,27 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
+import {
+  createDemoBooking,
+  loadPatients,
+  loadSchedule,
+  signDemoVisit,
+  type PatientItem,
+  type ScheduleItem,
+} from './api'
 
 type Page = 'schedule' | 'patients' | 'patient' | 'visit'
 type Role = 'Регистратор' | 'Врач'
-type Patient = { name: string; birth: string; phone: string; id: string; consent: string }
+type Patient = PatientItem
 
-const appointments = [
+const demoAppointments: ScheduleItem[] = [
   { time: '09:00', duration: '50 мин', name: 'Анна Михайлова', type: 'Первичный приём', status: 'Прибыл', tone: 'green' },
   { time: '10:10', duration: '30 мин', name: 'Дмитрий Волков', type: 'Повторный приём', status: 'Подтверждён', tone: 'blue' },
   { time: '11:00', duration: '50 мин', name: 'Мария Соколова', type: 'Первичный приём', status: 'Ожидает', tone: 'orange' },
   { time: '12:00', duration: '30 мин', name: 'Алексей Морозов', type: 'Повторный приём', status: 'Подтверждён', tone: 'blue' },
 ]
 
-const patients = [
+const demoPatients: Patient[] = [
   { name: 'Анна Михайлова', birth: '14.05.1991', phone: '+7 916 245-18-72', id: 'P-10482', consent: 'Действует' },
   { name: 'Дмитрий Волков', birth: '02.11.1985', phone: '+7 903 782-44-16', id: 'P-10396', consent: 'Действует' },
   { name: 'Мария Соколова', birth: '28.02.1996', phone: '+7 925 663-02-41', id: 'P-10251', consent: 'Требует обновления' },
@@ -67,10 +75,23 @@ function App() {
   const [signDialog, setSignDialog] = useState(false)
   const [diagnosis, setDiagnosis] = useState('Тревожно-депрессивная симптоматика на фоне длительного стресса.')
   const [prescription, setPrescription] = useState('Продолжить наблюдение. Контрольный визит через 2 недели.')
+  const [scheduleItems, setScheduleItems] = useState(demoAppointments)
+  const [patientItems, setPatientItems] = useState(demoPatients)
+  const [apiOnline, setApiOnline] = useState(false)
+
+  useEffect(() => {
+    Promise.all([loadSchedule(), loadPatients()])
+      .then(([schedule, remotePatients]) => {
+        setScheduleItems(schedule)
+        setPatientItems(remotePatients)
+        setApiOnline(true)
+      })
+      .catch(() => setApiOnline(false))
+  }, [])
 
   const visiblePatients = useMemo(
-    () => patients.filter((p) => `${p.name} ${p.phone} ${p.birth}`.toLowerCase().includes(query.toLowerCase())),
-    [query],
+    () => patientItems.filter((p) => `${p.name} ${p.phone} ${p.birth}`.toLowerCase().includes(query.toLowerCase())),
+    [patientItems, query],
   )
 
   const navigate = (next: Page) => {
@@ -122,28 +143,50 @@ function App() {
           </Box>
         </Box>
         <Box className="content">
-          {page === 'schedule' && <Schedule role={role} onBooking={() => setBooking(true)} onPatient={() => navigate('patient')} onVisit={() => navigate('visit')} />}
+          {page === 'schedule' && <Schedule role={role} appointments={scheduleItems} apiOnline={apiOnline} onBooking={() => setBooking(true)} onPatient={() => navigate('patient')} onVisit={() => navigate('visit')} />}
           {page === 'patients' && <Patients query={query} setQuery={setQuery} patients={visiblePatients} onPatient={() => navigate('patient')} />}
           {page === 'patient' && <PatientCard role={role} onBack={() => navigate('patients')} onVisit={() => navigate('visit')} />}
           {page === 'visit' && <Visit signed={signed} diagnosis={diagnosis} prescription={prescription} setDiagnosis={setDiagnosis} setPrescription={setPrescription} onSave={() => setSaved(true)} onSign={() => setSignDialog(true)} />}
         </Box>
       </Box>
 
-      <BookingDialog open={booking} onClose={() => setBooking(false)} onSave={() => { setBooking(false); setSaved(true) }} />
+      <BookingDialog open={booking} onClose={() => setBooking(false)} onSave={async () => {
+        if (apiOnline) {
+          try {
+            await createDemoBooking()
+            setScheduleItems(await loadSchedule())
+          } catch {
+            setApiOnline(false)
+          }
+        }
+        setBooking(false)
+        setSaved(true)
+      }} />
       <Dialog open={signDialog} onClose={() => setSignDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Подписать медицинский документ?</DialogTitle>
         <DialogContent>
           <Alert severity="warning" icon={<LockOutlined />}>После подписания эту версию нельзя изменить или удалить. Исправления оформляются отдельным дополнением.</Alert>
           <Typography sx={{ mt: 2, fontSize: 14, color: 'text.secondary' }}>Будут сохранены автор, точное время, версия шаблона и контрольный хеш документа.</Typography>
         </DialogContent>
-        <DialogActions><Button onClick={() => setSignDialog(false)}>Вернуться</Button><Button variant="contained" onClick={() => { setSigned(true); setSignDialog(false); setSaved(true) }}>Подписать и заблокировать</Button></DialogActions>
+        <DialogActions><Button onClick={() => setSignDialog(false)}>Вернуться</Button><Button variant="contained" onClick={async () => {
+          if (apiOnline) {
+            try {
+              await signDemoVisit(diagnosis, prescription)
+            } catch {
+              setApiOnline(false)
+            }
+          }
+          setSigned(true)
+          setSignDialog(false)
+          setSaved(true)
+        }}>Подписать и заблокировать</Button></DialogActions>
       </Dialog>
       <Snackbar open={saved} autoHideDuration={2500} onClose={() => setSaved(false)} message={signed ? 'Документ подписан и заблокирован' : 'Изменения сохранены'} />
     </Box>
   )
 }
 
-function Schedule({ role, onBooking, onPatient, onVisit }: { role: Role; onBooking: () => void; onPatient: () => void; onVisit: () => void }) {
+function Schedule({ role, appointments, apiOnline, onBooking, onPatient, onVisit }: { role: Role; appointments: ScheduleItem[]; apiOnline: boolean; onBooking: () => void; onPatient: () => void; onVisit: () => void }) {
   return (
     <>
       <Box className="summary-grid">
@@ -153,7 +196,7 @@ function Schedule({ role, onBooking, onPatient, onVisit }: { role: Role; onBooki
       </Box>
       <Box className="toolbar">
         <Box className="date-nav"><IconButton size="small">‹</IconButton><Typography sx={{ fontWeight: 700 }}>20 октября, вторник</Typography><IconButton size="small">›</IconButton></Box>
-        <Stack direction="row" spacing={1}><Button variant="outlined" startIcon={<ScheduleRounded />}>Сегодня</Button><Button variant="contained" startIcon={<AddRounded />} onClick={onBooking}>Новая запись</Button></Stack>
+        <Stack direction="row" spacing={1} alignItems="center"><Chip size="small" label={apiOnline ? 'API подключён' : 'Демо-режим'} color={apiOnline ? 'success' : 'default'} variant="outlined" /><Button variant="outlined" startIcon={<ScheduleRounded />}>Сегодня</Button><Button variant="contained" startIcon={<AddRounded />} onClick={onBooking}>Новая запись</Button></Stack>
       </Box>
       <Box className="schedule-card">
         <Box className="doctor-heading">
