@@ -109,6 +109,28 @@ function localToday() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 }
 
+const scheduleDateKey = 'quiet-clinic-schedule-date'
+const patientDateKey = 'quiet-clinic-patient-date'
+const roleKey = 'quiet-clinic-role'
+
+function readStoredDate(key: string) {
+  try {
+    const value = localStorage.getItem(key)
+    return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : clinicDay
+  } catch {
+    return clinicDay
+  }
+}
+
+function readStoredRole(): Role {
+  try {
+    const value = localStorage.getItem(roleKey)
+    return value === 'Администратор' || value === 'Регистратор' ? 'Администратор' : 'Врач'
+  } catch {
+    return 'Врач'
+  }
+}
+
 function mergeDay(current: ScheduleItem[], date: string, incoming: ScheduleItem[]) {
   return sortSchedule([...current.filter((item) => item.date !== date), ...incoming])
 }
@@ -116,7 +138,7 @@ function mergeDay(current: ScheduleItem[], date: string, incoming: ScheduleItem[
 function App() {
   const { mode, toggle } = useColorMode()
   const [page, setPage] = useState<Page>('schedule')
-  const [role, setRole] = useState<Role>('Врач')
+  const [role, setRole] = useState<Role>(readStoredRole)
   const [query, setQuery] = useState('')
   const [drawer, setDrawer] = useState(false)
   const [booking, setBooking] = useState(false)
@@ -133,9 +155,21 @@ function App() {
   const [scheduleItems, setScheduleItems] = useState(demoAppointments)
   const [patientItems, setPatientItems] = useState(demoPatients)
   const [apiOnline, setApiOnline] = useState(false)
-  const [scheduleDate, setScheduleDate] = useState(clinicDay)
-  const [patientDate, setPatientDate] = useState(clinicDay)
+  const [scheduleDate, setScheduleDate] = useState(() => readStoredDate(scheduleDateKey))
+  const [patientDate, setPatientDate] = useState(() => readStoredDate(patientDateKey))
   const loadGeneration = useRef(0)
+
+  useEffect(() => {
+    localStorage.setItem(roleKey, role)
+  }, [role])
+
+  useEffect(() => {
+    localStorage.setItem(scheduleDateKey, scheduleDate)
+  }, [scheduleDate])
+
+  useEffect(() => {
+    localStorage.setItem(patientDateKey, patientDate)
+  }, [patientDate])
 
   useEffect(() => {
     let cancelled = false
@@ -400,11 +434,14 @@ function Schedule({ role, date, appointments, apiOnline, onDate, onBooking, onPa
       </Box>
       <Box className="toolbar">
         <Box className="date-nav">
-          <IconButton size="small" aria-label="Предыдущий день" onClick={() => onDate(shiftDate(date, -1))}>‹</IconButton>
-          <TextField size="small" type="date" label="День расписания" value={date} onChange={(event) => { if (event.target.value) onDate(event.target.value) }} slotProps={{ inputLabel: { shrink: true } }} />
-          <IconButton size="small" aria-label="Следующий день" onClick={() => onDate(shiftDate(date, 1))}>›</IconButton>
+          <IconButton aria-label="Предыдущий день" onClick={() => onDate(shiftDate(date, -1))}>‹</IconButton>
+          <Box>
+            <Typography sx={{ fontWeight: 750 }}>{formatDay(date)}</Typography>
+            <TextField size="small" type="date" label="День расписания" value={date} onChange={(event) => { if (event.target.value) onDate(event.target.value) }} slotProps={{ inputLabel: { shrink: true } }} />
+          </Box>
+          <IconButton aria-label="Следующий день" onClick={() => onDate(shiftDate(date, 1))}>›</IconButton>
         </Box>
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}><Chip size="small" label={apiOnline ? 'API подключён' : 'Демо-режим'} color={apiOnline ? 'success' : 'default'} variant="outlined" /><Button variant="outlined" startIcon={<ScheduleRounded />} onClick={() => onDate(localToday())}>Сегодня</Button><Button variant="contained" startIcon={<AddRounded />} onClick={onBooking}>Новая запись</Button></Stack>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}><Chip size="small" label={apiOnline ? 'API подключён' : 'Демо-режим'} color={apiOnline ? 'success' : 'default'} variant="outlined" /><Button variant={date === localToday() ? 'outlined' : 'contained'} startIcon={<ScheduleRounded />} onClick={() => onDate(localToday())}>Сегодня</Button><Button variant="contained" startIcon={<AddRounded />} onClick={onBooking}>Новая запись</Button></Stack>
       </Box>
       <Box className="schedule-card">
         <Box className="doctor-heading">
@@ -593,7 +630,7 @@ function BookingDialog({ open, patients, error, initialDate, onClose, onSave }: 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}><TextField label="Дата" type="date" value={date} onChange={(event) => setDate(event.target.value)} slotProps={{ inputLabel: { shrink: true } }} fullWidth /><TextField label="Время" type="time" value={time} onChange={(event) => setTime(event.target.value)} slotProps={{ inputLabel: { shrink: true } }} fullWidth /></Stack>
         <TextField select label="Врач" value={doctor} onChange={(event) => setDoctor(event.target.value as 'petrov' | 'lebedeva')}><MenuItem value="petrov">Александр Петров</MenuItem><MenuItem value="lebedeva">Ольга Лебедева</MenuItem></TextField>
         <TextField select label="Услуга" value={service} onChange={(event) => setService(event.target.value as 'repeat' | 'first')}><MenuItem value="repeat">Повторный приём · 30 мин</MenuItem><MenuItem value="first">Первичный приём · 50 мин</MenuItem></TextField>
-        <Alert severity="info">Пациенту будет отправлено нейтральное сообщение без указания профиля клиники и цели визита.</Alert>
+        <Alert severity="info">Пациенту ничего не отправляется. Канал сообщений пока не подключён.</Alert>
       </Stack>
     </DialogContent>
     <DialogActions><Button onClick={onClose}>Отмена</Button><Button variant="contained" disabled={!selectedPatientId || !date || !time} onClick={() => onSave({ patientId: selectedPatientId, date, time, service, doctor })}>Создать запись</Button></DialogActions>

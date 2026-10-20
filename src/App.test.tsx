@@ -158,6 +158,57 @@ describe('основные сценарии', () => {
     expect(screen.getByText(/10:10/)).toBeInTheDocument()
   })
 
+  it('после обновления оставляет день записи и отмену администратора', async () => {
+    const anna = {
+      id: '00000000-0000-0000-0000-000000000101',
+      fullName: 'Анна Михайлова',
+      birthDate: '1991-05-14',
+      contacts: [{ type: 'PHONE', value: '+79160000000' }],
+      consents: [{ revokedAt: null }],
+    }
+    let appointments: Array<Record<string, string>> = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? 'GET'
+      const address = String(url)
+      if (address.includes('/patients')) return jsonResponse([anna])
+      if (address.includes('/cancel')) return jsonResponse({}, 404)
+      if (address.includes('/appointments') && method === 'POST') {
+        const body = JSON.parse(String(init?.body))
+        const created = { id: '00000000-0000-0000-0000-000000000399', ...body, status: 'BOOKED', version: 0 }
+        appointments = [...appointments, created]
+        return jsonResponse(created, 201)
+      }
+      if (address.includes('/appointments')) {
+        const date = new URL(address).searchParams.get('date')
+        return jsonResponse(appointments.filter((item) => String(item.startsAt).startsWith(`${date}T`)))
+      }
+      return jsonResponse({}, 404)
+    }))
+    const user = userEvent.setup()
+    const first = renderApp()
+    expect(await screen.findByText('API подключён')).toBeInTheDocument()
+    await user.click(screen.getByLabelText('Роль пользователя'))
+    await user.click(screen.getByRole('option', { name: 'Администратор' }))
+    await user.click(screen.getByRole('button', { name: /новая запись/i }))
+    fireEvent.change(screen.getByLabelText('Дата'), { target: { value: '2026-10-23' } })
+    fireEvent.change(screen.getByLabelText('Время'), { target: { value: '15:05' } })
+    await user.click(screen.getByRole('button', { name: /создать запись/i }))
+    expect(await screen.findByText('15:05')).toBeInTheDocument()
+    expect(screen.getByLabelText('День расписания')).toHaveValue('2026-10-23')
+    expect(screen.getByText('23 октября 2026, пятница')).toBeInTheDocument()
+    first.unmount()
+
+    renderApp()
+    expect(await screen.findByText('15:05')).toBeInTheDocument()
+    expect(screen.getByLabelText('День расписания')).toHaveValue('2026-10-23')
+    expect(screen.getByRole('button', { name: 'Отменить запись 15:05 Анна Михайлова' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Сегодня' }))
+    const now = new Date()
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    expect(screen.getByLabelText('День расписания')).toHaveValue(today)
+    if (today !== '2026-10-23') expect(screen.queryByText('15:05')).not.toBeInTheDocument()
+  })
+
   it('отменяет запись только у администратора', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
     const user = userEvent.setup()
