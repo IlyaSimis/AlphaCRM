@@ -131,15 +131,14 @@ public final class PlatformConfig {
   private PlatformConfig() {}
 
   public static void requireRole(String... roles) {
-    var auth = SecurityContextHolder.getContext().getAuthentication();
-    var allowed =
-        java.util.Arrays.stream(roles)
-            .anyMatch(
-                role ->
-                    auth != null
-                        && auth.getAuthorities().stream()
-                            .anyMatch(a -> a.getAuthority().equals("ROLE_" + role)));
+    var allowed = java.util.Arrays.stream(roles).anyMatch(PlatformConfig::hasRole);
     if (!allowed) throw DomainException.forbidden("Недостаточно прав для операции");
+  }
+
+  public static boolean hasRole(String role) {
+    var auth = SecurityContextHolder.getContext().getAuthentication();
+    return auth != null
+        && auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_" + role));
   }
 
   public static java.util.UUID actorId() {

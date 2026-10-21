@@ -9,7 +9,11 @@ import {
   HealthAndSafetyRounded,
   LockOutlined,
   DarkModeRounded,
+  EditRounded,
+  HistoryRounded,
+  InsightsRounded,
   LightModeRounded,
+  MoreHorizRounded,
   MenuRounded,
   PeopleAltRounded,
   PersonSearchRounded,
@@ -33,6 +37,7 @@ import {
   FormControl,
   IconButton,
   InputAdornment,
+  Menu,
   MenuItem,
   Select,
   Snackbar,
@@ -43,34 +48,84 @@ import {
 } from '@mui/material'
 import {
   ApiError,
+  LEBEDEVA_ID,
+  PETROV_ID,
   cancelAppointment,
+  changeAppointmentStatus,
   createAppointment,
   createPatient,
+  demoPractitioners,
   loadPatients,
+  loadPractitioners,
   loadSchedule,
+  rememberPatient,
   signDemoVisit,
+  statusLabel,
+  toneFor,
+  updatePatient,
+  type ApiRole,
+  type AppointmentStatus,
   type PatientItem,
+  type Practitioner,
   type ScheduleItem,
 } from './api'
+import { Analytics } from './Analytics'
+import { AuditLog } from './AuditLog'
 import { useColorMode } from './theme'
 
-type Page = 'schedule' | 'patients' | 'patient' | 'visit'
-type Role = 'Администратор' | 'Врач'
+type Page = 'schedule' | 'patients' | 'patient' | 'visit' | 'analytics' | 'audit'
+type Role = 'Администратор' | 'Врач' | 'Менеджер'
 type Patient = PatientItem
+
+const apiRoles: Record<Role, ApiRole> = { Администратор: 'ADMINISTRATOR', Врач: 'DOCTOR', Менеджер: 'MANAGER' }
+const profiles: Record<Role, { name: string; initials: string }> = {
+  Администратор: { name: 'Елена Смирнова', initials: 'ЕС' },
+  Врач: { name: 'Александр Петров', initials: 'АП' },
+  Менеджер: { name: 'Игорь Кузнецов', initials: 'ИК' },
+}
+
+/** Действия со статусом записи: какие переходы доступны и какой роли. Зеркалит AppointmentStatusPolicy на backend. */
+const statusActions: Array<{ to: AppointmentStatus; label: string; from: AppointmentStatus[]; role: Role }> = [
+  { to: 'CONFIRMED', label: 'Подтвердить запись', from: ['BOOKED'], role: 'Администратор' },
+  { to: 'ARRIVED', label: 'Пациент пришёл', from: ['BOOKED', 'CONFIRMED'], role: 'Администратор' },
+  { to: 'NO_SHOW', label: 'Отметить неявку', from: ['BOOKED', 'CONFIRMED'], role: 'Администратор' },
+  { to: 'IN_PROGRESS', label: 'Пациент на приёме', from: ['ARRIVED'], role: 'Врач' },
+  { to: 'COMPLETED', label: 'Завершить приём', from: ['ARRIVED', 'IN_PROGRESS'], role: 'Врач' },
+]
+
+function availableActions(item: ScheduleItem, role: Role) {
+  if (role === 'Врач' && item.practitionerId !== PETROV_ID) return []
+  return statusActions.filter((action) => action.role === role && action.from.includes(item.statusCode))
+}
+
+function demoItem(id: string, date: string, time: string, minutes: number, name: string, type: string, statusCode: AppointmentStatus, practitionerId = PETROV_ID): ScheduleItem {
+  return { id, date, time, duration: `${minutes} мин`, name, type, status: statusLabel(statusCode), statusCode, tone: toneFor(statusCode), practitionerId }
+}
 
 const clinicDay = '2026-10-20'
 
 const demoAppointments: ScheduleItem[] = [
-  { id: 'demo-301', date: clinicDay, time: '09:00', duration: '50 мин', name: 'Анна Михайлова', type: 'Первичный приём', status: 'Прибыл', tone: 'green' },
-  { id: 'demo-302', date: clinicDay, time: '10:10', duration: '30 мин', name: 'Дмитрий Волков', type: 'Повторный приём', status: 'Подтверждён', tone: 'blue' },
-  { id: 'demo-303', date: clinicDay, time: '11:00', duration: '50 мин', name: 'Мария Соколова', type: 'Первичный приём', status: 'Ожидает', tone: 'orange' },
-  { id: 'demo-304', date: clinicDay, time: '12:00', duration: '30 мин', name: 'Алексей Морозов', type: 'Повторный приём', status: 'Подтверждён', tone: 'blue' },
+  demoItem('demo-301', clinicDay, '09:00', 50, 'Анна Михайлова', 'Первичный приём', 'ARRIVED'),
+  demoItem('demo-302', clinicDay, '10:10', 30, 'Дмитрий Волков', 'Повторный приём', 'CONFIRMED'),
+  demoItem('demo-303', clinicDay, '11:00', 50, 'Мария Соколова', 'Первичный приём', 'BOOKED'),
+  demoItem('demo-304', clinicDay, '12:00', 30, 'Алексей Морозов', 'Повторный приём', 'CONFIRMED'),
+  demoItem('demo-305', clinicDay, '15:00', 50, 'Ксения Орлова', 'Первичный приём', 'CONFIRMED', LEBEDEVA_ID),
+  demoItem('demo-501', '2026-10-06', '09:00', 50, 'Анна Михайлова', 'Первичный приём', 'COMPLETED'),
+  demoItem('demo-502', '2026-10-06', '10:10', 30, 'Дмитрий Волков', 'Повторный приём', 'COMPLETED'),
+  demoItem('demo-503', '2026-10-06', '11:00', 50, 'Мария Соколова', 'Первичный приём', 'NO_SHOW', LEBEDEVA_ID),
+  demoItem('demo-504', '2026-10-08', '12:00', 30, 'Анна Михайлова', 'Повторный приём', 'COMPLETED', LEBEDEVA_ID),
+  demoItem('demo-505', '2026-10-08', '09:00', 30, 'Дмитрий Волков', 'Повторный приём', 'CANCELLED'),
+  demoItem('demo-506', '2026-10-13', '09:00', 50, 'Мария Соколова', 'Первичный приём', 'COMPLETED'),
+  demoItem('demo-507', '2026-10-13', '10:10', 30, 'Анна Михайлова', 'Повторный приём', 'COMPLETED'),
+  demoItem('demo-508', '2026-10-13', '11:00', 30, 'Дмитрий Волков', 'Повторный приём', 'COMPLETED', LEBEDEVA_ID),
+  demoItem('demo-509', '2026-10-15', '14:00', 30, 'Мария Соколова', 'Повторный приём', 'NO_SHOW', LEBEDEVA_ID),
+  demoItem('demo-510', '2026-10-15', '09:00', 30, 'Анна Михайлова', 'Повторный приём', 'COMPLETED'),
 ]
 
 const demoPatients: Patient[] = [
-  { name: 'Анна Михайлова', birth: '14.05.1991', phone: '+7 916 245-18-72', id: 'P-10482', consent: 'Действует' },
-  { name: 'Дмитрий Волков', birth: '02.11.1985', phone: '+7 903 782-44-16', id: 'P-10396', consent: 'Действует' },
-  { name: 'Мария Соколова', birth: '28.02.1996', phone: '+7 925 663-02-41', id: 'P-10251', consent: 'Требует обновления' },
+  { name: 'Анна Михайлова', birth: '14.05.1991', birthDate: '1991-05-14', phone: '+7 916 245-18-72', id: 'P-10482', consent: 'Действует' },
+  { name: 'Дмитрий Волков', birth: '02.11.1985', birthDate: '1985-11-02', phone: '+7 903 782-44-16', id: 'P-10396', consent: 'Действует' },
+  { name: 'Мария Соколова', birth: '28.02.1996', birthDate: '1996-02-28', phone: '+7 925 663-02-41', id: 'P-10251', consent: 'Требует обновления' },
 ]
 
 type BookingDraft = {
@@ -78,7 +133,28 @@ type BookingDraft = {
   date: string
   time: string
   service: 'repeat' | 'first'
-  doctor: 'petrov' | 'lebedeva'
+  practitionerId: string
+}
+
+type PatientInput = { fullName: string; birthDate: string; phone: string }
+
+function localPatient(id: string, input: PatientInput, consent = 'Действует'): Patient {
+  return { id, name: input.fullName, birth: input.birthDate.split('-').reverse().join('.'), birthDate: input.birthDate, phone: input.phone, consent }
+}
+
+function weekday(iso: string) {
+  const [year, month, day] = iso.split('-').map(Number)
+  const value = new Date(Date.UTC(year, month - 1, day)).getUTCDay()
+  return value === 0 ? 7 : value
+}
+
+function workingHoursLabel(practitioner: Practitioner, date: string) {
+  const hours = practitioner.workingHours.find((item) => item.dayOfWeek === weekday(date))
+  return hours ? `${hours.startsAt.slice(0, 5)}–${hours.endsAt.slice(0, 5)}` : 'не принимает'
+}
+
+function initialsOf(name: string) {
+  return name.split(' ').map((part) => part[0]).join('').slice(0, 2)
 }
 
 function isUuid(value: string) {
@@ -125,6 +201,7 @@ function readStoredDate(key: string) {
 function readStoredRole(): Role {
   try {
     const value = localStorage.getItem(roleKey)
+    if (value === 'Менеджер') return 'Менеджер'
     return value === 'Администратор' || value === 'Регистратор' ? 'Администратор' : 'Врач'
   } catch {
     return 'Врач'
@@ -145,6 +222,10 @@ function App() {
   const [bookingKey, setBookingKey] = useState(0)
   const [bookingError, setBookingError] = useState('')
   const [patientDialog, setPatientDialog] = useState(false)
+  const [editPatient, setEditPatient] = useState<Patient | null>(null)
+  const [editError, setEditError] = useState('')
+  const [practitioners, setPractitioners] = useState<Practitioner[]>(demoPractitioners)
+  const [doctorFilter, setDoctorFilter] = useState('all')
   const [selectedPatientId, setSelectedPatientId] = useState(demoPatients[0].id)
   const [notice, setNotice] = useState('')
   const [saved, setSaved] = useState(false)
@@ -183,6 +264,9 @@ function App() {
       .catch(() => {
         if (!cancelled) setApiOnline(false)
       })
+    loadPractitioners()
+      .then((remote) => { if (!cancelled) setPractitioners(remote) })
+      .catch(() => { /* список врачей по умолчанию остаётся из демо-данных */ })
     return () => { cancelled = true }
   }, [])
 
@@ -227,7 +311,7 @@ function App() {
 
   const cancelBooking = async (item: ScheduleItem) => {
     if (role !== 'Администратор' || item.status === 'Отменена' || !item.id) return
-    const markCancelled = () => setScheduleItems((items) => items.map((row) => row.id === item.id ? { ...row, status: 'Отменена', tone: 'muted' } : row))
+    const markCancelled = () => setScheduleItems((items) => items.map((row) => row.id === item.id ? { ...row, status: statusLabel('CANCELLED'), statusCode: 'CANCELLED', tone: toneFor('CANCELLED') } : row))
     if (apiOnline && isUuid(item.id)) {
       const generation = ++loadGeneration.current
       try {
@@ -257,6 +341,67 @@ function App() {
     setSaved(true)
   }
 
+  const changeStatus = async (item: ScheduleItem, to: AppointmentStatus) => {
+    if (!item.id || !availableActions(item, role).some((action) => action.to === to)) return
+    const label = statusLabel(to)
+    const markLocal = () => setScheduleItems((items) => items.map((row) => row.id === item.id ? { ...row, status: label, statusCode: to, tone: toneFor(to) } : row))
+    if (apiOnline && isUuid(item.id)) {
+      const generation = ++loadGeneration.current
+      try {
+        await changeAppointmentStatus(item.id, to, apiRoles[role])
+        const day = await loadSchedule(item.date)
+        if (generation !== loadGeneration.current) return
+        setScheduleItems((current) => mergeDay(current, item.date, day))
+        setNotice(`Статус: ${label}`)
+      } catch (error) {
+        if (generation !== loadGeneration.current) return
+        if (error instanceof ApiError && error.status < 500) {
+          setNotice(error.message)
+        } else {
+          setApiOnline(false)
+          markLocal()
+          setNotice('Сервер недоступен: статус виден только до обновления страницы')
+        }
+      }
+      setSaved(true)
+      return
+    }
+    loadGeneration.current += 1
+    markLocal()
+    setNotice(`Демо-режим: статус «${label}» виден только до обновления страницы`)
+    setSaved(true)
+  }
+
+  const saveEditedPatient = async (patient: Patient, input: PatientInput) => {
+    const applyLocally = (updated: Patient) => {
+      setPatientItems((items) => items.map((item) => item.id === patient.id ? updated : item))
+      if (updated.name !== patient.name) {
+        rememberPatient(updated.id, updated.name)
+        setScheduleItems((items) => items.map((item) => item.name === patient.name ? { ...item, name: updated.name } : item))
+      }
+    }
+    if (apiOnline && isUuid(patient.id)) {
+      try {
+        applyLocally(await updatePatient(patient.id, input))
+        setNotice('Данные пациента обновлены')
+      } catch (error) {
+        if (error instanceof ApiError && error.status < 500) {
+          setEditError(error.message)
+          return
+        }
+        setApiOnline(false)
+        applyLocally(localPatient(patient.id, input, patient.consent))
+        setNotice('Сервер недоступен: изменения видны только до обновления страницы')
+      }
+    } else {
+      applyLocally(localPatient(patient.id, input, patient.consent))
+      setNotice('Демо-режим: изменения видны только до обновления страницы')
+    }
+    setEditPatient(null)
+    setEditError('')
+    setSaved(true)
+  }
+
   const renderSidebar = (className: string) => (
     <Box className={className}>
       <Box className="brand">
@@ -268,19 +413,22 @@ function App() {
         <button type="button" className={`nav-item ${page === 'schedule' ? 'active' : ''}`} onClick={() => navigate('schedule')}><CalendarMonthRounded />Расписание</button>
         <button type="button" className={`nav-item ${page === 'patients' || page === 'patient' ? 'active' : ''}`} onClick={() => navigate('patients')}><PeopleAltRounded />Пациенты</button>
         {role === 'Врач' && <button type="button" className={`nav-item ${page === 'visit' ? 'active' : ''}`} onClick={() => navigate('visit')}><MedicalServicesRounded />Мои приёмы</button>}
+        {role !== 'Врач' && <button type="button" className={`nav-item ${page === 'analytics' ? 'active' : ''}`} onClick={() => navigate('analytics')}><InsightsRounded />Аналитика</button>}
+        {role !== 'Врач' && <button type="button" className={`nav-item ${page === 'audit' ? 'active' : ''}`} onClick={() => navigate('audit')}><HistoryRounded />Журнал аудита</button>}
       </Stack>
       <Box className="privacy-note">
         <ShieldOutlined />
         <Box><Typography sx={{ fontWeight: 700, fontSize: 13 }}>Данные разделены</Typography><Typography sx={{ fontSize: 12 }}>Доступ к клинической карте — только при участии в лечении</Typography></Box>
       </Box>
       <Box className="profile">
-        <Avatar sx={{ bgcolor: 'action.selected', color: 'primary.main' }}>ЕС</Avatar>
-        <Box sx={{ minWidth: 0, flex: 1 }}><Typography noWrap sx={{ fontWeight: 700, fontSize: 14 }}>Елена Смирнова</Typography><Typography sx={{ color: 'text.secondary', fontSize: 12 }}>{role}</Typography></Box>
+        <Avatar sx={{ bgcolor: 'action.selected', color: 'primary.main' }}>{profiles[role].initials}</Avatar>
+        <Box sx={{ minWidth: 0, flex: 1 }}><Typography noWrap sx={{ fontWeight: 700, fontSize: 14 }}>{profiles[role].name}</Typography><Typography sx={{ color: 'text.secondary', fontSize: 12 }}>{role}</Typography></Box>
       </Box>
     </Box>
   )
 
-  const title = page === 'schedule' ? 'Расписание' : page === 'patients' ? 'Пациенты' : page === 'patient' ? 'Карточка пациента' : 'Приём пациента'
+  const titles: Record<Page, string> = { schedule: 'Расписание', patients: 'Пациенты', patient: 'Карточка пациента', visit: 'Приём пациента', analytics: 'Аналитика', audit: 'Журнал аудита' }
+  const title = titles[page]
 
   return (
     <Box className="app-shell">
@@ -289,7 +437,7 @@ function App() {
       <Box component="main" className="main">
         <Box className="topbar">
           <IconButton className="mobile-menu" onClick={() => setDrawer(true)}><MenuRounded /></IconButton>
-          <Box><Typography className="eyebrow">{page === 'visit' ? 'КЛИНИЧЕСКИЙ КОНТУР · ДОСТУП РАЗРЕШЁН' : formatDay(page === 'patient' ? patientDate : scheduleDate).toLocaleUpperCase('ru-RU')}</Typography><Typography variant="h5" sx={{ fontWeight: 750 }}>{title}</Typography></Box>
+          <Box><Typography className="eyebrow">{page === 'visit' ? 'КЛИНИЧЕСКИЙ КОНТУР · ДОСТУП РАЗРЕШЁН' : page === 'analytics' || page === 'audit' ? 'УПРАВЛЕНИЕ КЛИНИКОЙ' : formatDay(page === 'patient' ? patientDate : scheduleDate).toLocaleUpperCase('ru-RU')}</Typography><Typography variant="h5" sx={{ fontWeight: 750 }}>{title}</Typography></Box>
           <Box className="role-switch">
             <Tooltip title={mode === 'light' ? 'Включить тёмную тему' : 'Включить светлую тему'}>
               <IconButton onClick={toggle} aria-label={mode === 'light' ? 'Включить тёмную тему' : 'Включить светлую тему'}>
@@ -301,19 +449,22 @@ function App() {
               <Select value={role} onChange={(e) => { setRole(e.target.value as Role); navigate('schedule') }} aria-label="Роль пользователя">
                 <MenuItem value="Врач">Врач</MenuItem>
                 <MenuItem value="Администратор">Администратор</MenuItem>
+                <MenuItem value="Менеджер">Менеджер</MenuItem>
               </Select>
             </FormControl>
           </Box>
         </Box>
         <Box className="content">
-          {page === 'schedule' && <Schedule role={role} date={scheduleDate} appointments={scheduleItems} apiOnline={apiOnline} onDate={setScheduleDate} onBooking={openBooking} onPatient={(name) => { const match = patientItems.find((patient) => patient.name === name); if (match) openPatient(match); else navigate('patient') }} onVisit={() => navigate('visit')} onCancel={cancelBooking} />}
+          {page === 'schedule' && <Schedule role={role} date={scheduleDate} appointments={scheduleItems} practitioners={practitioners} doctorFilter={doctorFilter} onDoctorFilter={setDoctorFilter} apiOnline={apiOnline} onDate={setScheduleDate} onBooking={openBooking} onStatus={changeStatus} onPatient={(name) => { const match = patientItems.find((patient) => patient.name === name); if (match) openPatient(match); else navigate('patient') }} onVisit={() => navigate('visit')} onCancel={cancelBooking} />}
           {page === 'patients' && <Patients query={query} setQuery={setQuery} patients={visiblePatients} onPatient={openPatient} onCreate={() => setPatientDialog(true)} />}
-          {page === 'patient' && selectedPatient && <PatientCard patient={selectedPatient} date={patientDate} appointments={scheduleItems} role={role} onDate={setPatientDate} onBack={() => navigate('patients')} onVisit={() => navigate('visit')} onCancel={cancelBooking} />}
+          {page === 'patient' && selectedPatient && <PatientCard patient={selectedPatient} date={patientDate} appointments={scheduleItems} practitioners={practitioners} role={role} onEdit={() => { setEditError(''); setEditPatient(selectedPatient) }} onDate={setPatientDate} onBack={() => navigate('patients')} onVisit={() => navigate('visit')} onCancel={cancelBooking} />}
+          {page === 'analytics' && role !== 'Врач' && <Analytics apiOnline={apiOnline} role={apiRoles[role]} anchor={scheduleDate} practitioners={practitioners} scheduleItems={scheduleItems} />}
+          {page === 'audit' && role !== 'Врач' && <AuditLog apiOnline={apiOnline} role={apiRoles[role]} />}
           {page === 'visit' && <Visit signed={signed} diagnosis={diagnosis} prescription={prescription} setDiagnosis={setDiagnosis} setPrescription={setPrescription} onSave={() => { setNotice('Изменения сохранены'); setSaved(true) }} onSign={() => setSignDialog(true)} />}
         </Box>
       </Box>
 
-      <BookingDialog key={bookingKey} open={booking} patients={patientItems} error={bookingError} initialDate={scheduleDate} onClose={() => { setBooking(false); setBookingError('') }} onSave={async (draft) => {
+      <BookingDialog key={bookingKey} open={booking} patients={patientItems} practitioners={practitioners} defaultPractitionerId={doctorFilter === 'all' ? practitioners[0]?.id ?? PETROV_ID : doctorFilter} error={bookingError} initialDate={scheduleDate} onClose={() => { setBooking(false); setBookingError('') }} onSave={async (draft) => {
         const patient = patientItems.find((item) => item.id === draft.patientId)
         if (!patient) {
           setBookingError('Выберите пациента из списка')
@@ -336,8 +487,10 @@ function App() {
           duration: `${minutes} мин`,
           name: patient.name,
           type: serviceName,
-          status: 'Ожидает',
-          tone: 'blue',
+          status: statusLabel('BOOKED'),
+          statusCode: 'BOOKED',
+          tone: toneFor('BOOKED'),
+          practitionerId: draft.practitionerId,
         }
         const showLocal = (message: string) => {
           loadGeneration.current += 1
@@ -348,14 +501,10 @@ function App() {
           setNotice(message)
           setSaved(true)
         }
-        if (apiOnline && draft.doctor !== 'petrov') {
-          setBookingError('В расписании сейчас доступен только Александр Петров')
-          return
-        }
         if (apiOnline && isUuid(patient.id)) {
           const generation = ++loadGeneration.current
           try {
-            await createAppointment({ patientId: patient.id, patientName: patient.name, date: draft.date, time: draft.time, minutes, serviceName })
+            await createAppointment({ patientId: patient.id, patientName: patient.name, practitionerId: draft.practitionerId, date: draft.date, time: draft.time, minutes, serviceName }, apiRoles[role] === 'ADMINISTRATOR' ? 'ADMINISTRATOR' : 'DOCTOR')
             const day = await loadSchedule(draft.date)
             if (generation !== loadGeneration.current) return
             setScheduleDate(draft.date)
@@ -405,31 +554,36 @@ function App() {
             setNotice('Пациент сохранён')
           } catch {
             setApiOnline(false)
-            setPatientItems((items) => [{ id: crypto.randomUUID(), name: input.fullName, birth: input.birthDate.split('-').reverse().join('.'), phone: input.phone, consent: 'Действует' }, ...items])
+            setPatientItems((items) => [localPatient(crypto.randomUUID(), input), ...items])
             setNotice('Сервер недоступен: пациент виден только до обновления страницы')
           }
         } else {
-          setPatientItems((items) => [{ id: crypto.randomUUID(), name: input.fullName, birth: input.birthDate.split('-').reverse().join('.'), phone: input.phone, consent: 'Действует' }, ...items])
+          setPatientItems((items) => [localPatient(crypto.randomUUID(), input), ...items])
           setNotice('Демо-режим: пациент виден только до обновления страницы')
         }
         setPatientDialog(false)
         setSaved(true)
       }} />
+      {editPatient && <PatientDialog key={editPatient.id} open mode="edit" initial={{ fullName: editPatient.name, birthDate: editPatient.birthDate, phone: editPatient.phone }} error={editError} onClose={() => { setEditPatient(null); setEditError('') }} onSave={(input) => saveEditedPatient(editPatient, input)} />}
       <Snackbar open={saved} autoHideDuration={2500} onClose={() => setSaved(false)} message={notice} />
     </Box>
   )
 }
 
-function Schedule({ role, date, appointments, apiOnline, onDate, onBooking, onPatient, onVisit, onCancel }: { role: Role; date: string; appointments: ScheduleItem[]; apiOnline: boolean; onDate: (date: string) => void; onBooking: () => void; onPatient: (name: string) => void; onVisit: () => void; onCancel: (item: ScheduleItem) => void }) {
-  const dayItems = appointments.filter((item) => item.date === date)
-  const active = dayItems.filter((item) => item.status !== 'Отменена')
-  const waiting = active.filter((item) => item.status === 'Ожидает').length
-  const firstActiveId = active[0]?.id
+function Schedule({ role, date, appointments, practitioners, doctorFilter, onDoctorFilter, apiOnline, onDate, onBooking, onStatus, onPatient, onVisit, onCancel }: { role: Role; date: string; appointments: ScheduleItem[]; practitioners: Practitioner[]; doctorFilter: string; onDoctorFilter: (id: string) => void; apiOnline: boolean; onDate: (date: string) => void; onBooking: () => void; onStatus: (item: ScheduleItem, to: AppointmentStatus) => void; onPatient: (name: string) => void; onVisit: () => void; onCancel: (item: ScheduleItem) => void }) {
+  const [menu, setMenu] = useState<{ anchor: HTMLElement; item: ScheduleItem } | null>(null)
+  const visibleDoctors = practitioners.filter((doctor) => doctorFilter === 'all' || doctor.id === doctorFilter)
+  const dayItems = appointments.filter((item) => item.date === date && visibleDoctors.some((doctor) => doctor.id === item.practitionerId))
+  const active = dayItems.filter((item) => item.statusCode !== 'CANCELLED' && item.statusCode !== 'NO_SHOW')
+  const cancelled = dayItems.filter((item) => item.statusCode === 'CANCELLED').length
+  const waiting = active.filter((item) => item.statusCode === 'BOOKED').length
+  const firstActiveId = active.find((item) => item.practitionerId === PETROV_ID && item.statusCode !== 'COMPLETED')?.id
+  const menuActions = menu ? availableActions(menu.item, role) : []
   return (
     <>
       <Box className="summary-grid">
-        <Metric value={String(active.length)} label="приёмов в этот день" note="без отменённых" />
-        <Metric value={String(dayItems.length - active.length)} label="отменено" note="слот можно занять снова" />
+        <Metric value={String(active.length)} label="приёмов в этот день" note="без отмен и неявок" />
+        <Metric value={String(cancelled)} label="отменено" note="слот можно занять снова" />
         <Metric value={String(waiting)} label="ожидает оформления" note="статус «Ожидает»" accent={waiting > 0} />
       </Box>
       <Box className="toolbar">
@@ -440,34 +594,49 @@ function Schedule({ role, date, appointments, apiOnline, onDate, onBooking, onPa
             <TextField size="small" type="date" label="День расписания" value={date} onChange={(event) => { if (event.target.value) onDate(event.target.value) }} slotProps={{ inputLabel: { shrink: true } }} />
           </Box>
           <IconButton aria-label="Следующий день" onClick={() => onDate(shiftDate(date, 1))}>›</IconButton>
+          <TextField select size="small" label="Врач" value={doctorFilter} onChange={(event) => onDoctorFilter(event.target.value)} sx={{ minWidth: 190 }}>
+            <MenuItem value="all">Все врачи</MenuItem>
+            {practitioners.map((doctor) => <MenuItem key={doctor.id} value={doctor.id}>{doctor.fullName}</MenuItem>)}
+          </TextField>
         </Box>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}><Chip size="small" label={apiOnline ? 'API подключён' : 'Демо-режим'} color={apiOnline ? 'success' : 'default'} variant="outlined" /><Button variant={date === localToday() ? 'outlined' : 'contained'} startIcon={<ScheduleRounded />} onClick={() => onDate(localToday())}>Сегодня</Button><Button variant="contained" startIcon={<AddRounded />} onClick={onBooking}>Новая запись</Button></Stack>
       </Box>
-      <Box className="schedule-card">
-        <Box className="doctor-heading">
-          <Avatar sx={{ bgcolor: '#244d48' }}>АП</Avatar>
-          <Box><Typography sx={{ fontWeight: 750 }}>Александр Петров</Typography><Typography sx={{ fontSize: 13, color: 'text.secondary' }}>Психиатр · кабинет 204 · {formatDay(date)}</Typography></Box>
-          <Chip label="09:00–18:00" size="small" variant="outlined" />
-        </Box>
-        <Box className="appointment-list">
-          {dayItems.length === 0 && <Box className="empty" sx={{ minHeight: 160 }}><EventNoteRounded /><Typography sx={{ fontWeight: 700 }}>На этот день записей нет</Typography></Box>}
-          {dayItems.map((item) => (
-            <Box className="appointment" key={item.id ?? `${item.date}-${item.time}-${item.name}`}>
-              <Box className="time"><Typography sx={{ fontWeight: 750 }}>{item.time}</Typography><Typography sx={{ fontSize: 12, color: 'text.secondary' }}>{item.duration}</Typography></Box>
-              <Box className={`status-line ${item.tone}`} />
-              <Box className="appointment-info" onClick={() => onPatient(item.name)} role="button" tabIndex={0}>
-                <Typography sx={{ fontWeight: 700 }}>{item.name}</Typography><Typography sx={{ fontSize: 13, color: 'text.secondary' }}>{item.type}</Typography>
-              </Box>
-              <Chip label={item.status} size="small" className={`status-chip ${item.tone}`} />
-              <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                {role === 'Врач' && item.id === firstActiveId ? <Button size="small" variant="contained" onClick={onVisit}>Начать приём</Button> : <IconButton size="small" aria-label={`Открыть карточку ${item.name}`} onClick={() => onPatient(item.name)}><ChevronRightRounded /></IconButton>}
-                {role === 'Администратор' && item.status !== 'Отменена' && <Button size="small" variant="outlined" aria-label={`Отменить запись ${item.time} ${item.name}`} onClick={() => onCancel(item)}>Отменить</Button>}
-              </Stack>
+      {dayItems.length === 0 ? (
+        <Box className="schedule-card"><Box className="empty" sx={{ minHeight: 160 }}><EventNoteRounded /><Typography sx={{ fontWeight: 700 }}>На этот день записей нет</Typography><Button size="small" onClick={onBooking}>+ Записать на свободное время</Button></Box></Box>
+      ) : visibleDoctors.map((doctor) => {
+        const items = dayItems.filter((item) => item.practitionerId === doctor.id)
+        return (
+          <Box className="schedule-card" key={doctor.id}>
+            <Box className="doctor-heading">
+              <Avatar sx={{ bgcolor: doctor.id === PETROV_ID ? '#244d48' : '#3d4f7a' }}>{initialsOf(doctor.fullName)}</Avatar>
+              <Box><Typography sx={{ fontWeight: 750 }}>{doctor.fullName}</Typography><Typography sx={{ fontSize: 13, color: 'text.secondary' }}>{doctor.specialty} · {formatDay(date)}</Typography></Box>
+              <Chip label={workingHoursLabel(doctor, date)} size="small" variant="outlined" />
             </Box>
-          ))}
-          <Box className="free-slot"><Typography sx={{ color: 'text.secondary' }}>—</Typography><Divider /><Button size="small" onClick={onBooking}>+ Записать на свободное время</Button></Box>
-        </Box>
-      </Box>
+            <Box className="appointment-list">
+              {items.length === 0 && <Typography sx={{ color: 'text.secondary', py: 2, px: 1 }}>Записей к этому врачу нет</Typography>}
+              {items.map((item) => (
+                <Box className="appointment" key={item.id ?? `${item.date}-${item.time}-${item.name}`}>
+                  <Box className="time"><Typography sx={{ fontWeight: 750 }}>{item.time}</Typography><Typography sx={{ fontSize: 12, color: 'text.secondary' }}>{item.duration}</Typography></Box>
+                  <Box className={`status-line ${item.tone}`} />
+                  <Box className="appointment-info" onClick={() => onPatient(item.name)} role="button" tabIndex={0}>
+                    <Typography sx={{ fontWeight: 700 }}>{item.name}</Typography><Typography sx={{ fontSize: 13, color: 'text.secondary' }}>{item.type}</Typography>
+                  </Box>
+                  <Chip label={item.status} size="small" className={`status-chip ${item.tone}`} />
+                  <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                    {role === 'Врач' && item.id === firstActiveId ? <Button size="small" variant="contained" onClick={onVisit}>Начать приём</Button> : <IconButton size="small" aria-label={`Открыть карточку ${item.name}`} onClick={() => onPatient(item.name)}><ChevronRightRounded /></IconButton>}
+                    {availableActions(item, role).length > 0 && <IconButton size="small" title="Изменить статус" aria-label={`Изменить статус ${item.time} ${item.name}`} onClick={(event) => setMenu({ anchor: event.currentTarget, item })}><MoreHorizRounded /></IconButton>}
+                    {role === 'Администратор' && ['BOOKED', 'CONFIRMED', 'ARRIVED', 'IN_PROGRESS'].includes(item.statusCode) && <Button size="small" variant="outlined" aria-label={`Отменить запись ${item.time} ${item.name}`} onClick={() => onCancel(item)}>Отменить</Button>}
+                  </Stack>
+                </Box>
+              ))}
+              <Box className="free-slot"><Typography sx={{ color: 'text.secondary' }}>—</Typography><Divider /><Button size="small" onClick={onBooking}>+ Записать на свободное время</Button></Box>
+            </Box>
+          </Box>
+        )
+      })}
+      <Menu anchorEl={menu?.anchor} open={Boolean(menu)} onClose={() => setMenu(null)}>
+        {menuActions.map((action) => <MenuItem key={action.to} onClick={() => { const target = menu?.item; setMenu(null); if (target) onStatus(target, action.to) }}>{action.label}</MenuItem>)}
+      </Menu>
     </>
   )
 }
@@ -495,9 +664,10 @@ function Patients({ query, setQuery, patients, onPatient, onCreate }: { query: s
   )
 }
 
-function PatientCard({ patient, date, appointments, role, onDate, onBack, onVisit, onCancel }: { patient: Patient; date: string; appointments: ScheduleItem[]; role: Role; onDate: (date: string) => void; onBack: () => void; onVisit: () => void; onCancel: (item: ScheduleItem) => void }) {
+function PatientCard({ patient, date, appointments, practitioners, role, onEdit, onDate, onBack, onVisit, onCancel }: { patient: Patient; date: string; appointments: ScheduleItem[]; practitioners: Practitioner[]; role: Role; onEdit: () => void; onDate: (date: string) => void; onBack: () => void; onVisit: () => void; onCancel: (item: ScheduleItem) => void }) {
   const dayItems = appointments.filter((item) => item.name === patient.name && item.date === date)
-  const initials = patient.name.split(' ').map((part) => part[0]).join('').slice(0, 2)
+  const initials = initialsOf(patient.name)
+  const doctorName = (id: string) => practitioners.find((doctor) => doctor.id === id)?.fullName ?? 'Врач'
   return (
     <>
       <Button onClick={onBack} sx={{ mb: 2 }}>← К результатам поиска</Button>
@@ -505,6 +675,7 @@ function PatientCard({ patient, date, appointments, role, onDate, onBack, onVisi
         <Avatar sx={{ width: 64, height: 64, bgcolor: 'action.selected', color: 'primary.main', fontSize: 22 }}>{initials}</Avatar>
         <Box><Typography variant="h4" sx={{ fontWeight: 750 }}>{patient.name}</Typography><Typography sx={{ color: 'text.secondary' }}>{patient.birth}{patient.id.startsWith('P-') ? ` · ${patient.id}` : ''}</Typography></Box>
         <Chip icon={<CheckCircleRounded />} label={patient.consent === 'Действует' ? 'Согласие действует' : patient.consent} color={patient.consent === 'Действует' ? 'success' : 'warning'} variant="outlined" />
+        {role === 'Администратор' && <Button variant="outlined" startIcon={<EditRounded />} onClick={onEdit}>Редактировать</Button>}
       </Box>
       <Box className="patient-columns">
         <Box className="panel">
@@ -521,8 +692,8 @@ function PatientCard({ patient, date, appointments, role, onDate, onBack, onVisi
           {dayItems.length ? dayItems.map((item) => (
             <Box className="next-appointment" key={item.id ?? `${item.time}-${item.type}`}>
               <EventNoteRounded />
-              <Box sx={{ flex: 1 }}><Typography sx={{ fontWeight: 700 }}>{item.time} · {item.status}</Typography><Typography sx={{ fontSize: 13 }}>Александр Петров · {item.type.toLowerCase()}</Typography></Box>
-              {role === 'Администратор' && item.status !== 'Отменена' && <Button size="small" variant="outlined" aria-label={`Отменить запись ${item.time} ${item.name}`} onClick={() => onCancel(item)}>Отменить</Button>}
+              <Box sx={{ flex: 1 }}><Typography sx={{ fontWeight: 700 }}>{item.time} · {item.status}</Typography><Typography sx={{ fontSize: 13 }}>{doctorName(item.practitionerId)} · {item.type.toLowerCase()}</Typography></Box>
+              {role === 'Администратор' && ['BOOKED', 'CONFIRMED', 'ARRIVED', 'IN_PROGRESS'].includes(item.statusCode) && <Button size="small" variant="outlined" aria-label={`Отменить запись ${item.time} ${item.name}`} onClick={() => onCancel(item)}>Отменить</Button>}
             </Box>
           )) : <Typography sx={{ color: 'text.secondary', mt: 1 }}>На этот день записей нет</Typography>}
         </Box>
@@ -590,34 +761,38 @@ function FormSection({ number, title, children }: { number: string; title: strin
   return <Box className="form-section"><Box className="form-section-title"><Typography>{number}</Typography><Typography sx={{ fontWeight: 750 }}>{title}</Typography></Box>{children}</Box>
 }
 
-function PatientDialog({ open, onClose, onSave }: { open: boolean; onClose: () => void; onSave: (input: { fullName: string; birthDate: string; phone: string }) => void }) {
-  const [fullName, setFullName] = useState('Ирина Белова')
-  const [birthDate, setBirthDate] = useState('1994-03-12')
-  const [phone, setPhone] = useState('+7 903 111-22-33')
+function PatientDialog({ open, mode = 'create', initial, error = '', onClose, onSave }: { open: boolean; mode?: 'create' | 'edit'; initial?: PatientInput; error?: string; onClose: () => void; onSave: (input: PatientInput) => void }) {
+  const [fullName, setFullName] = useState(initial?.fullName ?? 'Ирина Белова')
+  const [birthDate, setBirthDate] = useState(initial?.birthDate ?? '1994-03-12')
+  const [phone, setPhone] = useState(initial?.phone ?? '+7 903 111-22-33')
+  const edit = mode === 'edit'
   return <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-    <DialogTitle>Новый пациент</DialogTitle>
+    <DialogTitle>{edit ? 'Данные пациента' : 'Новый пациент'}</DialogTitle>
     <DialogContent>
       <Stack spacing={2} sx={{ mt: 1 }}>
+        {error && <Alert severity="error">{error}</Alert>}
         <TextField label="ФИО" value={fullName} onChange={(event) => setFullName(event.target.value)} />
         <TextField label="Дата рождения" type="date" value={birthDate} onChange={(event) => setBirthDate(event.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
         <TextField label="Телефон" value={phone} onChange={(event) => setPhone(event.target.value)} />
+        {edit && <Alert severity="info">В журнал аудита попадут только названия изменённых полей, без самих значений.</Alert>}
       </Stack>
     </DialogContent>
     <DialogActions>
       <Button onClick={onClose}>Отмена</Button>
-      <Button variant="contained" disabled={!fullName.trim() || !birthDate || !phone.trim()} onClick={() => onSave({ fullName: fullName.trim(), birthDate, phone: phone.trim() })}>Сохранить пациента</Button>
+      <Button variant="contained" disabled={!fullName.trim() || !birthDate || !phone.trim()} onClick={() => onSave({ fullName: fullName.trim(), birthDate, phone: phone.trim() })}>{edit ? 'Сохранить изменения' : 'Сохранить пациента'}</Button>
     </DialogActions>
   </Dialog>
 }
 
-function BookingDialog({ open, patients, error, initialDate, onClose, onSave }: { open: boolean; patients: Patient[]; error: string; initialDate: string; onClose: () => void; onSave: (draft: BookingDraft) => void }) {
+function BookingDialog({ open, patients, practitioners, defaultPractitionerId, error, initialDate, onClose, onSave }: { open: boolean; patients: Patient[]; practitioners: Practitioner[]; defaultPractitionerId: string; error: string; initialDate: string; onClose: () => void; onSave: (draft: BookingDraft) => void }) {
   const fallbackPatientId = patients.find((item) => item.name === 'Анна Михайлова')?.id ?? patients[0]?.id ?? ''
   const [patientId, setPatientId] = useState(fallbackPatientId)
   const [date, setDate] = useState(initialDate)
   const [time, setTime] = useState('13:00')
-  const [doctor, setDoctor] = useState<'petrov' | 'lebedeva'>('petrov')
+  const [practitionerId, setPractitionerId] = useState(defaultPractitionerId)
   const [service, setService] = useState<'repeat' | 'first'>('repeat')
   const selectedPatientId = patients.some((item) => item.id === patientId) ? patientId : fallbackPatientId
+  const selectedPractitionerId = practitioners.some((item) => item.id === practitionerId) ? practitionerId : practitioners[0]?.id ?? ''
 
   return <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
     <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>Новая запись <IconButton onClick={onClose}><CloseRounded /></IconButton></DialogTitle>
@@ -628,12 +803,14 @@ function BookingDialog({ open, patients, error, initialDate, onClose, onSave }: 
           {patients.map((patient) => <MenuItem key={patient.id} value={patient.id}>{patient.name}</MenuItem>)}
         </TextField>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}><TextField label="Дата" type="date" value={date} onChange={(event) => setDate(event.target.value)} slotProps={{ inputLabel: { shrink: true } }} fullWidth /><TextField label="Время" type="time" value={time} onChange={(event) => setTime(event.target.value)} slotProps={{ inputLabel: { shrink: true } }} fullWidth /></Stack>
-        <TextField select label="Врач" value={doctor} onChange={(event) => setDoctor(event.target.value as 'petrov' | 'lebedeva')}><MenuItem value="petrov">Александр Петров</MenuItem><MenuItem value="lebedeva">Ольга Лебедева</MenuItem></TextField>
+        <TextField select label="Врач" value={selectedPractitionerId} onChange={(event) => setPractitionerId(event.target.value)}>
+          {practitioners.map((doctor) => <MenuItem key={doctor.id} value={doctor.id}>{doctor.fullName} · {doctor.specialty.toLowerCase()}</MenuItem>)}
+        </TextField>
         <TextField select label="Услуга" value={service} onChange={(event) => setService(event.target.value as 'repeat' | 'first')}><MenuItem value="repeat">Повторный приём · 30 мин</MenuItem><MenuItem value="first">Первичный приём · 50 мин</MenuItem></TextField>
         <Alert severity="info">Пациенту ничего не отправляется. Канал сообщений пока не подключён.</Alert>
       </Stack>
     </DialogContent>
-    <DialogActions><Button onClick={onClose}>Отмена</Button><Button variant="contained" disabled={!selectedPatientId || !date || !time} onClick={() => onSave({ patientId: selectedPatientId, date, time, service, doctor })}>Создать запись</Button></DialogActions>
+    <DialogActions><Button onClick={onClose}>Отмена</Button><Button variant="contained" disabled={!selectedPatientId || !selectedPractitionerId || !date || !time} onClick={() => onSave({ patientId: selectedPatientId, date, time, service, practitionerId: selectedPractitionerId })}>Создать запись</Button></DialogActions>
   </Dialog>
 }
 

@@ -1,0 +1,11 @@
+.git
+.idea
+.vscode
+node_modules
+dist
+**/target
+_to_delete
+*.log
+.env
+.env.*
+!.env.example

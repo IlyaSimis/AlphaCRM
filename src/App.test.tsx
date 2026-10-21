@@ -262,4 +262,106 @@ describe('основные сценарии', () => {
 
     await waitFor(() => expect(document.documentElement).toHaveAttribute('data-theme', 'dark'))
   })
+
+  it('меняет статус записи: администратор отмечает приход и неявку', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
+    const user = userEvent.setup()
+    renderApp()
+    expect(screen.queryByRole('button', { name: 'Изменить статус 11:00 Мария Соколова' })).not.toBeInTheDocument()
+    await user.click(screen.getByLabelText('Роль пользователя'))
+    await user.click(screen.getByRole('option', { name: 'Администратор' }))
+    await user.click(screen.getByRole('button', { name: 'Изменить статус 11:00 Мария Соколова' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Отметить неявку' }))
+    expect(await screen.findByText('Неявка')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Отменить запись 11:00 Мария Соколова' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Изменить статус 10:10 Дмитрий Волков' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Пациент пришёл' }))
+    expect(await screen.findAllByText('Прибыл')).toHaveLength(2)
+  })
+
+  it('отправляет смену статуса на сервер от имени врача', async () => {
+    const anna = { id: '00000000-0000-0000-0000-000000000101', fullName: 'Анна Михайлова', birthDate: '1991-05-14', contacts: [{ type: 'PHONE', value: '+79160000000' }], consents: [{ revokedAt: null }] }
+    let status = 'ARRIVED'
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      const address = String(url)
+      if (address.includes('/patients')) return jsonResponse([anna])
+      if (address.includes('/status')) {
+        status = JSON.parse(String(init?.body)).status
+        return jsonResponse({ status })
+      }
+      if (address.includes('/appointments')) return jsonResponse([{ id: '00000000-0000-0000-0000-000000000301', patientId: anna.id, practitionerId: '00000000-0000-0000-0000-000000000201', startsAt: '2026-10-20T09:00:00Z', endsAt: '2026-10-20T09:50:00Z', serviceName: 'Первичный приём', status }])
+      return jsonResponse({}, 404)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByText('API подключён')).toBeInTheDocument()
+    await user.click(await screen.findByRole('button', { name: 'Изменить статус 09:00 Анна Михайлова' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Завершить приём' }))
+    expect(await screen.findByText('Завершён')).toBeInTheDocument()
+    const call = fetchMock.mock.calls.find(([url]) => String(url).includes('/status'))
+    expect(call?.[1]?.headers).toMatchObject({ 'X-Demo-Role': 'DOCTOR', 'X-Actor-Id': '00000000-0000-0000-0000-000000000201' })
+  })
+
+  it('показывает расписание нескольких врачей и фильтрует по врачу', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
+    const user = userEvent.setup()
+    renderApp()
+    expect(screen.getByText('Ольга Лебедева')).toBeInTheDocument()
+    expect(screen.getByText('Ксения Орлова')).toBeInTheDocument()
+    await user.click(screen.getByRole('combobox', { name: 'Врач' }))
+    await user.click(screen.getByRole('option', { name: 'Ольга Лебедева' }))
+    expect(screen.getByText('Ксения Орлова')).toBeInTheDocument()
+    expect(screen.queryByText('Дмитрий Волков')).not.toBeInTheDocument()
+  })
+
+  it('администратор редактирует данные пациента', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
+    const user = userEvent.setup()
+    renderApp()
+    await user.click(screen.getByLabelText('Роль пользователя'))
+    await user.click(screen.getByRole('option', { name: 'Администратор' }))
+    await user.click(screen.getByRole('button', { name: 'Пациенты' }))
+    await user.click(screen.getByText('Дмитрий Волков'))
+    await user.click(screen.getByRole('button', { name: 'Редактировать' }))
+    await user.clear(screen.getByLabelText('Телефон'))
+    await user.type(screen.getByLabelText('Телефон'), '+7 900 000-00-01')
+    await user.click(screen.getByRole('button', { name: 'Сохранить изменения' }))
+    expect(await screen.findByText('+7 900 000-00-01')).toBeInTheDocument()
+    expect(screen.getByText('Демо-режим: изменения видны только до обновления страницы')).toBeInTheDocument()
+  })
+
+  it('врач не видит аналитику и журнал, менеджер видит графики', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
+    const user = userEvent.setup()
+    renderApp()
+    expect(screen.queryByRole('button', { name: 'Аналитика' })).not.toBeInTheDocument()
+    await user.click(screen.getByLabelText('Роль пользователя'))
+    await user.click(screen.getByRole('option', { name: 'Менеджер' }))
+    await user.click(screen.getByRole('button', { name: 'Аналитика' }))
+    expect(screen.getByRole('heading', { name: 'Посещаемость и приёмы' })).toBeInTheDocument()
+    expect(screen.getByText('посещаемость')).toBeInTheDocument()
+    expect(screen.getByLabelText('20.10: всего 5')).toBeInTheDocument()
+    expect(screen.getByText('Нагрузка по врачам')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Журнал аудита' }))
+    expect(screen.getByText(/доступен только при подключённом API/)).toBeInTheDocument()
+  })
+
+  it('загружает журнал аудита с сервера', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      const address = String(url)
+      if (address.includes('/audit')) return jsonResponse([{ id: 'e1', occurredAt: '2026-10-20T09:00:00Z', actorId: '00000000-0000-0000-0000-000000000901', action: 'PATIENT_UPDATED', objectType: 'PATIENT', objectId: '00000000-0000-0000-0000-000000000103', result: 'ALLOWED', reason: 'phone', correlationId: null }])
+      if (address.includes('/patients')) return jsonResponse([])
+      if (address.includes('/appointments')) return jsonResponse([])
+      return jsonResponse({}, 404)
+    }))
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByText('API подключён')).toBeInTheDocument()
+    await user.click(screen.getByLabelText('Роль пользователя'))
+    await user.click(screen.getByRole('option', { name: 'Менеджер' }))
+    await user.click(screen.getByRole('button', { name: 'Журнал аудита' }))
+    expect(await screen.findByText('Изменение данных пациента')).toBeInTheDocument()
+    expect(screen.getByText('Елена Смирнова')).toBeInTheDocument()
+  })
 })

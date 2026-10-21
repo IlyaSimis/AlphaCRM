@@ -1,19 +1,64 @@
+# Полный стек: PostgreSQL + Spring backend + nginx с интерфейсом.
+# Запуск: ./scripts/start.sh (WSL/Linux) или .\scripts\start.ps1 (PowerShell).
+# Только база для локальной разработки: docker compose up -d postgres
+name: quiet-clinic
+
+x-restart: &restart
+  restart: unless-stopped
+
 services:
   postgres:
+    <<: *restart
     image: postgres:18-alpine
     environment:
-      POSTGRES_DB: quiet_clinic
-      POSTGRES_USER: quiet_clinic
-      POSTGRES_PASSWORD: quiet_clinic
+      POSTGRES_DB: ${POSTGRES_DB:-quiet_clinic}
+      POSTGRES_USER: ${POSTGRES_USER:-quiet_clinic}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Задайте POSTGRES_PASSWORD в .env (scripts/init-env.sh)}
     ports:
-      - "127.0.0.1:55432:5432"
+      # Только localhost: для IDE и миграций. Снаружи база недоступна.
+      - "127.0.0.1:${POSTGRES_PORT:-55432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U quiet_clinic -d quiet_clinic"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 3s
       retries: 10
     volumes:
       - quiet-clinic-postgres:/var/lib/postgresql
+
+  backend:
+    <<: *restart
+    build:
+      context: .
+      dockerfile: deploy/backend.Dockerfile
+    image: quiet-clinic-api:${APP_VERSION:-local}
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DATABASE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-quiet_clinic}
+      DATABASE_USER: ${POSTGRES_USER:-quiet_clinic}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?Задайте POSTGRES_PASSWORD в .env}
+      CLINIC_DEV_KMS_KEY: ${CLINIC_KMS_KEY:?Задайте CLINIC_KMS_KEY в .env (scripts/init-env.sh)}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Порт не публикуется: backend доступен только через nginx.
+    expose:
+      - "8081"
+    deploy:
+      resources:
+        limits:
+          memory: 768m
+
+  frontend:
+    <<: *restart
+    build:
+      context: .
+      dockerfile: deploy/frontend.Dockerfile
+    image: quiet-clinic-web:${APP_VERSION:-local}
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-8080}:8080"
 
 volumes:
   quiet-clinic-postgres:

@@ -1,0 +1,7 @@
+# Скрипты и конфиги контейнеров всегда с LF, иначе bash и nginx в Linux-контейнерах ломаются.
+*.sh text eol=lf
+deploy/** text eol=lf
+mvnw text eol=lf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+.env.example text eol=lf

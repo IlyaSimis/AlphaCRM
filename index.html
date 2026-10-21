@@ -2,16 +2,7 @@
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
-    <script>
-      (() => {
-        const stored = localStorage.getItem('quiet-clinic-color-mode')
-        const mode = stored === 'light' || stored === 'dark'
-          ? stored
-          : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-        document.documentElement.dataset.theme = mode
-        document.documentElement.style.colorScheme = mode
-      })()
-    </script>
+    <script src="/theme-init.js"></script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0d1514" media="(prefers-color-scheme: dark)" />

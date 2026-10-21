@@ -1,0 +1,31 @@
+# Профиль для запуска в контейнере (docker compose). Включается SPRING_PROFILES_ACTIVE=prod.
+server:
+  shutdown: graceful
+  # За nginx: корректные схема и IP клиента из X-Forwarded-* заголовков.
+  forward-headers-strategy: framework
+  error:
+    include-message: always
+    include-stacktrace: never
+
+spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+  datasource:
+    hikari:
+      maximum-pool-size: 10
+      connection-timeout: 5000
+
+management:
+  endpoint:
+    health:
+      show-details: never
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+clinic:
+  # Без значения по умолчанию: без ключа приложение не стартует.
+  dev-kms-key: ${CLINIC_DEV_KMS_KEY}

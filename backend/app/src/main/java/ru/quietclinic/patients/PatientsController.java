@@ -1,6 +1,7 @@
 package ru.quietclinic.patients;
 
 import static ru.quietclinic.platform.PlatformConfig.actorId;
+import static ru.quietclinic.platform.PlatformConfig.notFound;
 import static ru.quietclinic.platform.PlatformConfig.requireRole;
 
 import jakarta.persistence.CascadeType;
@@ -12,6 +13,8 @@ import jakarta.persistence.Table;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Past;
+import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -21,7 +24,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -124,6 +129,11 @@ record CreatePatientRequest(
     @NotBlank String consentVersion,
     @NotBlank String consentBasis) {}
 
+record UpdatePatientRequest(
+    @NotBlank @Size(max = 255) String fullName,
+    @NotNull @Past LocalDate birthDate,
+    @NotBlank @Size(max = 255) String phone) {}
+
 record PatientView(
     UUID id,
     String fullName,
@@ -170,6 +180,51 @@ public class PatientsController {
     patient.consents.add(new Consent(patient, request.consentVersion(), request.consentBasis()));
     patients.save(patient);
     audit.record(actorId(), "PATIENT_CREATED", "PATIENT", patient.id, "ALLOWED", "registration");
+    return view(patient);
+  }
+
+  @GetMapping("/{id}")
+  @Transactional(readOnly = true)
+  PatientView get(@PathVariable UUID id) {
+    requireRole("ADMINISTRATOR", "DOCTOR", "NURSE", "CASHIER", "MANAGER");
+    var patient = patients.findById(id).orElseThrow(() -> notFound("Пациент не найден"));
+    audit.record(actorId(), "PATIENT_ADMIN_READ", "PATIENT", patient.id, "ALLOWED", "card");
+    return view(patient);
+  }
+
+  @PutMapping("/{id}")
+  @Transactional
+  PatientView update(@PathVariable UUID id, @Valid @RequestBody UpdatePatientRequest request) {
+    requireRole("ADMINISTRATOR");
+    var patient = patients.findById(id).orElseThrow(() -> notFound("Пациент не найден"));
+    var changed = new ArrayList<String>();
+    var fullName = request.fullName().trim();
+    if (!fullName.equals(patient.fullName)) {
+      patient.fullName = fullName;
+      changed.add("fullName");
+    }
+    if (!request.birthDate().equals(patient.birthDate)) {
+      patient.birthDate = request.birthDate();
+      changed.add("birthDate");
+    }
+    var phone = request.phone().trim();
+    var current = patient.contacts.stream().filter(c -> "PHONE".equals(c.type)).findFirst();
+    if (current.isEmpty()) {
+      patient.contacts.add(new Contact(patient, "PHONE", phone));
+      changed.add("phone");
+    } else if (!phone.equals(current.get().value)) {
+      current.get().value = phone;
+      changed.add("phone");
+    }
+    patients.save(patient);
+    // В аудит пишутся только имена изменённых полей, без значений.
+    audit.record(
+        actorId(),
+        "PATIENT_UPDATED",
+        "PATIENT",
+        patient.id,
+        "ALLOWED",
+        changed.isEmpty() ? "no-changes" : String.join(",", changed));
     return view(patient);
   }
 
