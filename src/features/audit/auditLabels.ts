@@ -1,0 +1,75 @@
+import { statusLabel } from '../../api/schedule'
+
+export const actionLabels: Record<string, string> = {
+  PATIENT_ADMIN_READ: 'Просмотр карточки пациента',
+  PATIENT_CREATED: 'Регистрация пациента',
+  PATIENT_UPDATED: 'Изменение данных пациента',
+  PATIENT_CONSENT_CHANGED: 'Согласие на обработку данных',
+  APPOINTMENT_CREATED: 'Создание записи',
+  APPOINTMENT_CANCELLED: 'Отмена записи',
+  APPOINTMENT_RESCHEDULED: 'Перенос записи',
+  APPOINTMENT_STATUS_CHANGED: 'Смена статуса записи',
+  APPOINTMENT_STATUS_CHANGE: 'Попытка сменить статус',
+  ENCOUNTER_STARTED: 'Начало приёма',
+  CLINICAL_HISTORY_READ: 'Просмотр клинической истории',
+  CLINICAL_NOTE_SAVED: 'Сохранение заметки приёма',
+  CLINICAL_ACCESS: 'Доступ к клиническим данным',
+  DOCUMENT_DRAFT_CREATED: 'Черновик документа',
+  DOCUMENT_SIGNED: 'Подписание документа',
+  DOCUMENT_AMENDMENT_CREATED: 'Дополнение к документу',
+  CHARGE_CREATED: 'Выставление счёта',
+  PAYMENT_CONFIRMED: 'Оплата',
+}
+
+export const objectLabels: Record<string, string> = {
+  PATIENT: 'Пациент', APPOINTMENT: 'Запись', ENCOUNTER: 'Приём', DOCUMENT: 'Документ', CHARGE: 'Счёт', PAYMENT: 'Платёж', CONSENT: 'Согласие',
+}
+
+/** Коды, которые только повторяют колонку «Действие». */
+const repeatsAction = new Set(['booking', 'cancel', 'treatment', 'attestation', 'correction', 'billing', 'registration'])
+
+const fixed: Record<string, string> = {
+  search: 'из поиска',
+  card: 'из карточки',
+  'no-changes': 'поля не изменились',
+  'no-care-relationship': 'нет активной связи с лечением',
+  granted: 'выдано',
+  revoked: 'отозвано',
+  'appointment-completed': 'после завершения приёма',
+}
+
+const fieldNames: Record<string, string> = { phone: 'телефон', fullName: 'ФИО', birthDate: 'дата рождения' }
+
+const statusCodes = new Set(['BOOKED', 'CONFIRMED', 'ARRIVED', 'IN_PROGRESS', 'COMPLETED', 'NO_SHOW', 'CANCELLED'])
+
+const moment = String.raw`(\d{4})-(\d{2})-(\d{2})T(\d{2}:\d{2})Z`
+const reschedulePattern = new RegExp(`^${moment}>${moment}(;practitioner)?$`)
+
+/**
+ * Русская подпись для машинного кода из колонки «Основание».
+ * Неизвестный код показывается как есть — без догадок.
+ */
+export function reasonLabel(code: string | null | undefined): string {
+  if (!code) return '—'
+  if (repeatsAction.has(code)) return '—'
+  if (fixed[code]) return fixed[code]
+
+  const fields = code.split(',')
+  if (fields.every((field) => fieldNames[field])) return `изменены: ${fields.map((field) => fieldNames[field]).join(', ')}`
+
+  const transition = /^([A-Z_]+)->([A-Z_]+)$/.exec(code)
+  if (transition && statusCodes.has(transition[1]) && statusCodes.has(transition[2])) {
+    return `${statusLabel(transition[1])} → ${statusLabel(transition[2])}`
+  }
+
+  const attempt = /^to ([A-Z_]+)$/.exec(code)
+  if (attempt && statusCodes.has(attempt[1])) return `попытка перевести в ${statusLabel(attempt[1])}`
+
+  const moved = reschedulePattern.exec(code)
+  if (moved) {
+    const [, y1, m1, d1, t1, y2, m2, d2, t2, doctorChanged] = moved
+    return `${d1}.${m1}.${y1} ${t1} → ${d2}.${m2}.${y2} ${t2}${doctorChanged ? ', другой врач' : ''}`
+  }
+
+  return code
+}

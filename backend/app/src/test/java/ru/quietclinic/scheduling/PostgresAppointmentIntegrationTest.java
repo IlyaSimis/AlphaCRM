@@ -43,8 +43,8 @@ class PostgresAppointmentIntegrationTest {
         {
           "patientId":"00000000-0000-0000-0000-000000000101",
           "practitionerId":"00000000-0000-0000-0000-000000000201",
-          "startsAt":"2026-10-21T09:00:00Z",
-          "endsAt":"2026-10-21T09:50:00Z",
+          "startsAt":"2026-10-22T09:00:00Z",
+          "endsAt":"2026-10-22T09:50:00Z",
           "serviceName":"Первичный приём"
         }
         """;

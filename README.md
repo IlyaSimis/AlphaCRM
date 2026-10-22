@@ -175,14 +175,78 @@ Frontend запускается так же, как в варианте 1. Не 
 
 ## Возможности и API
 
-Роли в интерфейсе: «Врач», «Администратор», «Менеджер». Запросы отправляются с `X-Actor-Id` выбранного демо-сотрудника, поэтому в журнале аудита видно, кто выполнил действие.
+Роли в интерфейсе: «Врач», «Администратор», «Менеджер», «Кассир». Запросы уходят с `X-Actor-Id` выбранного демо-сотрудника, поэтому в журнале аудита видно, кто выполнил действие. Для роли «Врач» рядом с переключателем роли выбирается врач — Александр Петров (`…0201`, по умолчанию) или Ольга Лебедева (`…0202`); его id уходит в `X-Actor-Id`.
 
-- **Расписание нескольких врачей**: `GET /api/v1/practitioners` (с рабочими часами), фильтр `practitionerId` у `GET /api/v1/appointments?date=...`.
-- **Статусы записи**: `POST /api/v1/appointments/{id}/status` с телом `{"status":"..."}`. Администратор: `BOOKED → CONFIRMED`, `BOOKED/CONFIRMED → ARRIVED | NO_SHOW`. Врач, только свои записи: `ARRIVED → IN_PROGRESS`, `ARRIVED/IN_PROGRESS → COMPLETED`. Недопустимый переход — `409 INVALID_STATUS_TRANSITION`. Неявка освобождает слот, завершённый приём — нет. Отмена: `POST /api/v1/appointments/{id}/cancel`, только администратор.
-- **Пациенты**: поиск `GET /api/v1/patients`, регистрация `POST`, карточка `GET /api/v1/patients/{id}`, редактирование `PUT /api/v1/patients/{id}` (только администратор; в аудит пишутся имена изменённых полей без значений).
-- **Клинический контур**: приём → заметка → документ → подпись (`/api/v1/clinical/...`). Доступ только врачу с активной `care_relationship`.
-- **Аналитика**: `GET /api/v1/analytics/appointments?from=2026-10-01&to=2026-10-31[&practitionerId=...]` для `MANAGER`/`ADMINISTRATOR` — агрегаты «дата × врач × статус» без персональных данных. Экран: посещаемость, неявки, отмены, приёмы по дням, нагрузка по врачам.
-- **Журнал аудита**: `GET /api/v1/audit[?result=DENIED&objectType=PATIENT]` для `MANAGER`/`ADMINISTRATOR`.
+| Сотрудник | Роль API | X-Actor-Id |
+|---|---|---|
+| Александр Петров / Ольга Лебедева | `DOCTOR` | `00000000-0000-0000-0000-000000000201` / `…0202` |
+| Елена Смирнова | `ADMINISTRATOR` | `00000000-0000-0000-0000-000000000901` |
+| Игорь Кузнецов | `MANAGER` | `00000000-0000-0000-0000-000000000902` |
+| Наталья Орлова | `CASHIER` | `00000000-0000-0000-0000-000000000903` |
+
+Время во всех запросах — UTC (`2026-10-20T09:00:00Z`); дни недели в рабочих часах — ISO (понедельник = 1).
+
+### Расписание (`scheduling`)
+
+| Маршрут | Кто | Что делает |
+|---|---|---|
+| `GET /api/v1/practitioners` | все роли | врачи с рабочими часами |
+| `GET /api/v1/services` | все роли | справочник услуг: название, длительность, цена в копейках, валюта |
+| `GET /api/v1/appointments?date=` | все роли | записи за день; фильтры `practitionerId`, `patientId`, `status` |
+| `GET /api/v1/appointments?from=&to=` | все роли | записи за период (до трёх лет): история пациента (`patientId`), завершённые приёмы для кассы (`status=COMPLETED`) |
+| `POST /api/v1/appointments` | `ADMINISTRATOR`, `DOCTOR` | новая запись; `serviceName` из справочника, на запись сохраняется снимок цены (`amountMinor`, `currency`) |
+| `POST /api/v1/appointments/{id}/reschedule` | `ADMINISTRATOR` | перенос `{startsAt, endsAt, practitionerId}` из `BOOKED`/`CONFIRMED`, статус не меняется, в outbox ничего не уходит |
+| `POST /api/v1/appointments/{id}/status` | `ADMINISTRATOR`, `DOCTOR` | смена статуса |
+| `POST /api/v1/appointments/{id}/cancel` | `ADMINISTRATOR` | отмена активной записи |
+
+Правила записи и переноса: интервал целиком внутри смены врача в этот день недели (иначе `409 OUTSIDE_WORKING_HOURS`, форма показывает ту же ошибку до отправки), без пересечений с другими записями врача (`409 SLOT_ALREADY_BOOKED`, дополнительно PostgreSQL exclusion constraint), конец позже начала (`409 INVALID_INTERVAL`), услуга из справочника (`409 UNKNOWN_SERVICE`).
+
+Статусы: администратор — `BOOKED → CONFIRMED`, `BOOKED/CONFIRMED → ARRIVED | NO_SHOW`; врач, только свои записи — `ARRIVED → IN_PROGRESS`, `ARRIVED/IN_PROGRESS → COMPLETED`. Недопустимый переход — `409 INVALID_STATUS_TRANSITION`. Неявка освобождает слот, завершённый приём — нет. При переходе в `COMPLETED` модуль оплаты создаёт один счёт `PENDING` на снимок цены записи.
+
+При создании записи (и при переносе к другому врачу) расписание вызывает `CareRelationshipService.ensureCareRelationship(practitionerId, patientId)`: если активной связи с лечением нет, создаётся новая на год.
+
+### Пациенты (`patients`)
+
+| Маршрут | Кто | Что делает |
+|---|---|---|
+| `GET /api/v1/patients[?query=]` | все роли | поиск по ФИО |
+| `POST /api/v1/patients` | `ADMINISTRATOR` | регистрация с первым согласием |
+| `GET /api/v1/patients/{id}` | все роли | карточка |
+| `PUT /api/v1/patients/{id}` | `ADMINISTRATOR` | ФИО, дата рождения, телефон; в аудит — имена изменённых полей без значений |
+| `POST /api/v1/patients/{id}/consents` | `ADMINISTRATOR` | новая действующая версия согласия `{version, basis}`; прежние не удаляются |
+| `POST /api/v1/patients/{id}/consents/{consentId}/revoke` | `ADMINISTRATOR` | отзыв: ставит `revokedAt`, повторный отзыв — `409 ALREADY_REVOKED` |
+
+Согласие «действует», если есть хотя бы одно без `revokedAt`. В аудит — факт и id согласия, без текста основания.
+
+### Клинический контур (`clinical`)
+
+Доступ к тексту — только врачу с активной `care_relationship`; администратору, менеджеру и кассиру клинический текст недоступен.
+
+| Маршрут | Что делает |
+|---|---|
+| `POST /api/v1/clinical/encounters` | начать приём по записи `{appointmentId, patientId, practitionerId}`. Запись должна существовать, пациент и врач — совпадать с ней, врач — быть текущим `X-Actor-Id`, статус — `ARRIVED` или `IN_PROGRESS`. `201` — новый приём, `200` — уже начатый по этой записи |
+| `GET /api/v1/clinical/patients/{patientId}/encounters` | история приёмов: `appointmentId`, `startedAt`, текст заметки и список версий документа (`id`, `state`, `templateVersion`, `signedAt`, `amendsDocumentId`) — без snapshot и текста документа |
+| `PUT /api/v1/clinical/encounters/{id}/note` | черновик заметки: жалобы, психический статус, диагноз, рекомендации |
+| `POST /api/v1/clinical/encounters/{id}/documents` | черновик документа `{templateVersion}` из текущей заметки (`409 NOTE_REQUIRED`, если заметки нет) |
+| `POST /api/v1/clinical/documents/{id}/sign` | подпись: черновик приводится к текущей заметке, считается хеш, версия блокируется (`SIGNED_LOCKED`) |
+| `POST /api/v1/clinical/documents/{id}/amendments` | дополнение к подписанному документу — новый черновик со ссылкой на исходный; исходник остаётся заблокированным |
+
+Клинический модуль не зависит от расписания: данные записи он получает через свой порт `VisitAppointments`, который реализует `scheduling`.
+
+### Касса (`billing`)
+
+| Маршрут | Кто | Что делает |
+|---|---|---|
+| `GET /api/v1/billing/charges` | `CASHIER`, `ADMINISTRATOR` | счета с оплатой: `appointmentId`, сумма, статус, `paymentStatus` |
+| `POST /api/v1/billing/charges` | `CASHIER`, `ADMINISTRATOR` | счёт по приёму, если его ещё нет (`409 CHARGE_ALREADY_EXISTS`) |
+| `POST /api/v1/billing/charges/{id}/payments` | `CASHIER` | оплата `{idempotencyKey}`; повтор с тем же ключом не списывает второй раз |
+
+Один счёт на приём — уникальный индекс по `appointment_id`. Экран «Касса» (кассир и администратор): завершённые приёмы за 90 дней — пациент, врач, услуга, сумма, статус счёта; без диагнозов и текста приёма. Администратор выставляет недостающий счёт, кассир принимает оплату. На экран аналитики деньги не выводятся.
+
+### Аналитика и аудит
+
+- **Аналитика**: `GET /api/v1/analytics/appointments?from=&to=[&practitionerId=]` для `MANAGER`/`ADMINISTRATOR` — агрегаты «дата × врач × статус» без персональных данных.
+- **Журнал аудита**: `GET /api/v1/audit[?result=DENIED&objectType=PATIENT]` для `MANAGER`/`ADMINISTRATOR`. Колонка «Основание» — короткий машинный код без клинического текста, телефонов, ФИО и значений полей; интерфейс переводит его на русский (`search` → «из поиска», `fullName,phone` → «изменены: ФИО, телефон», `BOOKED->CONFIRMED` → «Ожидает → Подтверждён», перенос → «20.10.2026 09:00 → 22.10.2026 10:30»). Коды, которые повторяют действие, показываются как «—», неизвестные — как есть.
 
 ### Demo auth
 
@@ -208,6 +272,50 @@ curl -H 'X-Demo-Role: DOCTOR' \
 - платежи и уведомления — порты с безопасными mock-адаптерами;
 - аудит фиксирует чтения и изменения без клинического текста.
 
+### Структура кода
+
+Код разложен по разделам; тест лежит рядом с тем, что он проверяет.
+
+**Frontend** (`src/`): тест — в той же папке, с тем же именем и суффиксом `.test`.
+
+```
+src/
+  app/          App.tsx (каркас и навигация), Sidebar, Topbar, theme.tsx,
+                useClinicData.ts (данные и действия: сервер или демо-режим), demoData.ts
+  api/          client.ts (адрес, заголовки, выбранный врач, ошибки), schedule.ts, patients.ts,
+                clinical.ts, billing.ts, analytics.ts, audit.ts, types.ts
+  features/
+    schedule/   Schedule.tsx, BookingDialog.tsx, RescheduleDialog.tsx, booking.ts,
+                statusActions.ts, workingHours.ts
+    patients/   PatientsList.tsx, PatientCard.tsx, PatientDialog.tsx, ConsentDialog.tsx,
+                history.ts, usePatientHistory.ts, useClinicalHistory.ts, search.ts
+    visit/      Visit.tsx, SignDialog.tsx, useVisit.ts, visit.ts
+    cashier/    Cashier.tsx, cashier.ts
+    analytics/  Analytics.tsx, stats.ts
+    audit/      AuditLog.tsx, auditLabels.ts
+  shared/       dates.ts, roles.ts, storage.ts, text.ts, ui.tsx (Metric, Info, FormSection)
+  test/         setup.ts (общая подготовка), helpers.tsx (renderApp, chooseRole, goOffline)
+```
+
+Два вида тестов: `*.test.ts` — функции без интерфейса (`stats.test.ts`, `statusActions.test.ts`, `dates.test.ts`), `<раздел>.test.tsx` — сценарии раздела через весь интерфейс (`schedule.test.tsx`, `patients.test.tsx`).
+
+**Backend** (`backend/app/src/main/java/ru/quietclinic/<модуль>/`): один тип — один файл. В каждом модуле:
+
+- сущности и репозитории (`Appointment`, `AppointmentRepository`);
+- запросы и ответы API (`CreateAppointmentRequest`, `AppointmentView`);
+- правила и логика — в сервисах и доменных классах (`AppointmentService`, `AppointmentStatusPolicy`, `Patient.update`);
+- контроллер — только HTTP, без логики (`SchedulingController`).
+
+Тесты — по стандарту Maven в `src/test/java`, в том же пакете, класс `FooTest` проверяет класс `Foo`. В IntelliJ IDEA переход между классом и его тестом — `Ctrl+Shift+T`.
+
+| Тест | Что проверяет | Spring нужен? |
+|---|---|---|
+| `AppointmentStatusPolicyTest`, `WorkingHoursPolicyTest`, `RescheduleReasonTest`, `AppointmentStatsServiceTest`, `PatientTest`, `MedicalDocumentTest`, `NoteContentTest`, `ProductionReadinessCheckTest` | правила и расчёты | нет, миллисекунды |
+| `SchedulingControllerTest`, `ServiceCatalogControllerTest`, `AnalyticsControllerTest`, `PatientsControllerTest`, `ClinicalControllerTest`, `BillingControllerTest`, `AuditControllerTest` | HTTP-сценарии с правами ролей на H2 | да |
+| `CareRelationshipServiceTest`, `ChargeServiceTest` | публичные методы модулей, которые вызывает расписание | да |
+| `PostgresAppointmentIntegrationTest` | ограничение на пересечение записей в настоящем PostgreSQL | Docker |
+| `ModularityTest` | границы между модулями | нет |
+
 Файлы запуска:
 
 ```
@@ -228,11 +336,12 @@ scripts/stop.sh               # остановка
 ./mvnw spotless:apply   # форматирование Java
 ./mvnw verify           # тесты backend + проверка форматирования
 npm run lint
-npm test
+npm test                # все тесты frontend
+npx vitest src/features/schedule   # тесты одного раздела
 npm run build
 ```
 
-PostgreSQL integration test использует Testcontainers и пропускается, если Docker не запущен; unit-тесты и проверка границ модулей выполняются всегда.
+Один класс backend: `./mvnw -pl backend/app test -Dtest=AppointmentStatusPolicyTest` или зелёная стрелка рядом с тестом в IDEA. PostgreSQL integration test использует Testcontainers и пропускается, если Docker не запущен.
 
 ## Решение проблем
 

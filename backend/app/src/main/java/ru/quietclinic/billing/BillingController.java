@@ -4,20 +4,13 @@ import static ru.quietclinic.platform.PlatformConfig.actorId;
 import static ru.quietclinic.platform.PlatformConfig.conflict;
 import static ru.quietclinic.platform.PlatformConfig.requireRole;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
-import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -27,98 +20,6 @@ import org.springframework.web.bind.annotation.RestController;
 import ru.quietclinic.audit.AuditService;
 import ru.quietclinic.communications.OutboxService;
 
-@Entity
-@Table(name = "charge")
-class Charge {
-  @Id UUID id;
-
-  @Column(nullable = false)
-  UUID appointmentId;
-
-  @Column(nullable = false)
-  long amountMinor;
-
-  @Column(nullable = false)
-  String currency;
-
-  @Column(nullable = false)
-  String status;
-
-  @Column(nullable = false)
-  Instant createdAt;
-
-  protected Charge() {}
-
-  Charge(UUID appointmentId, long amountMinor, String currency) {
-    id = UUID.randomUUID();
-    this.appointmentId = appointmentId;
-    this.amountMinor = amountMinor;
-    this.currency = currency;
-    status = "PENDING";
-    createdAt = Instant.now();
-  }
-}
-
-@Entity
-@Table(name = "payment_record")
-class PaymentRecord {
-  @Id UUID id;
-
-  @Column(nullable = false, unique = true)
-  String idempotencyKey;
-
-  @Column(nullable = false)
-  UUID chargeId;
-
-  @Column(nullable = false)
-  String providerRef;
-
-  @Column(nullable = false)
-  String paymentStatus;
-
-  @Column(nullable = false)
-  String fiscalStatus;
-
-  @Column(nullable = false)
-  Instant createdAt;
-
-  protected PaymentRecord() {}
-}
-
-interface ChargeRepository extends JpaRepository<Charge, UUID> {}
-
-interface PaymentRepository extends JpaRepository<PaymentRecord, UUID> {
-  java.util.Optional<PaymentRecord> findByIdempotencyKey(String key);
-}
-
-interface PaymentGateway {
-  ProviderPayment capture(UUID chargeId, long amountMinor, String currency, String idempotencyKey);
-}
-
-record ProviderPayment(String reference, String status) {}
-
-@Component
-class SafeMockPaymentGateway implements PaymentGateway {
-  public ProviderPayment capture(
-      UUID chargeId, long amountMinor, String currency, String idempotencyKey) {
-    return new ProviderPayment("mock-pay-" + chargeId, "CONFIRMED");
-  }
-}
-
-record ChargeRequest(
-    @NotNull UUID appointmentId, @Positive long amountMinor, @NotBlank String currency) {}
-
-record PaymentRequest(@NotBlank String idempotencyKey) {}
-
-record BillingView(
-    UUID chargeId,
-    long amountMinor,
-    String currency,
-    String chargeStatus,
-    UUID paymentId,
-    String paymentStatus,
-    String fiscalStatus) {}
-
 @RestController
 @RequestMapping("/api/v1/billing")
 public class BillingController {
@@ -127,30 +28,32 @@ public class BillingController {
   private final PaymentGateway gateway;
   private final OutboxService outbox;
   private final AuditService audit;
+  private final ChargeService chargeService;
 
   BillingController(
       ChargeRepository charges,
       PaymentRepository payments,
       PaymentGateway gateway,
       OutboxService outbox,
-      AuditService audit) {
+      AuditService audit,
+      ChargeService chargeService) {
     this.charges = charges;
     this.payments = payments;
     this.gateway = gateway;
     this.outbox = outbox;
     this.audit = audit;
+    this.chargeService = chargeService;
+  }
+
+  @GetMapping("/charges")
+  List<ChargeView> charges() {
+    return chargeService.list();
   }
 
   @PostMapping("/charges")
   @ResponseStatus(HttpStatus.CREATED)
-  @Transactional
-  BillingView createCharge(@Valid @RequestBody ChargeRequest request) {
-    requireRole("CASHIER", "ADMINISTRATOR");
-    var charge =
-        charges.save(
-            new Charge(request.appointmentId(), request.amountMinor(), request.currency()));
-    audit.record(actorId(), "CHARGE_CREATED", "CHARGE", charge.id, "ALLOWED", "billing");
-    return view(charge, null);
+  ChargeView createCharge(@Valid @RequestBody ChargeRequest request) {
+    return chargeService.create(request);
   }
 
   @PostMapping("/charges/{chargeId}/payments")
