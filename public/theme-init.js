@@ -2,7 +2,8 @@
 (() => {
   let stored = null
   try {
-    stored = localStorage.getItem('quiet-clinic-color-mode')
+    // Новый ключ alphacrm-*, если его ещё нет — прежний quiet-clinic-* (см. src/shared/storage.ts).
+    stored = localStorage.getItem('alphacrm-color-mode') ?? localStorage.getItem('quiet-clinic-color-mode')
   } catch {
     // хранилище недоступно (приватный режим) — берём системную тему
   }

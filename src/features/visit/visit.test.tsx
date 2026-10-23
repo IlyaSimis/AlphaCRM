@@ -1,7 +1,7 @@
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
-import { anna, goOffline, jsonResponse, renderApp } from '../../test/helpers'
+import { describe, expect, it } from 'vitest'
+import { anna, enterDemo, goOffline, jsonResponse, renderApp, withAuth } from '../../test/helpers'
 
 type User = ReturnType<typeof userEvent.setup>
 
@@ -12,11 +12,12 @@ async function fillNote(user: User) {
   await user.type(screen.getByLabelText('Назначения и рекомендации'), 'Контроль через 2 недели')
 }
 
-describe('приём пациента', () => {
-  it('открывает приём выбранной записи и подписывает документ из формы', async () => {
+describe('patient visit', () => {
+  it('opens the visit of the selected appointment and signs the document from the form', async () => {
     goOffline()
     const user = userEvent.setup()
     renderApp()
+    await enterDemo(user)
     await user.click(screen.getByRole('button', { name: 'Начать приём 09:00 Анна Михайлова' }))
     expect(screen.getByRole('heading', { name: 'Анна Михайлова' })).toBeInTheDocument()
     expect(screen.getByText(/ПЕРВИЧНЫЙ ПРИЁМ · .* · 09:00–09:50/)).toBeInTheDocument()
@@ -34,11 +35,12 @@ describe('приём пациента', () => {
     expect(screen.getByLabelText('Диагноз')).toBeDisabled()
   })
 
-  it('дополнение открывает новый черновик, исходная версия остаётся подписанной', async () => {
+  it('an amendment opens a new draft while the original stays signed', async () => {
     goOffline()
     const user = userEvent.setup()
     renderApp()
-    await user.click(screen.getByRole('button', { name: /начать приём/i }))
+    await enterDemo(user)
+    await user.click(screen.getByRole('button', { name: 'Начать приём 09:00 Анна Михайлова' }))
     await fillNote(user)
     await user.click(screen.getByRole('button', { name: /проверить и подписать/i }))
     await user.click(screen.getByRole('button', { name: /подписать и заблокировать/i }))
@@ -48,9 +50,9 @@ describe('приём пациента', () => {
     expect(screen.getByLabelText('Диагноз')).toBeEnabled()
   })
 
-  it('на сервере начинает приём по записи, сохраняет черновик из формы и подписывает', async () => {
+  it('on the server starts a visit, saves the draft from the form and signs it', async () => {
     const appointmentId = '00000000-0000-0000-0000-000000000301'
-    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    const fetchMock = withAuth(async (url: string, init?: RequestInit) => {
       const address = String(url)
       const method = init?.method ?? 'GET'
       const encounter = { encounterId: 'e1', appointmentId, patientId: anna.id, practitionerId: '00000000-0000-0000-0000-000000000201', status: 'IN_PROGRESS', startedAt: '2026-10-20T09:01:00Z', documents: [] }
@@ -62,8 +64,7 @@ describe('приём пациента', () => {
       if (address.includes('/patients')) return jsonResponse([anna])
       if (address.includes('/appointments')) return jsonResponse([{ id: appointmentId, patientId: anna.id, practitionerId: '00000000-0000-0000-0000-000000000201', startsAt: '2026-10-20T09:00:00Z', endsAt: '2026-10-20T09:50:00Z', serviceName: 'Первичный приём', status: 'ARRIVED' }])
       return jsonResponse({}, 404)
-    })
-    vi.stubGlobal('fetch', fetchMock)
+    }, 't.petrov')
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()

@@ -10,18 +10,24 @@ import {
   rememberPatient,
   revokeConsent as revokeConsentApi,
   updatePatient as updatePatientApi,
+  updateRegistry as updateRegistryApi,
   type PatientInput,
 } from '../api/patients'
 import {
   cancelAppointment,
   changeAppointmentStatus,
   createAppointment,
+  createService,
   demoPractitioners,
   demoServices,
+  loadAppointments,
   loadPractitioners,
   loadSchedule,
   loadServices,
   rescheduleAppointment,
+  saveServicePrice,
+  saveWorkingHours,
+  setServiceActive,
   statusLabel,
   withStatus,
 } from '../api/schedule'
@@ -29,14 +35,17 @@ import type { AppointmentStatus, ChargeItem, PatientItem, Practitioner, Schedule
 import { localCharge } from '../features/cashier/cashier'
 import { localBooking, validateBooking, type BookingDraft } from '../features/schedule/booking'
 import type { RescheduleDraft } from '../features/schedule/RescheduleDialog'
+import type { ScheduleView } from '../features/schedule/scheduleView'
 import { availableActions } from '../features/schedule/statusActions'
 import { OUTSIDE_WORKING_HOURS, fitsWorkingHours } from '../features/schedule/workingHours'
-import { apiRoles, type Role } from '../shared/roles'
-import { readStored, writeStored } from '../shared/storage'
+import type { Role } from '../shared/roles'
+import { weekOf } from '../shared/dates'
+import { useSandboxState } from '../shared/sandbox'
+import { readStored, storageKeys, writeStored } from '../shared/storage'
 import { isUuid } from '../shared/text'
 import { clinicDay, demoAppointments, demoPatients } from './demoData'
 
-const scheduleDateKey = 'quiet-clinic-schedule-date'
+const scheduleDateKey = storageKeys.scheduleDate
 
 const parseDate = (value: string | null) => (value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : clinicDay)
 
@@ -48,22 +57,30 @@ function mergeDay(current: ScheduleItem[], date: string, incoming: ScheduleItem[
   return sortSchedule([...current.filter((item) => item.date !== date), ...incoming])
 }
 
-/** Итог действия из диалога: закрыть, показать ошибку или ничего (ответ устарел). */
-export type DialogResult = { status: 'done' } | { status: 'error'; message: string } | { status: 'stale' }
+/** Заменяет записи за период from–to включительно: так неделя приходит одним запросом. */
+function mergeRange(current: ScheduleItem[], from: string, to: string, incoming: ScheduleItem[]) {
+  return sortSchedule([...current.filter((item) => item.date < from || item.date > to), ...incoming])
+}
+
+/** Итог действия из диалога: закрыть (с id созданной записи), показать ошибку или ничего (ответ устарел). */
+export type DialogResult = { status: 'done'; id?: string } | { status: 'error'; message: string } | { status: 'stale' }
 
 /**
- * Данные клиники и действия над ними: загрузка с сервера, а если он недоступен —
- * демо-режим, где изменения живут только до обновления страницы.
+ * Данные клиники и действия над ними. live — вошли на сервер: данные приходят с API.
+ * Иначе демо-песочница: запросов нет, изменения живут только до обновления страницы.
  */
-export function useClinicData(doctorId: string) {
-  const [scheduleItems, setScheduleItems] = useState(demoAppointments)
-  const [patientItems, setPatientItems] = useState(demoPatients)
-  const [practitioners, setPractitioners] = useState<Practitioner[]>(demoPractitioners)
-  const [services, setServices] = useState<ServiceItem[]>(demoServices)
-  const [localCharges, setLocalCharges] = useState<ChargeItem[]>([])
+export function useClinicData(doctorId: string, live: boolean) {
+  const sandbox = !live
+  const [scheduleItems, setScheduleItems] = useSandboxState<ScheduleItem[]>('schedule', demoAppointments, sandbox)
+  const [patientItems, setPatientItems] = useSandboxState<PatientItem[]>('patients', demoPatients, sandbox)
+  const [practitioners, setPractitioners] = useSandboxState<Practitioner[]>('practitioners', demoPractitioners, sandbox)
+  // На живом API справочник услуг — только с сервера; демо-услуги — у песочницы.
+  const [services, setServices] = useSandboxState<ServiceItem[]>('services', live ? [] : demoServices, sandbox)
+  const [localCharges, setLocalCharges] = useSandboxState<ChargeItem[]>('charges', [], sandbox)
   const [selectedPatientId, setSelectedPatientId] = useState(demoPatients[0].id)
   const [apiOnline, setApiOnline] = useState(false)
   const [scheduleDate, setScheduleDate] = useState(() => readStored(scheduleDateKey, parseDate))
+  const [scheduleView, setScheduleView] = useState<ScheduleView>('day')
   const [notice, setNotice] = useState({ message: '', open: false })
   // Растёт после каждого изменения записей: карточка пациента и касса по нему перечитывают данные.
   const [revision, setRevision] = useState(0)
@@ -77,6 +94,7 @@ export function useClinicData(doctorId: string) {
   useEffect(() => { writeStored(scheduleDateKey, scheduleDate) }, [scheduleDate])
 
   useEffect(() => {
+    if (!live) return
     let cancelled = false
     loadPatients()
       .then((remotePatients) => {
@@ -93,24 +111,28 @@ export function useClinicData(doctorId: string) {
       .catch(() => { /* список врачей по умолчанию остаётся из демо-данных */ })
     loadServices()
       .then((remote) => { if (!cancelled) setServices(remote) })
-      .catch(() => { /* справочник услуг по умолчанию совпадает с seed */ })
+      .catch(() => { /* справочник недоступен: запись покажет, что услуг нет */ })
     return () => { cancelled = true }
-  }, [])
+  }, [live])
 
   useEffect(() => {
     if (!apiOnline) return
     const generation = ++loadGeneration.current
     let cancelled = false
-    loadSchedule(scheduleDate)
-      .then((items) => {
+    const week = weekOf(scheduleDate)
+    const request = scheduleView === 'week'
+      ? loadAppointments({ from: week[0], to: week[6] }).then((items) => (current: ScheduleItem[]) => mergeRange(current, week[0], week[6], items))
+      : loadSchedule(scheduleDate).then((items) => (current: ScheduleItem[]) => mergeDay(current, scheduleDate, items))
+    request
+      .then((apply) => {
         if (cancelled || generation !== loadGeneration.current) return
-        setScheduleItems((current) => mergeDay(current, scheduleDate, items))
+        setScheduleItems(apply)
       })
       .catch(() => {
         if (!cancelled && generation === loadGeneration.current) setApiOnline(false)
       })
     return () => { cancelled = true }
-  }, [apiOnline, scheduleDate])
+  }, [apiOnline, scheduleDate, scheduleView])
 
   const updateLocally = (id: string, change: (item: ScheduleItem) => ScheduleItem) =>
     setScheduleItems((items) => items.map((row) => row.id === id ? change(row) : row))
@@ -164,7 +186,7 @@ export function useClinicData(doctorId: string) {
     setLocalCharges((charges) => charges.map((charge) => charge.chargeId === chargeId ? { ...charge, status: 'PAID', paymentStatus: 'CONFIRMED' } : charge))
 
   const cancelBooking = async (item: ScheduleItem, role: Role) => {
-    if (role !== 'Администратор' || item.statusCode === 'CANCELLED' || !item.id) return
+    if (role !== 'ADMINISTRATOR' || item.statusCode === 'CANCELLED' || !item.id) return
     const id = item.id
     notifyError(await mutateAppointment({ ...item, id }, () => cancelAppointment(id), () => updateLocally(id, (row) => withStatus(row, 'CANCELLED')), {
       done: 'Запись отменена',
@@ -182,11 +204,33 @@ export function useClinicData(doctorId: string) {
       // Как на сервере: завершённый приём получает счёт на снимок цены.
       if (to === 'COMPLETED') addLocalCharge({ ...item, statusCode: to })
     }
-    notifyError(await mutateAppointment({ ...item, id }, () => changeAppointmentStatus(id, to, apiRoles[role]), local, {
+    notifyError(await mutateAppointment({ ...item, id }, () => changeAppointmentStatus(id, to), local, {
       done: `Статус: ${label}`,
       offline: 'Сервер недоступен: статус виден только до обновления страницы',
       demo: `Демо-режим: статус «${label}» виден только до обновления страницы`,
     }))
+  }
+
+  /**
+   * Врач начал приём по записи. На сервере статус ставит сам старт приёма — перечитываем день;
+   * в песочнице запись до приёма сразу становится «На приёме». Другие записи не трогаются.
+   */
+  const visitStarted = async (item: ScheduleItem) => {
+    if (!item.id) return
+    const id = item.id
+    if (apiOnline && isUuid(id)) {
+      try {
+        await reloadDays([item.date])
+        bump()
+      } catch {
+        // расписание обновится при следующей загрузке дня
+      }
+      return
+    }
+    if (item.statusCode === 'BOOKED' || item.statusCode === 'CONFIRMED' || item.statusCode === 'ARRIVED') {
+      updateLocally(id, (row) => withStatus(row, 'IN_PROGRESS'))
+      bump()
+    }
   }
 
   const reschedule = async (item: ScheduleItem, draft: RescheduleDraft): Promise<DialogResult> => {
@@ -204,25 +248,25 @@ export function useClinicData(doctorId: string) {
     return result
   }
 
-  const book = async (draft: BookingDraft, role: Role): Promise<DialogResult> => {
+  const book = async (draft: BookingDraft): Promise<DialogResult> => {
     const invalid = validateBooking(draft, patientItems, services, practitioners)
     if (invalid) return { status: 'error', message: invalid }
     const patient = patientItems.find((item) => item.id === draft.patientId) as PatientItem
     const service = services.find((item) => item.id === draft.serviceId) as ServiceItem
     const showLocal = (message: string): DialogResult => {
       loadGeneration.current += 1
+      const created = localBooking(draft, patient, service)
       setScheduleDate(draft.date)
-      setScheduleItems((items) => sortSchedule([...items, localBooking(draft, patient, service)]))
+      setScheduleItems((items) => sortSchedule([...items, created]))
       notify(message)
       bump()
-      return { status: 'done' }
+      return { status: 'done', id: created.id }
     }
     if (!apiOnline || !isUuid(patient.id)) return showLocal('Демо-режим: запись видна только до обновления страницы')
     const generation = ++loadGeneration.current
     try {
-      await createAppointment(
+      const created = await createAppointment(
         { patientId: patient.id, patientName: patient.name, practitionerId: draft.practitionerId, date: draft.date, time: draft.time, minutes: service.durationMinutes, serviceName: service.name },
-        apiRoles[role] === 'ADMINISTRATOR' ? 'ADMINISTRATOR' : 'DOCTOR',
       )
       const day = await loadSchedule(draft.date)
       if (generation !== loadGeneration.current) return { status: 'stale' }
@@ -230,7 +274,7 @@ export function useClinicData(doctorId: string) {
       setScheduleItems((current) => mergeDay(current, draft.date, day))
       notify('Запись создана')
       bump()
-      return { status: 'done' }
+      return { status: 'done', id: created?.id as string | undefined }
     } catch (error) {
       if (generation !== loadGeneration.current) return { status: 'stale' }
       if (error instanceof ApiError && error.status < 500) return { status: 'error', message: error.message }
@@ -316,12 +360,106 @@ export function useClinicData(doctorId: string) {
     notify('Демо-режим: отзыв согласия виден только до обновления страницы')
   }
 
+  /** Недельный график врача: на сервере — PUT целиком, в песочнице — локально. */
+  const saveHours = async (practitioner: Practitioner, shifts: Practitioner['workingHours']): Promise<string | null> => {
+    const replace = (updated: Practitioner) => setPractitioners((items) => items.map((item) => item.id === updated.id ? updated : item))
+    if (apiOnline && isUuid(practitioner.id)) {
+      try {
+        replace(await saveWorkingHours(practitioner.id, shifts))
+        notify('График сохранён')
+        return null
+      } catch (error) {
+        return (error as Error).message
+      }
+    }
+    replace({ ...practitioner, workingHours: shifts })
+    notify('Демо-режим: график виден только до обновления страницы')
+    return null
+  }
+
+  /** Новая цена — только для новых записей: снимок цены в уже созданных записях не трогаем. */
+  const savePrice = async (service: ServiceItem, priceMinor: number): Promise<string | null> => {
+    const replace = (updated: ServiceItem) => setServices((items) => items.map((item) => item.id === updated.id ? updated : item))
+    if (apiOnline && isUuid(service.id)) {
+      try {
+        replace(await saveServicePrice(service.id, priceMinor))
+        notify('Цена сохранена')
+        return null
+      } catch (error) {
+        return (error as Error).message
+      }
+    }
+    replace({ ...service, priceMinor })
+    notify('Демо-режим: цена видна только до обновления страницы')
+    return null
+  }
+
+  /** Новая услуга сразу доступна в записи на приём. Возвращает текст ошибки или null. */
+  const addService = async (input: { name: string; durationMinutes: number; priceMinor: number }): Promise<string | null> => {
+    const name = input.name.trim()
+    if (apiOnline) {
+      try {
+        const created = await createService({ ...input, name })
+        setServices((items) => [...items, created])
+        notify('Услуга добавлена')
+        return null
+      } catch (error) {
+        return (error as Error).message
+      }
+    }
+    if (services.some((item) => item.name.toLowerCase() === name.toLowerCase())) return 'Услуга с таким названием уже есть'
+    setServices((items) => [...items, { id: crypto.randomUUID(), name, durationMinutes: input.durationMinutes, priceMinor: input.priceMinor, currency: 'RUB', active: true }])
+    notify('Демо-режим: услуга видна только до обновления страницы')
+    return null
+  }
+
+  /** Выключенная услуга не предлагается в новой записи; старые записи хранят свой снимок. */
+  const toggleService = async (service: ServiceItem): Promise<string | null> => {
+    const active = !service.active
+    const replace = (updated: ServiceItem) => setServices((items) => items.map((item) => item.id === updated.id ? updated : item))
+    if (apiOnline && isUuid(service.id)) {
+      try {
+        replace(await setServiceActive(service.id, active))
+        notify(active ? 'Услуга включена' : 'Услуга выключена')
+        return null
+      } catch (error) {
+        return (error as Error).message
+      }
+    }
+    replace({ ...service, active })
+    notify('Демо-режим: изменение видно только до обновления страницы')
+    return null
+  }
+
+  /** Источник пациента и заметка регистратуры. Возвращает текст ошибки или null. */
+  const updateRegistry = async (patient: PatientItem, input: { referralSource: string | null; registryNote: string | null }): Promise<string | null> => {
+    if (apiOnline && isUuid(patient.id)) {
+      try {
+        replacePatient(await updateRegistryApi(patient.id, input))
+        notify('Данные регистратуры сохранены')
+        return null
+      } catch (error) {
+        return (error as Error).message
+      }
+    }
+    replacePatient({ ...patient, referralSource: input.referralSource, registryNote: input.registryNote })
+    notify('Демо-режим: изменения видны только до обновления страницы')
+    return null
+  }
+
   return {
     apiOnline,
+    scheduleView,
+    setScheduleView,
+    saveHours,
+    savePrice,
+    updateRegistry,
     scheduleItems,
     patientItems,
     practitioners,
     services,
+    addService,
+    toggleService,
     localCharges,
     revision,
     selectedPatientId,
@@ -333,6 +471,7 @@ export function useClinicData(doctorId: string) {
     closeNotice,
     cancelBooking,
     changeStatus,
+    visitStarted,
     reschedule,
     book,
     createPatient,

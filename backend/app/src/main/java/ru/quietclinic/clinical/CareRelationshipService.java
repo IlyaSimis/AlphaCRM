@@ -10,7 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class CareRelationshipService {
   static final Duration DEFAULT_TERM = Duration.ofDays(365);
-  static final String APPOINTMENT_REASON = "Назначение по записи";
+  static final String APPOINTMENT_REASON = "appointment-booking";
 
   private final CareRelationshipRepository relationships;
 

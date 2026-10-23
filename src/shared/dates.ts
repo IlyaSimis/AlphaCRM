@@ -38,6 +38,17 @@ export function daysBetween(from: string, to: string) {
   return days
 }
 
+/** Понедельник недели, в которую попадает дата. */
+export function weekStart(iso: string) {
+  return shiftDate(iso, 1 - isoWeekday(iso))
+}
+
+/** Семь дат недели с понедельника. */
+export function weekOf(iso: string) {
+  const monday = weekStart(iso)
+  return daysBetween(monday, shiftDate(monday, 6))
+}
+
 export function localToday() {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`

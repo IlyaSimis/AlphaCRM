@@ -1,31 +1,55 @@
+import { errorPhrase } from './errorMessages'
+
 export type ApiRole = 'ADMINISTRATOR' | 'DOCTOR' | 'MANAGER' | 'CASHIER'
 
-export const API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8081/api/v1'
+/** Тот же origin, что и интерфейс: nginx в Docker, прокси Vite при разработке. */
+export const API = import.meta.env.VITE_API_URL ?? '/api/v1'
 
+/** Демо-врачи из миграций: остаются в расписании, но учётных записей у них нет. */
 export const PETROV_ID = '00000000-0000-0000-0000-000000000201'
 export const LEBEDEVA_ID = '00000000-0000-0000-0000-000000000202'
 
-/** Демо-сотрудники: от их имени уходят запросы, чтобы журнал аудита показывал реального автора действия. */
-export const ACTORS: Record<ApiRole, { id: string; name: string }> = {
-  ADMINISTRATOR: { id: '00000000-0000-0000-0000-000000000901', name: 'Елена Смирнова' },
-  DOCTOR: { id: PETROV_ID, name: 'Александр Петров' },
-  MANAGER: { id: '00000000-0000-0000-0000-000000000902', name: 'Игорь Кузнецов' },
-  CASHIER: { id: '00000000-0000-0000-0000-000000000903', name: 'Наталья Орлова' },
+const CSRF_COOKIE = 'XSRF-TOKEN'
+const SAFE_METHODS = ['GET', 'HEAD', 'OPTIONS']
+
+let unauthorizedHandler: (() => void) | null = null
+
+/** Вызывается, когда живой API ответил 401: сессия закончилась — вернуться на страницу входа. */
+export function onUnauthorized(handler: (() => void) | null) {
+  unauthorizedHandler = handler
 }
 
-/** Врач, от имени которого работает роль «Врач». По умолчанию — Александр Петров. */
-let doctorActorId = PETROV_ID
-
-export function setDoctorActor(id: string) {
-  doctorActorId = id
+function readCookie(name: string) {
+  const match = document.cookie.split('; ').find((part) => part.startsWith(`${name}=`))
+  return match ? decodeURIComponent(match.slice(name.length + 1)) : null
 }
 
-export function actorIdFor(role: ApiRole) {
-  return role === 'DOCTOR' ? doctorActorId : ACTORS[role].id
+/** Cookie XSRF-TOKEN выдаёт сервер; если её ещё нет, запрашиваем перед изменяющим запросом. */
+async function csrfToken() {
+  const existing = readCookie(CSRF_COOKIE)
+  if (existing) return existing
+  try {
+    await fetch(`${API}/auth/csrf`, { credentials: 'include' })
+  } catch {
+    return null
+  }
+  return readCookie(CSRF_COOKIE)
 }
 
-export function headersFor(role: ApiRole = 'DOCTOR') {
-  return { 'Content-Type': 'application/json', 'X-Demo-Role': role, 'X-Actor-Id': actorIdFor(role) }
+/**
+ * Все запросы к API: cookie сессии (credentials: 'include'), CSRF-заголовок на изменяющих
+ * запросах, возврат на вход при 401. Роль и автор действия берёт сервер из сессии.
+ */
+export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const method = (init.method ?? 'GET').toUpperCase()
+  const headers: Record<string, string> = { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...((init.headers as Record<string, string> | undefined) ?? {}) }
+  if (!SAFE_METHODS.includes(method)) {
+    const token = await csrfToken()
+    if (token) headers['X-XSRF-TOKEN'] = token
+  }
+  const response = await fetch(`${API}${path}`, { ...init, method, headers, credentials: 'include' })
+  if (response.status === 401 && !path.startsWith('/auth/')) unauthorizedHandler?.()
+  return response
 }
 
 export class ApiError extends Error {
@@ -39,16 +63,23 @@ export class ApiError extends Error {
   }
 }
 
-/** Превращает неуспешный ответ в ApiError с сообщением сервера или запасным текстом. */
+/**
+ * Превращает неуспешный ответ в ApiError. Текст для сотрудника: фраза экрана по коду ответа,
+ * иначе сообщение сервера, иначе запасной текст. Сырой code на экран не попадает.
+ */
 export async function failure(response: Response, fallback: string, byStatus: Record<number, string> = {}) {
-  let message = fallback
-  let code = 'ERROR'
+  let body: { code?: unknown; message?: unknown } | null = null
   try {
-    const body = await response.json()
-    message = body.message || message
-    code = body.code || code
+    body = await response.json()
   } catch {
-    message = byStatus[response.status] ?? message
+    body = null
   }
+  if (!body || typeof body !== 'object') {
+    // Ответ не от API (nginx, прокси): показываем HTTP-статус, чтобы причину можно было найти.
+    return new ApiError(byStatus[response.status] ?? `${fallback} (код ${response.status})`, response.status, 'ERROR')
+  }
+  const code = typeof body.code === 'string' && body.code ? body.code : 'ERROR'
+  const serverMessage = typeof body.message === 'string' && body.message ? body.message : undefined
+  const message = errorPhrase(code) ?? serverMessage ?? byStatus[response.status] ?? fallback
   return new ApiError(message, response.status, code)
 }

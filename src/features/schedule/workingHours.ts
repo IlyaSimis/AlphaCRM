@@ -21,7 +21,14 @@ export function fitsWorkingHours(practitioner: Practitioner | undefined, date: s
   return practitioner.workingHours.some((shift) => shift.dayOfWeek === day && start >= minutesOf(shift.startsAt) && end <= minutesOf(shift.endsAt))
 }
 
+export const DAY_OFF = 'Выходной'
+
+/** Смены в этот день недели нет — выходной, запись не принимается. */
+export function isDayOff(practitioner: Practitioner, date: string) {
+  return !practitioner.workingHours.some((item) => item.dayOfWeek === isoWeekday(date))
+}
+
 export function workingHoursLabel(practitioner: Practitioner, date: string) {
   const hours = practitioner.workingHours.find((item) => item.dayOfWeek === isoWeekday(date))
-  return hours ? `${hours.startsAt.slice(0, 5)}–${hours.endsAt.slice(0, 5)}` : 'не принимает'
+  return hours ? `${hours.startsAt.slice(0, 5)}–${hours.endsAt.slice(0, 5)}` : DAY_OFF
 }

@@ -25,13 +25,62 @@ export type PatientItem = {
   birth: string
   birthDate: string
   phone: string
-  consent: string
+  consent: ConsentState
   consents: ConsentItem[]
+  /** Откуда пришёл пациент — код из справочника регистратуры. */
+  referralSource?: string | null
+  /** Административная заметка регистратуры: в клинический контур не попадает. */
+  registryNote?: string | null
+  /** Другие карточки с тем же телефоном. */
+  phoneSharedWith?: Array<{ id: string; fullName: string }>
 }
+
+/** Состояние согласия пациента; надпись на экране — consentLabels. */
+export type ConsentState = 'ACTIVE' | 'NEEDS_UPDATE'
+
+export type StaffRole = 'ADMINISTRATOR' | 'DOCTOR' | 'MANAGER' | 'CASHIER'
+
+/** Сотрудник без хеша пароля. mustChangePassword — вошёл с временным паролем. */
+export type StaffItem = {
+  id: string
+  fullName: string
+  username: string
+  role: StaffRole
+  practitionerId?: string | null
+  active: boolean
+  mustChangePassword?: boolean
+  clinicName?: string | null
+}
+
+/** Подписанный документ из архива: текст — из снимка подписи, а не из текущей заметки. */
+export type SignedDocumentItem = {
+  id: string
+  encounterId: string
+  appointmentId: string
+  patientId: string
+  patientName?: string | null
+  practitionerId: string
+  practitionerName?: string | null
+  signedAt: string
+  templateVersion: string
+  amendsDocumentId?: string | null
+  contentHash?: string | null
+  complaints?: string | null
+  mentalStatus?: string | null
+  diagnosis?: string | null
+  recommendations?: string | null
+}
+
+
+/** Задача регистратуры: свободный текст; patientId — null, если задача не про пациента. */
+export type TaskItem = { id: string; patientId: string | null; title: string; dueDate: string; assigneeId: string; status: 'OPEN' | 'DONE'; createdAt?: string; doneAt?: string | null }
+
+export type WaitlistItem = { id: string; patientId: string; practitionerId: string; serviceId: string; wishFrom: string; wishTo: string; status: 'ACTIVE' | 'BOOKED' | 'CANCELLED'; appointmentId?: string | null }
 
 export type ConsentItem = { id: string; version: string; basis: string; grantedAt: string; revokedAt?: string | null }
 
-export type ServiceItem = { id: string; name: string; durationMinutes: number; priceMinor: number; currency: string }
+/** Услуга справочника. Выключенная (active: false) не предлагается в новой записи. */
+export type ServiceItem = { id: string; name: string; durationMinutes: number; priceMinor: number; currency: string; active: boolean }
 
 export type ChargeItem = {
   chargeId: string
@@ -79,6 +128,8 @@ export type AuditItem = {
   id: string
   occurredAt: string
   actorId: string
+  /** Имя сотрудника своей клиники — подставляет сервер. */
+  actorName?: string | null
   action: string
   objectType: string
   objectId: string

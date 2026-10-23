@@ -19,10 +19,29 @@ export const actionLabels: Record<string, string> = {
   DOCUMENT_AMENDMENT_CREATED: 'Дополнение к документу',
   CHARGE_CREATED: 'Выставление счёта',
   PAYMENT_CONFIRMED: 'Оплата',
+  PATIENT_REGISTRY_UPDATED: 'Данные регистратуры',
+  REGISTRY_TASK_CREATED: 'Задача регистратуры',
+  REGISTRY_TASK_DONE: 'Задача выполнена',
+  REGISTRY_TASK_REOPENED: 'Задача снова открыта',
+  WAITLIST_ADDED: 'Добавление в лист ожидания',
+  WAITLIST_BOOKED: 'Запись из листа ожидания',
+  WAITLIST_CANCELLED: 'Удаление из листа ожидания',
+  PRACTITIONER_HOURS_CHANGED: 'Изменение графика врача',
+  SERVICE_PRICE_CHANGED: 'Изменение цены услуги',
+  SERVICE_CREATED: 'Новая услуга',
+  SERVICE_DEACTIVATED: 'Выключение услуги',
+  SERVICE_ACTIVATED: 'Включение услуги',
+  STAFF_CREATED: 'Новый сотрудник',
+  STAFF_DEACTIVATED: 'Отключение сотрудника',
+  STAFF_ACTIVATED: 'Включение сотрудника',
+  STAFF_PASSWORD_RESET: 'Новый пароль сотрудника',
+  STAFF_PASSWORD_CHANGED: 'Смена своего пароля',
+  SIGNED_DOCUMENT_READ: 'Просмотр подписанного документа',
 }
 
 export const objectLabels: Record<string, string> = {
   PATIENT: 'Пациент', APPOINTMENT: 'Запись', ENCOUNTER: 'Приём', DOCUMENT: 'Документ', CHARGE: 'Счёт', PAYMENT: 'Платёж', CONSENT: 'Согласие',
+  TASK: 'Задача', WAITLIST: 'Лист ожидания', PRACTITIONER: 'Врач', SERVICE: 'Услуга', STAFF: 'Сотрудник',
 }
 
 /** Коды, которые только повторяют колонку «Действие». */
@@ -31,14 +50,26 @@ const repeatsAction = new Set(['booking', 'cancel', 'treatment', 'attestation', 
 const fixed: Record<string, string> = {
   search: 'из поиска',
   card: 'из карточки',
+  list: 'из списка',
   'no-changes': 'поля не изменились',
   'no-care-relationship': 'нет активной связи с лечением',
   granted: 'выдано',
   revoked: 'отозвано',
   'appointment-completed': 'после завершения приёма',
+  // Старые события: до свободного текста задача выбиралась из двух видов.
+  'call-back': 'перезвонить',
+  'update-consent': 'обновить согласие',
+  // Текст задачи в аудит не пишется — только есть ли у неё пациент.
+  'with-patient': 'по пациенту',
+  'without-patient': 'без пациента',
+  self: 'сам сотрудник',
 }
 
-const fieldNames: Record<string, string> = { phone: 'телефон', fullName: 'ФИО', birthDate: 'дата рождения' }
+const roleNames: Record<string, string> = { ADMINISTRATOR: 'администратор', DOCTOR: 'врач', MANAGER: 'менеджер', CASHIER: 'кассир' }
+
+const dayNames = ['', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс']
+
+const fieldNames: Record<string, string> = { phone: 'телефон', fullName: 'ФИО', birthDate: 'дата рождения', referralSource: 'источник', registryNote: 'заметка регистратуры' }
 
 const statusCodes = new Set(['BOOKED', 'CONFIRMED', 'ARRIVED', 'IN_PROGRESS', 'COMPLETED', 'NO_SHOW', 'CANCELLED'])
 
@@ -53,6 +84,12 @@ export function reasonLabel(code: string | null | undefined): string {
   if (!code) return '—'
   if (repeatsAction.has(code)) return '—'
   if (fixed[code]) return fixed[code]
+
+  const role = /^role:([A-Z]+)$/.exec(code)
+  if (role && roleNames[role[1]]) return `роль: ${roleNames[role[1]]}`
+
+  const days = /^days:([1-7](,[1-7])*)?$/.exec(code)
+  if (days) return days[1] ? `рабочие дни: ${days[1].split(',').map((day) => dayNames[Number(day)]).join(', ')}` : 'рабочих дней нет'
 
   const fields = code.split(',')
   if (fields.every((field) => fieldNames[field])) return `изменены: ${fields.map((field) => fieldNames[field]).join(', ')}`

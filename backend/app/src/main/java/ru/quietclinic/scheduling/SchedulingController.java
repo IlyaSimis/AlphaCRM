@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -31,6 +32,12 @@ public class SchedulingController {
     return practitioners.list();
   }
 
+  @PutMapping("/practitioners/{id}/working-hours")
+  PractitionerView replaceWorkingHours(
+      @PathVariable UUID id, @Valid @RequestBody WorkingHoursRequest request) {
+    return practitioners.replaceWorkingHours(id, request);
+  }
+
   /** {@code ?date=} — один день; {@code ?from=&to=} — период, например история пациента. */
   @GetMapping("/appointments")
   List<AppointmentView> find(
@@ -51,8 +58,7 @@ public class SchedulingController {
   }
 
   @PostMapping("/appointments/{id}/reschedule")
-  AppointmentView reschedule(
-      @PathVariable UUID id, @Valid @RequestBody RescheduleRequest request) {
+  AppointmentView reschedule(@PathVariable UUID id, @Valid @RequestBody RescheduleRequest request) {
     return appointments.reschedule(id, request);
   }
 

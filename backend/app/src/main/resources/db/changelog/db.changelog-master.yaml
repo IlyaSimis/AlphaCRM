@@ -7,3 +7,9 @@ databaseChangeLog:
       file: db/changelog/003-crm-features.sql
   - include:
       file: db/changelog/004-visits-billing.sql
+  - include:
+      file: db/changelog/005-staff-registry.sql
+  - include:
+      file: db/changelog/006-clinics.sql
+  - include:
+      file: db/changelog/007-services-tasks.sql

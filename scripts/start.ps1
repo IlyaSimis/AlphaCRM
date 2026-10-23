@@ -22,10 +22,23 @@ $ErrorActionPreference = 'Stop'
 if (-not $hadEnv) {
   $lines = (Get-Content '.env.example' -Encoding UTF8) `
     -replace '^POSTGRES_PASSWORD=.*', "POSTGRES_PASSWORD=$(New-RandomHex 24)" `
-    -replace '^CLINIC_KMS_KEY=.*', "CLINIC_KMS_KEY=$(New-RandomHex 32)"
+    -replace '^CLINIC_KMS_KEY=.*', "CLINIC_KMS_KEY=$(New-RandomHex 32)" `
+    -replace '^CLINIC_ADMIN_PASSWORD=.*', "CLINIC_ADMIN_PASSWORD=$(New-RandomHex 10)"
   # WriteAllLines пишет UTF-8 без BOM: docker compose читает такой файл корректно.
   [System.IO.File]::WriteAllLines((Join-Path (Get-Location) '.env'), $lines)
-  Write-Host 'Создан .env со случайным паролем БД и ключом шифрования. Сохраните его копию в надёжном месте.'
+  Write-Host 'Создан .env со случайным паролем БД, ключом шифрования и паролем администратора.'
+  $admin = (Select-String -Path '.env' -Pattern '^CLINIC_ADMIN_PASSWORD=(.*)$').Matches[0].Groups[1].Value
+  Write-Host "Вход: логин admin, пароль $admin (после первого входа его нужно сменить)"
+  Write-Host 'Сохраните копию .env в надёжном месте.'
+}
+
+if ($hadEnv -and -not (Select-String -Path '.env' -Pattern '^CLINIC_ADMIN_PASSWORD=.+' -Quiet)) {
+  # .env от прошлой версии: без пароля администратора prod не стартует — дописываем.
+  $lines = @(Get-Content '.env' -Encoding UTF8 | Where-Object { $_ -notmatch '^CLINIC_(ADMIN|BOOTSTRAP)_PASSWORD=' })
+  $admin = New-RandomHex 10
+  $lines += "CLINIC_ADMIN_PASSWORD=$admin"
+  [System.IO.File]::WriteAllLines((Join-Path (Get-Location) '.env'), $lines)
+  Write-Host "В .env добавлен пароль начального администратора (логин admin, после входа смените): $admin"
 }
 
 if (-not $hadEnv -and $volumeExists) {

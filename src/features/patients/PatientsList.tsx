@@ -2,6 +2,7 @@ import { AddRounded, ChevronRightRounded, PersonSearchRounded, SearchRounded, Sh
 import { Avatar, Box, Button, Chip, InputAdornment, TextField, Typography } from '@mui/material'
 import type { PatientItem } from '../../api/types'
 import { initialsOf } from '../../shared/text'
+import { consentLabels } from './consentLabels'
 
 type PatientsListProps = {
   query: string
@@ -22,7 +23,7 @@ export function PatientsList({ query, setQuery, patients, onPatient, onCreate }:
           <Avatar>{initialsOf(patient.name)}</Avatar>
           <Box className="patient-main"><Typography sx={{ fontWeight: 750 }}>{patient.name}</Typography><Typography sx={{ fontSize: 13, color: 'text.secondary' }}>Дата рождения: {patient.birth}</Typography></Box>
           <Box><Typography sx={{ fontSize: 12, color: 'text.secondary' }}>Телефон</Typography><Typography sx={{ fontSize: 14 }}>{patient.phone}</Typography></Box>
-          <Chip label={patient.consent} size="small" color={patient.consent === 'Действует' ? 'success' : 'warning'} variant="outlined" />
+          <Chip label={consentLabels[patient.consent]} size="small" color={patient.consent === 'ACTIVE' ? 'success' : 'warning'} variant="outlined" />
           <ChevronRightRounded color="disabled" />
         </Box>) : <Box className="empty"><PersonSearchRounded /><Typography sx={{ fontWeight: 700 }}>Пациенты не найдены</Typography><Typography sx={{ color: 'text.secondary' }}>Проверьте запрос или создайте новую карточку</Typography></Box>}
       </Box>

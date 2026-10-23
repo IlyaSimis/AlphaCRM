@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -18,6 +19,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import ru.quietclinic.StaffSessions;
 
 /** Приём по записи: старт, черновик, подпись из заметки, дополнение и история с документами. */
 @SpringBootTest
@@ -31,12 +33,18 @@ class ClinicalControllerTest {
   static final String TEMPLATE = "{\"templateVersion\":\"v2.4\"}";
 
   @Autowired MockMvc mvc;
+  StaffSessions staff;
+
+  @BeforeEach
+  void signIn() {
+    staff = new StaffSessions(mvc);
+  }
 
   private String arrivedAppointment(String startsAt, String endsAt) throws Exception {
     var body =
         mvc.perform(
                 post("/api/v1/appointments")
-                    .header("X-Demo-Role", "ADMINISTRATOR")
+                    .with(staff.role("ADMINISTRATOR"))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(
                         """
@@ -51,7 +59,7 @@ class ClinicalControllerTest {
     String id = JsonPath.read(body, "$.id");
     mvc.perform(
             post("/api/v1/appointments/" + id + "/status")
-                .header("X-Demo-Role", "ADMINISTRATOR")
+                .with(staff.role("ADMINISTRATOR"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"status\":\"ARRIVED\"}"))
         .andExpect(status().isOk());
@@ -62,8 +70,7 @@ class ClinicalControllerTest {
       throws Exception {
     return mvc.perform(
         post("/api/v1/clinical/encounters")
-            .header("X-Demo-Role", "DOCTOR")
-            .header("X-Actor-Id", actor)
+            .with(staff.doctor(actor))
             .contentType(MediaType.APPLICATION_JSON)
             .content(
                 """
@@ -73,7 +80,7 @@ class ClinicalControllerTest {
   }
 
   private ResultActions doctor(MockHttpServletRequestBuilder request) throws Exception {
-    return mvc.perform(request.header("X-Demo-Role", "DOCTOR").header("X-Actor-Id", PETROV));
+    return mvc.perform(request.with(staff.doctor(PETROV)));
   }
 
   @Test
@@ -86,8 +93,7 @@ class ClinicalControllerTest {
     start(appointment, ANNA, PETROV)
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("APPOINTMENT_MISMATCH"));
-    start("00000000-0000-0000-0000-000000009999", DMITRY, PETROV)
-        .andExpect(status().isNotFound());
+    start("00000000-0000-0000-0000-000000009999", DMITRY, PETROV).andExpect(status().isNotFound());
 
     var first =
         start(appointment, DMITRY, PETROV)
@@ -103,19 +109,95 @@ class ClinicalControllerTest {
         .andExpect(jsonPath("$.encounterId").value(encounterId));
   }
 
+  private String bookedAppointment(String startsAt, String endsAt) throws Exception {
+    var body =
+        mvc.perform(
+                post("/api/v1/appointments")
+                    .with(staff.role("ADMINISTRATOR"))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"patientId":"%s","practitionerId":"%s","startsAt":"%s","endsAt":"%s",
+                         "serviceName":"Повторный приём"}
+                        """
+                            .formatted(DMITRY, PETROV, startsAt, endsAt)))
+            .andExpect(status().isCreated())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    return JsonPath.read(body, "$.id");
+  }
+
+  private ResultActions setStatus(String appointmentId, String target, String role)
+      throws Exception {
+    return mvc.perform(
+        post("/api/v1/appointments/" + appointmentId + "/status")
+            .with("DOCTOR".equals(role) ? staff.doctor(PETROV) : staff.role(role))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"status\":\"" + target + "\"}"));
+  }
+
+  private ResultActions day(String date) throws Exception {
+    return mvc.perform(get("/api/v1/appointments").param("date", date).with(staff.doctor(PETROV)));
+  }
+
   @Test
-  void refusesToStartBeforePatientArrived() throws Exception {
-    // 302 — подтверждённая запись Петрова к Дмитрию Волкову из seed.
-    start("00000000-0000-0000-0000-000000000302", DMITRY, PETROV)
+  void doctorStartsSeveralVisitsInARowFromBookedOrConfirmed() throws Exception {
+    // Свой день (четверг): 24.11 уже занимают записи BillingControllerTest, база H2 общая.
+    var booked = bookedAppointment("2026-11-26T09:00:00Z", "2026-11-26T09:30:00Z");
+    var confirmed = bookedAppointment("2026-11-26T10:00:00Z", "2026-11-26T10:30:00Z");
+    setStatus(confirmed, "CONFIRMED", "ADMINISTRATOR").andExpect(status().isOk());
+
+    // Старт из «Ожидает» и «Подтверждён» переводит запись в IN_PROGRESS.
+    start(booked, DMITRY, PETROV).andExpect(status().isCreated());
+    // Второй пациент — не дожидаясь завершения и подписи первого.
+    var second =
+        start(confirmed, DMITRY, PETROV)
+            .andExpect(status().isCreated())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    day("2026-11-26")
+        .andExpect(jsonPath("$[?(@.id == '" + booked + "')].status").value(contains("IN_PROGRESS")))
+        .andExpect(
+            jsonPath("$[?(@.id == '" + confirmed + "')].status").value(contains("IN_PROGRESS")));
+
+    // Завершение одного приёма не трогает другой.
+    setStatus(booked, "COMPLETED", "DOCTOR").andExpect(status().isOk());
+    day("2026-11-26")
+        .andExpect(jsonPath("$[?(@.id == '" + booked + "')].status").value(contains("COMPLETED")))
+        .andExpect(
+            jsonPath("$[?(@.id == '" + confirmed + "')].status").value(contains("IN_PROGRESS")));
+
+    // Повторный старт идущего приёма — тот же encounter; завершённый не стартует.
+    start(confirmed, DMITRY, PETROV)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.encounterId").value(JsonPath.<String>read(second, "$.encounterId")));
+    start(booked, DMITRY, PETROV)
         .andExpect(status().isConflict())
-        .andExpect(jsonPath("$.code").value("APPOINTMENT_NOT_ARRIVED"));
+        .andExpect(jsonPath("$.code").value("APPOINTMENT_NOT_STARTABLE"));
+  }
+
+  @Test
+  void cancelledAndNoShowAppointmentsCannotBeStarted() throws Exception {
+    var cancelled = bookedAppointment("2026-11-24T12:00:00Z", "2026-11-24T12:30:00Z");
+    mvc.perform(post("/api/v1/appointments/" + cancelled + "/cancel").with(staff.admin()))
+        .andExpect(status().isOk());
+    var missed = bookedAppointment("2026-11-24T13:00:00Z", "2026-11-24T13:30:00Z");
+    setStatus(missed, "NO_SHOW", "ADMINISTRATOR").andExpect(status().isOk());
+
+    start(cancelled, DMITRY, PETROV)
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("APPOINTMENT_NOT_STARTABLE"));
+    start(missed, DMITRY, PETROV)
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("APPOINTMENT_NOT_STARTABLE"));
   }
 
   @Test
   void savesDraftSignsFromNoteAndAmendsSignedDocument() throws Exception {
     var appointment = arrivedAppointment("2026-11-17T10:00:00Z", "2026-11-17T10:30:00Z");
-    var started =
-        start(appointment, DMITRY, PETROV).andReturn().getResponse().getContentAsString();
+    var started = start(appointment, DMITRY, PETROV).andReturn().getResponse().getContentAsString();
     String encounterId = JsonPath.read(started, "$.encounterId");
     var documents = "/api/v1/clinical/encounters/" + encounterId + "/documents";
 
@@ -128,11 +210,11 @@ class ClinicalControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     """
-                    {"complaints":"Синтетические жалобы","mentalStatus":"Синтетический статус",
-                     "diagnosis":"Синтетический диагноз","recommendations":"Синтетические советы"}
+                    {"complaints":"Synthetic complaints","mentalStatus":"Synthetic status",
+                     "diagnosis":"Synthetic diagnosis","recommendations":"Synthetic advice"}
                     """))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.diagnosis").value("Синтетический диагноз"));
+        .andExpect(jsonPath("$.diagnosis").value("Synthetic diagnosis"));
 
     var draft =
         doctor(post(documents).contentType(MediaType.APPLICATION_JSON).content(TEMPLATE))
@@ -180,11 +262,11 @@ class ClinicalControllerTest {
     var created =
         mvc.perform(
                 post("/api/v1/patients")
-                    .header("X-Demo-Role", "ADMINISTRATOR")
+                    .with(staff.role("ADMINISTRATOR"))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(
                         """
-                        {"fullName":"Без Связи","birthDate":"1970-01-01","phone":"+70000000002",
+                        {"fullName":"No Link","birthDate":"1970-01-01","phone":"+70000000002",
                          "consentVersion":"v1.2","consentBasis":"SIGNED_FORM"}
                         """))
             .andReturn()
@@ -194,10 +276,14 @@ class ClinicalControllerTest {
 
     doctor(get("/api/v1/clinical/patients/" + patientId + "/encounters"))
         .andExpect(status().isForbidden())
-        .andExpect(jsonPath("$.message").value("Нет активной связи с лечением пациента"));
+        .andExpect(jsonPath("$.message").value("No active care relationship with the patient"));
     mvc.perform(
             get("/api/v1/clinical/patients/" + DMITRY + "/encounters")
-                .header("X-Demo-Role", "ADMINISTRATOR"))
+                .with(staff.role("ADMINISTRATOR")))
+        .andExpect(status().isForbidden());
+    // Кассир не открывает клиническую историю, даже если знает id пациента.
+    mvc.perform(
+            get("/api/v1/clinical/patients/" + DMITRY + "/encounters").with(staff.role("CASHIER")))
         .andExpect(status().isForbidden());
   }
 }

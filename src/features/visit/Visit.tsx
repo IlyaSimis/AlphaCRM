@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { LockOutlined } from '@mui/icons-material'
 import { Alert, Box, Button, Chip, CircularProgress, Divider, Stack, TextField, Typography } from '@mui/material'
 import { TEMPLATE_VERSION } from '../../api/clinical'
-import type { DocumentSummary, NoteFields } from '../../api/types'
+import type { AppointmentStatus, DocumentSummary, NoteFields } from '../../api/types'
 import { formatDay } from '../../shared/dates'
 import { FormSection, Info } from '../../shared/ui'
 import { SignDialog } from './SignDialog'
@@ -14,6 +14,10 @@ type VisitProps = {
   doctorName: string
   apiOnline: boolean
   notify: (message: string) => void
+  /** Текущий статус записи из расписания: от него зависит кнопка «Завершить приём». */
+  appointmentStatus?: AppointmentStatus
+  onStarted?: () => void
+  onComplete?: () => void
   onBack: () => void
 }
 
@@ -29,8 +33,10 @@ function versionLabel(doc: DocumentSummary) {
 }
 
 /** Приём конкретной записи: пациент, время и услуга берутся из строки расписания или истории. */
-export function Visit({ target, doctorName, apiOnline, notify, onBack }: VisitProps) {
-  const visit = useVisit(target, apiOnline, notify)
+export function Visit({ target, doctorName, apiOnline, notify, appointmentStatus, onStarted, onComplete, onBack }: VisitProps) {
+  const visit = useVisit(target, apiOnline, notify, onStarted)
+  const completed = appointmentStatus === 'COMPLETED'
+  const canComplete = Boolean(target.appointmentId && onComplete) && (appointmentStatus === 'ARRIVED' || appointmentStatus === 'IN_PROGRESS')
   const [signDialog, setSignDialog] = useState(false)
   const locked = isLocked(visit.documents)
   const current = activeDocument(visit.documents)
@@ -45,7 +51,11 @@ export function Visit({ target, doctorName, apiOnline, notify, onBack }: VisitPr
       <Button onClick={onBack} sx={{ mb: 2 }}>← Назад</Button>
       <Box className="visit-banner">
         <Box><Typography className="eyebrow">{eyebrow.toLocaleUpperCase('ru-RU')}</Typography><Typography variant="h4" sx={{ fontWeight: 750 }}>{target.patientName}</Typography><Typography sx={{ color: 'text.secondary' }}>{visit.remote ? 'Данные приёма на сервере' : 'Демо-режим: приём виден до обновления страницы'}</Typography></Box>
-        <Chip icon={locked ? <LockOutlined /> : undefined} label={chip} color={locked ? 'success' : 'warning'} variant="outlined" />
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+          {completed && <Chip label="Приём завершён" color="success" />}
+          <Chip icon={locked ? <LockOutlined /> : undefined} label={chip} color={locked ? 'success' : 'warning'} variant="outlined" />
+          {canComplete && <Button variant="contained" color="success" onClick={onComplete}>Завершить приём</Button>}
+        </Stack>
       </Box>
       {visit.error && <Alert severity="error" sx={{ mb: 2 }}>{visit.error}</Alert>}
       {visit.loading && <Box className="empty" sx={{ minHeight: 160 }}><CircularProgress aria-label="Загрузка приёма" /></Box>}

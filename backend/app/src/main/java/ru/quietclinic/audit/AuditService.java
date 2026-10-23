@@ -1,5 +1,6 @@
 package ru.quietclinic.audit;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -20,9 +21,11 @@ public class AuditService {
     repository.save(new AuditEvent(actorId, action, objectType, objectId, result, reason));
   }
 
+  /** Последние 100 событий, которые совершили перечисленные сотрудники (своей клиники). */
   @Transactional(readOnly = true)
-  public List<AuditView> recent() {
-    return repository.findTop100ByOrderByOccurredAtDesc().stream()
+  public List<AuditView> recent(Collection<UUID> actorIds) {
+    if (actorIds.isEmpty()) return List.of();
+    return repository.findTop100ByActorIdInOrderByOccurredAtDesc(actorIds).stream()
         .map(
             e ->
                 new AuditView(
@@ -34,7 +37,8 @@ public class AuditService {
                     e.objectId,
                     e.result,
                     e.reason,
-                    e.correlationId))
+                    e.correlationId,
+                    null))
         .toList();
   }
 }

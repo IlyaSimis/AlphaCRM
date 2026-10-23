@@ -20,9 +20,7 @@ class RescheduleReasonTest {
   void marksPractitionerChange() {
     assertThat(
             RescheduleReason.code(
-                Instant.parse("2026-10-20T09:00:00Z"),
-                Instant.parse("2026-10-20T11:00:00Z"),
-                true))
+                Instant.parse("2026-10-20T09:00:00Z"), Instant.parse("2026-10-20T11:00:00Z"), true))
         .isEqualTo("2026-10-20T09:00Z>2026-10-20T11:00Z;practitioner");
   }
 }

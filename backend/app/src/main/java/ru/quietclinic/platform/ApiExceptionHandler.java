@@ -22,6 +22,7 @@ class ApiExceptionHandler {
         .forEach(error -> fields.put(error.getField(), error.getDefaultMessage()));
     return org.springframework.http.ResponseEntity.badRequest()
         .body(
-            new ApiError(Instant.now(), 400, "VALIDATION_ERROR", "Проверьте поля запроса", fields));
+            new ApiError(
+                Instant.now(), 400, "VALIDATION_ERROR", "Check the request fields", fields));
   }
 }

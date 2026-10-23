@@ -19,26 +19,30 @@ class AppointmentStatsService {
   static final int MAX_RANGE_DAYS = 366;
 
   private final AppointmentRepository appointments;
+  private final ClinicScope clinic;
 
-  AppointmentStatsService(AppointmentRepository appointments) {
+  AppointmentStatsService(AppointmentRepository appointments, ClinicScope clinic) {
     this.appointments = appointments;
+    this.clinic = clinic;
   }
 
   @Transactional(readOnly = true)
   AppointmentStatsView stats(LocalDate from, LocalDate to, UUID practitionerId) {
     requireRole("MANAGER", "ADMINISTRATOR");
     if (to.isBefore(from)) {
-      throw conflict("INVALID_RANGE", "Конец периода должен быть не раньше начала");
+      throw conflict("INVALID_RANGE", "Period end must not be before its start");
     }
     if (ChronoUnit.DAYS.between(from, to) >= MAX_RANGE_DAYS) {
-      throw conflict("RANGE_TOO_LONG", "Период не может быть длиннее года");
+      throw conflict("RANGE_TOO_LONG", "Period must not exceed one year");
     }
     var inRange =
         appointments.findByStartsAtGreaterThanEqualAndStartsAtLessThanOrderByStartsAt(
             from.atStartOfDay().toInstant(ZoneOffset.UTC),
             to.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC));
+    var ownPractitioners = clinic.practitionerIds();
     var filtered =
         inRange.stream()
+            .filter(a -> ownPractitioners.contains(a.practitionerId))
             .filter(a -> practitionerId == null || a.practitionerId.equals(practitionerId))
             .toList();
     return new AppointmentStatsView(from, to, aggregate(filtered));

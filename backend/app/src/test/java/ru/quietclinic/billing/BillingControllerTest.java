@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -14,6 +15,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import ru.quietclinic.StaffSessions;
 
 /** Касса: список счетов, ручной счёт без дублей, оплата только кассиром. */
 @SpringBootTest
@@ -23,12 +25,18 @@ class BillingControllerTest {
   static final String PETROV = "00000000-0000-0000-0000-000000000201";
 
   @Autowired MockMvc mvc;
+  StaffSessions staff;
+
+  @BeforeEach
+  void signIn() {
+    staff = new StaffSessions(mvc);
+  }
 
   private String book(String startsAt, String endsAt) throws Exception {
     var body =
         mvc.perform(
                 post("/api/v1/appointments")
-                    .header("X-Demo-Role", "ADMINISTRATOR")
+                    .with(staff.role("ADMINISTRATOR"))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(
                         """
@@ -46,7 +54,7 @@ class BillingControllerTest {
   private ResultActions createCharge(String role, String appointmentId) throws Exception {
     return mvc.perform(
         post("/api/v1/billing/charges")
-            .header("X-Demo-Role", role)
+            .with(staff.role(role))
             .contentType(MediaType.APPLICATION_JSON)
             .content(
                 """
@@ -58,7 +66,7 @@ class BillingControllerTest {
   private ResultActions pay(String role, String chargeId, String key) throws Exception {
     return mvc.perform(
         post("/api/v1/billing/charges/" + chargeId + "/payments")
-            .header("X-Demo-Role", role)
+            .with(staff.role(role))
             .contentType(MediaType.APPLICATION_JSON)
             .content("{\"idempotencyKey\":\"" + key + "\"}"));
   }
@@ -87,7 +95,7 @@ class BillingControllerTest {
         .andExpect(jsonPath("$.chargeStatus").value("PAID"));
     pay("CASHIER", chargeId, "pay-" + chargeId).andExpect(status().isOk());
 
-    mvc.perform(get("/api/v1/billing/charges").header("X-Demo-Role", "CASHIER"))
+    mvc.perform(get("/api/v1/billing/charges").with(staff.role("CASHIER")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[?(@.chargeId == '" + chargeId + "')].status").value("PAID"))
         .andExpect(
@@ -96,11 +104,11 @@ class BillingControllerTest {
 
   @Test
   void chargeListIsClosedForDoctorsAndManagers() throws Exception {
-    mvc.perform(get("/api/v1/billing/charges").header("X-Demo-Role", "DOCTOR"))
+    mvc.perform(get("/api/v1/billing/charges").with(staff.role("DOCTOR")))
         .andExpect(status().isForbidden());
-    mvc.perform(get("/api/v1/billing/charges").header("X-Demo-Role", "MANAGER"))
+    mvc.perform(get("/api/v1/billing/charges").with(staff.role("MANAGER")))
         .andExpect(status().isForbidden());
-    mvc.perform(get("/api/v1/billing/charges").header("X-Demo-Role", "ADMINISTRATOR"))
+    mvc.perform(get("/api/v1/billing/charges").with(staff.role("ADMINISTRATOR")))
         .andExpect(status().isOk());
   }
 }

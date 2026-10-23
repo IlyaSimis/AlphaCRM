@@ -1,13 +1,14 @@
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
-import { anna, chooseRole, goOffline, jsonResponse, renderApp } from '../../test/helpers'
+import { describe, expect, it } from 'vitest'
+import { anna, enterDemo, goOffline, jsonResponse, renderApp, withAuth } from '../../test/helpers'
 
-describe('пациенты', () => {
-  it('открывает список пациентов и карточку выбранного человека', async () => {
+describe('patients', () => {
+  it('opens the patient list and the selected person card', async () => {
     goOffline()
     const user = userEvent.setup()
     renderApp()
+    await enterDemo(user)
     await user.click(screen.getByRole('button', { name: 'Пациенты' }))
     expect(screen.getByRole('heading', { name: 'Поиск пациента' })).toBeInTheDocument()
     await user.click(screen.getByText('Дмитрий Волков'))
@@ -15,10 +16,11 @@ describe('пациенты', () => {
     expect(screen.getByText('+7 903 782-44-16')).toBeInTheDocument()
   })
 
-  it('добавляет пациента в список', async () => {
+  it('adds a patient to the list', async () => {
     goOffline()
     const user = userEvent.setup()
     renderApp()
+    await enterDemo(user)
     await user.click(screen.getByRole('button', { name: 'Пациенты' }))
     await user.click(screen.getByRole('button', { name: /новый пациент/i }))
     await user.clear(screen.getByLabelText('ФИО'))
@@ -27,11 +29,11 @@ describe('пациенты', () => {
     expect(await screen.findByText('Ирина Белова')).toBeInTheDocument()
   })
 
-  it('администратор редактирует данные пациента', async () => {
+  it('the administrator edits patient details', async () => {
     goOffline()
     const user = userEvent.setup()
     renderApp()
-    await chooseRole(user, 'Администратор')
+    await enterDemo(user, 'ADMINISTRATOR')
     await user.click(screen.getByRole('button', { name: 'Пациенты' }))
     await user.click(screen.getByText('Дмитрий Волков'))
     await user.click(screen.getByRole('button', { name: 'Редактировать' }))
@@ -42,10 +44,11 @@ describe('пациенты', () => {
     expect(screen.getByText('Демо-режим: изменения видны только до обновления страницы')).toBeInTheDocument()
   })
 
-  it('показывает все записи пациента в карточке без листания по дням', async () => {
+  it('shows all patient appointments in the card without paging by day', async () => {
     goOffline()
     const user = userEvent.setup()
     renderApp()
+    await enterDemo(user)
     await user.click(screen.getByRole('button', { name: 'Пациенты' }))
     await user.click(screen.getByText('Дмитрий Волков'))
     expect(screen.getByText('Ближайшие записи')).toBeInTheDocument()
@@ -56,11 +59,11 @@ describe('пациенты', () => {
     expect(screen.getByText('13.10.2026 11:00 · Завершён')).toBeInTheDocument()
   })
 
-  it('администратор обновляет и отзывает согласие', async () => {
+  it('the administrator renews and revokes consent', async () => {
     goOffline()
     const user = userEvent.setup()
     renderApp()
-    await chooseRole(user, 'Администратор')
+    await enterDemo(user, 'ADMINISTRATOR')
     await user.click(screen.getByRole('button', { name: 'Пациенты' }))
     await user.click(screen.getByText('Мария Соколова'))
     expect(screen.getByText('Требует обновления')).toBeInTheDocument()
@@ -72,14 +75,14 @@ describe('пациенты', () => {
     expect(await screen.findByText('Требует обновления')).toBeInTheDocument()
   })
 
-  it('показывает отказ сервера вместо клинической истории, если нет связи с лечением', async () => {
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+  it('shows the server refusal instead of clinical history without a care relationship', async () => {
+    withAuth(async (url: string) => {
       const address = String(url)
-      if (address.includes('/clinical/patients/')) return jsonResponse({ code: 'ACCESS_DENIED', message: 'Нет активной связи с лечением пациента' }, 403)
+      if (address.includes('/clinical/patients/')) return jsonResponse({ code: 'NO_CARE_RELATIONSHIP', message: 'No active care relationship with the patient' }, 403)
       if (address.includes('/patients')) return jsonResponse([anna])
       if (address.includes('/appointments')) return jsonResponse([])
       return jsonResponse({}, 404)
-    }))
+    }, 't.petrov')
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
@@ -89,8 +92,8 @@ describe('пациенты', () => {
     expect(screen.queryByText('История приёмов')).not.toBeInTheDocument()
   })
 
-  it('показывает врачу историю приёмов с версиями документа', async () => {
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+  it('shows a doctor the visit history with document versions', async () => {
+    withAuth(async (url: string) => {
       const address = String(url)
       if (address.includes('/clinical/patients/')) {
         return jsonResponse([{
@@ -104,7 +107,7 @@ describe('пациенты', () => {
       if (address.includes('/patients')) return jsonResponse([anna])
       if (address.includes('/appointments')) return jsonResponse([])
       return jsonResponse({}, 404)
-    }))
+    }, 't.petrov')
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
@@ -118,21 +121,21 @@ describe('пациенты', () => {
     expect(screen.getByText('Дополнение · черновик', { selector: '.MuiChip-label' })).toBeInTheDocument()
   })
 
-  it('называет в замке собственную роль сотрудника', async () => {
+  it('names the staff member own role in the lock message', async () => {
     goOffline()
     const user = userEvent.setup()
     renderApp()
-    await chooseRole(user, 'Менеджер')
+    await enterDemo(user, 'MANAGER')
     await user.click(screen.getByRole('button', { name: 'Пациенты' }))
     await user.click(screen.getByText('Анна Михайлова'))
     expect(screen.getByText(/Роль «Менеджер» не имеет доступа/)).toBeInTheDocument()
   })
 
-  it('скрывает клинические данные от администратора', async () => {
+  it('hides clinical data from the administrator', async () => {
     goOffline()
     const user = userEvent.setup()
     renderApp()
-    await chooseRole(user, 'Администратор')
+    await enterDemo(user, 'ADMINISTRATOR')
     await user.click(screen.getByRole('button', { name: 'Пациенты' }))
     await user.click(screen.getByText('Анна Михайлова'))
     expect(screen.getByText('Клинические данные недоступны')).toBeInTheDocument()

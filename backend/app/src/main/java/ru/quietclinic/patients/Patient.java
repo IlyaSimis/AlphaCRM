@@ -20,6 +20,10 @@ import java.util.UUID;
 class Patient {
   @Id UUID id;
 
+  /** Клиника, где заведена карточка. Пациенты других клиник не видны. */
+  @Column(nullable = false)
+  UUID clinicId;
+
   @Column(nullable = false)
   String fullName;
 
@@ -28,6 +32,12 @@ class Patient {
 
   @Column(nullable = false)
   Instant createdAt;
+
+  /** Откуда пришёл пациент — значение из {@link ReferralSources}. */
+  String referralSource;
+
+  /** Заметка регистратуры: административная, в клинический контур не попадает. */
+  String registryNote;
 
   @OneToMany(mappedBy = "patient", cascade = CascadeType.ALL, orphanRemoval = true)
   List<Contact> contacts = new ArrayList<>();
@@ -83,13 +93,41 @@ class Patient {
         consents.stream()
             .filter(c -> c.id.equals(consentId))
             .findFirst()
-            .orElseThrow(() -> notFound("Согласие не найдено"));
-    if (consent.revokedAt != null) throw conflict("ALREADY_REVOKED", "Согласие уже отозвано");
+            .orElseThrow(() -> notFound("CONSENT_NOT_FOUND", "Consent not found"));
+    if (consent.revokedAt != null) throw conflict("ALREADY_REVOKED", "Consent is already revoked");
     consent.revokedAt = Instant.now();
     return consent;
   }
 
   boolean hasActiveConsent() {
     return consents.stream().anyMatch(c -> c.revokedAt == null);
+  }
+
+  /** Возвращает имена изменённых полей: в аудит попадает факт изменения, без текста заметки. */
+  List<String> updateRegistry(String newReferralSource, String newRegistryNote) {
+    var changed = new ArrayList<String>();
+    var source = blankToNull(newReferralSource);
+    if (!java.util.Objects.equals(source, referralSource)) {
+      referralSource = source;
+      changed.add("referralSource");
+    }
+    var note = blankToNull(newRegistryNote);
+    if (!java.util.Objects.equals(note, registryNote)) {
+      registryNote = note;
+      changed.add("registryNote");
+    }
+    return changed;
+  }
+
+  String phone() {
+    return contacts.stream()
+        .filter(c -> "PHONE".equals(c.type))
+        .map(c -> c.value)
+        .findFirst()
+        .orElse(null);
+  }
+
+  private static String blankToNull(String value) {
+    return value == null || value.isBlank() ? null : value.trim();
   }
 }

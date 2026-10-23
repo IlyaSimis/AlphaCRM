@@ -1,20 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import { canOpen, navigationFor } from './pages'
 
-describe('страницы по ролям', () => {
-  it('кассир видит кассу, но не аналитику', () => {
-    expect(navigationFor('Кассир')).toEqual(['schedule', 'patients', 'cashier'])
+describe('pages by role', () => {
+  it('a cashier sees registry and cashier but not analytics', () => {
+    expect(navigationFor('CASHIER')).toEqual(['schedule', 'patients', 'registry', 'cashier'])
   })
 
-  it('администратор видит кассу, аналитику и журнал', () => {
-    expect(navigationFor('Администратор')).toEqual(['schedule', 'patients', 'cashier', 'analytics', 'audit'])
+  it('the administrator sees everything, including hours, prices and staff', () => {
+    expect(navigationFor('ADMINISTRATOR')).toEqual(['schedule', 'patients', 'registry', 'cashier', 'analytics', 'audit', 'settings', 'staff'])
   })
 
-  it('врач и менеджер не видят кассу', () => {
-    expect(navigationFor('Врач')).toEqual(['schedule', 'patients'])
-    expect(navigationFor('Менеджер')).toEqual(['schedule', 'patients', 'analytics', 'audit'])
-    expect(canOpen('cashier', 'Врач')).toBe(false)
-    expect(canOpen('visit', 'Врач')).toBe(true)
-    expect(canOpen('visit', 'Администратор')).toBe(false)
+  it('doctor and manager see neither cashier nor settings', () => {
+    expect(navigationFor('DOCTOR')).toEqual(['schedule', 'patients', 'documents'])
+    expect(navigationFor('MANAGER')).toEqual(['schedule', 'patients', 'documents', 'registry', 'analytics', 'audit'])
+    expect(canOpen('cashier', 'DOCTOR')).toBe(false)
+    expect(canOpen('staff', 'MANAGER')).toBe(false)
+    expect(canOpen('documents', 'ADMINISTRATOR')).toBe(false)
+    expect(canOpen('documents', 'CASHIER')).toBe(false)
+    expect(canOpen('visit', 'DOCTOR')).toBe(true)
+    expect(canOpen('visit', 'ADMINISTRATOR')).toBe(false)
   })
 })

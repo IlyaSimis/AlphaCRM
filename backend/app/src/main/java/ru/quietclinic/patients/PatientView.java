@@ -9,9 +9,12 @@ record PatientView(
     String fullName,
     LocalDate birthDate,
     List<ContactView> contacts,
-    List<ConsentView> consents) {
+    List<ConsentView> consents,
+    String referralSource,
+    String registryNote,
+    List<PatientRef> phoneSharedWith) {
 
-  static PatientView of(Patient patient) {
+  static PatientView of(Patient patient, List<PatientRef> phoneSharedWith) {
     return new PatientView(
         patient.id,
         patient.fullName,
@@ -19,6 +22,9 @@ record PatientView(
         patient.contacts.stream().map(c -> new ContactView(c.type, c.value)).toList(),
         patient.consents.stream()
             .map(c -> new ConsentView(c.id, c.version, c.basis, c.grantedAt, c.revokedAt))
-            .toList());
+            .toList(),
+        patient.referralSource,
+        patient.registryNote,
+        phoneSharedWith);
   }
 }

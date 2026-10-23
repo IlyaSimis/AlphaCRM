@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 
 class PatientTest {
   private static Patient patientWithPhone(String phone) {
-    var patient = new Patient("Анна Михайлова", LocalDate.parse("1991-05-14"));
+    var patient = new Patient("Anna Mikhailova", LocalDate.parse("1991-05-14"));
     patient.contacts.add(new Contact(patient, "PHONE", phone));
     return patient;
   }
@@ -18,17 +18,17 @@ class PatientTest {
     var patient = patientWithPhone("+79160000000");
 
     var changed =
-        patient.update("  Анна Михайлова-Орлова ", LocalDate.parse("1991-05-14"), "+79160000000");
+        patient.update("  Anna Mikhailova-Orlova ", LocalDate.parse("1991-05-14"), "+79160000000");
 
     assertThat(changed).containsExactly("fullName");
-    assertThat(patient.fullName).isEqualTo("Анна Михайлова-Орлова");
+    assertThat(patient.fullName).isEqualTo("Anna Mikhailova-Orlova");
   }
 
   @Test
   void updatesExistingPhoneInPlace() {
     var patient = patientWithPhone("+79160000000");
 
-    var changed = patient.update("Анна Михайлова", LocalDate.parse("1991-05-15"), "+79990000000");
+    var changed = patient.update("Anna Mikhailova", LocalDate.parse("1991-05-15"), "+79990000000");
 
     assertThat(changed).containsExactly("birthDate", "phone");
     assertThat(patient.contacts).hasSize(1);
@@ -37,9 +37,9 @@ class PatientTest {
 
   @Test
   void addsPhoneWhenPatientHadNone() {
-    var patient = new Patient("Дмитрий Волков", LocalDate.parse("1985-11-02"));
+    var patient = new Patient("Dmitry Volkov", LocalDate.parse("1985-11-02"));
 
-    var changed = patient.update("Дмитрий Волков", LocalDate.parse("1985-11-02"), "+79030000000");
+    var changed = patient.update("Dmitry Volkov", LocalDate.parse("1985-11-02"), "+79030000000");
 
     assertThat(changed).containsExactly("phone");
     assertThat(patient.contacts).extracting(c -> c.type).containsExactly("PHONE");
@@ -49,7 +49,7 @@ class PatientTest {
   void noChangesGivesEmptyList() {
     var patient = patientWithPhone("+79160000000");
 
-    assertThat(patient.update("Анна Михайлова", LocalDate.parse("1991-05-14"), "+79160000000"))
+    assertThat(patient.update("Anna Mikhailova", LocalDate.parse("1991-05-14"), "+79160000000"))
         .isEmpty();
   }
 
@@ -66,8 +66,20 @@ class PatientTest {
     assertThat(patient.hasActiveConsent()).isFalse();
     assertThat(patient.consents).hasSize(1);
     assertThatThrownBy(() -> patient.revokeConsent(consent.id))
-        .hasMessageContaining("уже отозвано");
+        .hasMessageContaining("already revoked");
     assertThatThrownBy(() -> patient.revokeConsent(java.util.UUID.randomUUID()))
-        .hasMessageContaining("не найдено");
+        .hasMessageContaining("not found");
+  }
+
+  @Test
+  void registryUpdateReportsChangedFieldsAndClearsBlankValues() {
+    var patient = patientWithPhone("+79160000000");
+
+    assertThat(patient.updateRegistry("WEBSITE", " Call in the evening "))
+        .containsExactly("referralSource", "registryNote");
+    assertThat(patient.registryNote).isEqualTo("Call in the evening");
+    assertThat(patient.updateRegistry("WEBSITE", "Call in the evening")).isEmpty();
+    assertThat(patient.updateRegistry("WEBSITE", "  ")).containsExactly("registryNote");
+    assertThat(patient.registryNote).isNull();
   }
 }

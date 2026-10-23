@@ -1,27 +1,52 @@
 package ru.quietclinic.scheduling;
 
-import static ru.quietclinic.platform.PlatformConfig.requireRole;
-
+import jakarta.validation.Valid;
 import java.util.List;
-import org.springframework.transaction.annotation.Transactional;
+import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /** Справочник услуг: из него форма записи берёт название, длительность и цену. */
 @RestController
 @RequestMapping("/api/v1/services")
 public class ServiceCatalogController {
-  private final ClinicServiceRepository services;
+  private final ServiceCatalog services;
 
-  ServiceCatalogController(ClinicServiceRepository services) {
+  ServiceCatalogController(ServiceCatalog services) {
     this.services = services;
   }
 
   @GetMapping
-  @Transactional(readOnly = true)
-  List<ServiceView> list() {
-    requireRole("ADMINISTRATOR", "DOCTOR", "NURSE", "CASHIER", "MANAGER");
-    return services.findAllByOrderByDurationMinutesDesc().stream().map(ServiceView::of).toList();
+  List<ServiceView> list(@RequestParam(defaultValue = "false") boolean all) {
+    return services.list(all);
+  }
+
+  @PostMapping
+  @ResponseStatus(HttpStatus.CREATED)
+  ServiceView create(@Valid @RequestBody CreateServiceRequest request) {
+    return services.create(request);
+  }
+
+  @PutMapping("/{id}/price")
+  ServiceView changePrice(@PathVariable UUID id, @Valid @RequestBody ServicePriceRequest request) {
+    return services.changePrice(id, request);
+  }
+
+  @PostMapping("/{id}/deactivate")
+  ServiceView deactivate(@PathVariable UUID id) {
+    return services.setActive(id, false);
+  }
+
+  @PostMapping("/{id}/activate")
+  ServiceView activate(@PathVariable UUID id) {
+    return services.setActive(id, true);
   }
 }

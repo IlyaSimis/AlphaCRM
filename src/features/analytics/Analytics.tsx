@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { InsightsRounded } from '@mui/icons-material'
 import { Alert, Box, Chip, CircularProgress, MenuItem, Stack, TextField, Typography } from '@mui/material'
 import { loadAppointmentStats } from '../../api/analytics'
-import type { ApiRole } from '../../api/client'
 import type { Practitioner, ScheduleItem, StatRow } from '../../api/types'
 import { shiftDate, shortDate } from '../../shared/dates'
 import { Metric } from '../../shared/ui'
@@ -25,7 +24,7 @@ function niceMax(value: number) {
   return Math.ceil(value / step) * step
 }
 
-export function Analytics({ apiOnline, role, anchor, practitioners, scheduleItems }: { apiOnline: boolean; role: ApiRole; anchor: string; practitioners: Practitioner[]; scheduleItems: ScheduleItem[] }) {
+export function Analytics({ apiOnline, anchor, practitioners, scheduleItems }: { apiOnline: boolean; anchor: string; practitioners: Practitioner[]; scheduleItems: ScheduleItem[] }) {
   const [periodDays, setPeriodDays] = useState(30)
   const [to, setTo] = useState(anchor)
   const [doctor, setDoctor] = useState('all')
@@ -40,12 +39,12 @@ export function Analytics({ apiOnline, role, anchor, practitioners, scheduleItem
     let cancelled = false
     setLoading(true)
     setError('')
-    loadAppointmentStats(from, to, role)
+    loadAppointmentStats(from, to)
       .then((rows) => { if (!cancelled) setRemoteRows(rows) })
       .catch((reason: Error) => { if (!cancelled) { setRemoteRows(null); setError(reason.message) } })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [apiOnline, from, to, role])
+  }, [apiOnline, from, to])
 
   const rows = apiOnline && remoteRows ? remoteRows : rowsFromSchedule(scheduleItems)
   const stats = useMemo(() => summarize(rows, from, to, doctor === 'all' ? undefined : doctor), [rows, from, to, doctor])

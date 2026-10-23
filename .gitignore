@@ -25,5 +25,36 @@ target/
 *.sln
 *.sw?
 
-# Локальные секреты
+# Локальные секреты: .env и его варианты; шаблон .env.example остаётся в Git
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+
+# Резервные копии базы и дампы (README, «Резервная копия базы»)
+*.dump
+*.sql.gz
+backup*.sql
+
+# Cookie сессии из примеров curl в README
+cookies.txt
+
+# Сборка и отчёты frontend
+coverage/
+*.tsbuildinfo
+.vite/
+.eslintcache
+
+# Java и IntelliJ IDEA
+*.iml
+out/
+.mvn/wrapper/maven-wrapper.jar
+hs_err_pid*.log
+replay_pid*.log
+
+# Временные файлы
+_to_delete/
+*.tmp
+Thumbs.db

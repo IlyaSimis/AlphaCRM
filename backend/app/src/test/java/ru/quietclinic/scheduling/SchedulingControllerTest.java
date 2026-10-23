@@ -3,10 +3,12 @@ package ru.quietclinic.scheduling;
 import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -15,6 +17,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import ru.quietclinic.StaffSessions;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -25,6 +28,12 @@ class SchedulingControllerTest {
   static final String LEBEDEVA = "00000000-0000-0000-0000-000000000202";
 
   @Autowired MockMvc mvc;
+  StaffSessions staff;
+
+  @BeforeEach
+  void signIn() {
+    staff = new StaffSessions(mvc);
+  }
 
   static final String DMITRY = "00000000-0000-0000-0000-000000000102";
 
@@ -53,7 +62,7 @@ class SchedulingControllerTest {
             .formatted(patientId, practitionerId, startsAt, endsAt, service);
     return mvc.perform(
         post("/api/v1/appointments")
-            .header("X-Demo-Role", "ADMINISTRATOR")
+            .with(staff.role("ADMINISTRATOR"))
             .contentType(MediaType.APPLICATION_JSON)
             .content(body));
   }
@@ -63,7 +72,7 @@ class SchedulingControllerTest {
       throws Exception {
     return mvc.perform(
         post("/api/v1/appointments/" + id + "/reschedule")
-            .header("X-Demo-Role", role)
+            .with(staff.role(role))
             .contentType(MediaType.APPLICATION_JSON)
             .content(
                 """
@@ -72,12 +81,11 @@ class SchedulingControllerTest {
                     .formatted(practitionerId, startsAt, endsAt)));
   }
 
-  private ResultActions change(
-      String id, String role, String actor, String target) throws Exception {
+  private ResultActions change(String id, String role, String actor, String target)
+      throws Exception {
     return mvc.perform(
         post("/api/v1/appointments/" + id + "/status")
-            .header("X-Demo-Role", role)
-            .header("X-Actor-Id", actor)
+            .with(staff.as(role, actor))
             .contentType(MediaType.APPLICATION_JSON)
             .content("{\"status\":\"" + target + "\"}"));
   }
@@ -99,30 +107,28 @@ class SchedulingControllerTest {
         .andExpect(jsonPath("$.status").value("COMPLETED"));
 
     // Завершение приёма создаёт один счёт на снимок цены записи.
-    mvc.perform(get("/api/v1/billing/charges").header("X-Demo-Role", "CASHIER"))
+    mvc.perform(get("/api/v1/billing/charges").with(staff.role("CASHIER")))
         .andExpect(jsonPath("$[?(@.appointmentId == '" + id + "')].amountMinor").value(300000))
         .andExpect(jsonPath("$[?(@.appointmentId == '" + id + "')].status").value("PENDING"));
 
     change(id, "ADMINISTRATOR", PETROV, "NO_SHOW")
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("INVALID_STATUS_TRANSITION"));
-    mvc.perform(
-            post("/api/v1/appointments/" + id + "/cancel").header("X-Demo-Role", "ADMINISTRATOR"))
+    mvc.perform(post("/api/v1/appointments/" + id + "/cancel").with(staff.role("ADMINISTRATOR")))
         .andExpect(status().isConflict());
   }
 
   @Test
   void noShowFreesTheSlotForAnotherBooking() throws Exception {
     var id = book(LEBEDEVA, "2026-11-05T10:00:00Z", "2026-11-05T10:30:00Z");
-    change(id, "ADMINISTRATOR", PETROV, "NO_SHOW")
-        .andExpect(jsonPath("$.status").value("NO_SHOW"));
+    change(id, "ADMINISTRATOR", PETROV, "NO_SHOW").andExpect(jsonPath("$.status").value("NO_SHOW"));
     // Неявка освобождает интервал: на него можно записать другого пациента.
     book(LEBEDEVA, "2026-11-05T10:00:00Z", "2026-11-05T10:30:00Z");
   }
 
   @Test
   void listsPractitionersAndFiltersScheduleByPractitioner() throws Exception {
-    mvc.perform(get("/api/v1/practitioners").header("X-Demo-Role", "ADMINISTRATOR"))
+    mvc.perform(get("/api/v1/practitioners").with(staff.role("ADMINISTRATOR")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[*].fullName").value(hasItem("Ольга Лебедева")))
         .andExpect(jsonPath("$[*].fullName").value(hasItem("Александр Петров")));
@@ -131,7 +137,7 @@ class SchedulingControllerTest {
             get("/api/v1/appointments")
                 .param("date", "2026-10-06")
                 .param("practitionerId", LEBEDEVA)
-                .header("X-Demo-Role", "ADMINISTRATOR"))
+                .with(staff.role("ADMINISTRATOR")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.length()").value(1))
         .andExpect(jsonPath("$[0].status").value("NO_SHOW"));
@@ -141,7 +147,7 @@ class SchedulingControllerTest {
   void rejectsUnknownPractitioner() throws Exception {
     mvc.perform(
             post("/api/v1/appointments")
-                .header("X-Demo-Role", "ADMINISTRATOR")
+                .with(staff.role("ADMINISTRATOR"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     """
@@ -160,17 +166,16 @@ class SchedulingControllerTest {
   void onlyAdministratorCanCancelAndTheSlotCanBeBookedAgain() throws Exception {
     mvc.perform(
             post("/api/v1/appointments/00000000-0000-0000-0000-000000000301/cancel")
-                .header("X-Demo-Role", "DOCTOR"))
+                .with(staff.role("DOCTOR")))
         .andExpect(status().isForbidden());
 
     mvc.perform(
             post("/api/v1/appointments/00000000-0000-0000-0000-000000000301/cancel")
-                .header("X-Demo-Role", "ADMINISTRATOR"))
+                .with(staff.role("ADMINISTRATOR")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.status").value("CANCELLED"));
 
-    mvc.perform(
-            get("/api/v1/appointments").param("date", "2026-10-20").header("X-Demo-Role", "DOCTOR"))
+    mvc.perform(get("/api/v1/appointments").param("date", "2026-10-20").with(staff.role("DOCTOR")))
         .andExpect(status().isOk())
         .andExpect(
             jsonPath("$[?(@.status == 'CANCELLED')].id")
@@ -178,7 +183,7 @@ class SchedulingControllerTest {
 
     mvc.perform(
             post("/api/v1/appointments/00000000-0000-0000-0000-000000000301/cancel")
-                .header("X-Demo-Role", "ADMINISTRATOR"))
+                .with(staff.role("ADMINISTRATOR")))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("ALREADY_CANCELLED"));
 
@@ -194,7 +199,7 @@ class SchedulingControllerTest {
         """;
     mvc.perform(
             post("/api/v1/appointments")
-                .header("X-Demo-Role", "ADMINISTRATOR")
+                .with(staff.role("ADMINISTRATOR"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(rebook))
         .andExpect(status().isCreated());
@@ -203,12 +208,11 @@ class SchedulingControllerTest {
   @Test
   void keepsPriceSnapshotAndRejectsUnknownService() throws Exception {
     attemptBooking(
-            DMITRY, PETROV, "2026-11-03T11:00:00Z", "2026-11-03T11:50:00Z",
-            "Первичный приём")
+            DMITRY, PETROV, "2026-11-03T11:00:00Z", "2026-11-03T11:50:00Z", "Первичный приём")
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.amountMinor").value(450000))
         .andExpect(jsonPath("$.currency").value("RUB"));
-    attemptBooking(DMITRY, PETROV, "2026-11-03T13:00:00Z", "2026-11-03T13:30:00Z", "Массаж")
+    attemptBooking(DMITRY, PETROV, "2026-11-03T13:00:00Z", "2026-11-03T13:30:00Z", "Massage")
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("UNKNOWN_SERVICE"));
   }
@@ -217,14 +221,12 @@ class SchedulingControllerTest {
   void rejectsBookingOutsideWorkingHours() throws Exception {
     // Среда: у Петрова нет смены.
     attemptBooking(
-            DMITRY, PETROV, "2026-11-04T10:00:00Z", "2026-11-04T10:30:00Z",
-            "Повторный приём")
+            DMITRY, PETROV, "2026-11-04T10:00:00Z", "2026-11-04T10:30:00Z", "Повторный приём")
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("OUTSIDE_WORKING_HOURS"));
     // Вторник, но конец приёма после 18:00.
     attemptBooking(
-            DMITRY, PETROV, "2026-11-03T17:45:00Z", "2026-11-03T18:15:00Z",
-            "Повторный приём")
+            DMITRY, PETROV, "2026-11-03T17:45:00Z", "2026-11-03T18:15:00Z", "Повторный приём")
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("OUTSIDE_WORKING_HOURS"));
   }
@@ -254,7 +256,7 @@ class SchedulingControllerTest {
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("INVALID_INTERVAL"));
 
-    mvc.perform(get("/api/v1/audit").header("X-Demo-Role", "MANAGER"))
+    mvc.perform(get("/api/v1/audit").with(staff.role("MANAGER")))
         .andExpect(
             jsonPath("$[?(@.action == 'APPOINTMENT_RESCHEDULED')].reason")
                 .value(hasItem("2026-11-10T09:00Z>2026-11-12T10:00Z;practitioner")));
@@ -276,7 +278,7 @@ class SchedulingControllerTest {
                 .param("patientId", "00000000-0000-0000-0000-000000000101")
                 .param("from", "2026-10-01")
                 .param("to", "2026-10-31")
-                .header("X-Demo-Role", "ADMINISTRATOR"))
+                .with(staff.role("ADMINISTRATOR")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.length()").value(5))
         .andExpect(jsonPath("$[0].startsAt").value("2026-10-06T09:00:00Z"));
@@ -286,9 +288,9 @@ class SchedulingControllerTest {
                 .param("to", "2026-10-31")
                 .param("patientId", "00000000-0000-0000-0000-000000000101")
                 .param("status", "COMPLETED")
-                .header("X-Demo-Role", "CASHIER"))
+                .with(staff.role("CASHIER")))
         .andExpect(jsonPath("$.length()").value(4));
-    mvc.perform(get("/api/v1/appointments").header("X-Demo-Role", "ADMINISTRATOR"))
+    mvc.perform(get("/api/v1/appointments").with(staff.role("ADMINISTRATOR")))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("INVALID_RANGE"));
   }
@@ -298,11 +300,11 @@ class SchedulingControllerTest {
     var created =
         mvc.perform(
                 post("/api/v1/patients")
-                    .header("X-Demo-Role", "ADMINISTRATOR")
+                    .with(staff.role("ADMINISTRATOR"))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(
                         """
-                        {"fullName":"Новый Пациент","birthDate":"1990-01-01","phone":"+70000000000",
+                        {"fullName":"New Patient","birthDate":"1990-01-01","phone":"+70000000000",
                          "consentVersion":"v1.2","consentBasis":"SIGNED_FORM"}
                         """))
             .andReturn()
@@ -311,10 +313,82 @@ class SchedulingControllerTest {
     String patientId = JsonPath.read(created, "$.id");
     var history = "/api/v1/clinical/patients/" + patientId + "/encounters";
 
-    mvc.perform(get(history).header("X-Demo-Role", "DOCTOR").header("X-Actor-Id", LEBEDEVA))
-        .andExpect(status().isForbidden());
+    mvc.perform(get(history).with(staff.doctor(LEBEDEVA))).andExpect(status().isForbidden());
     book(patientId, LEBEDEVA, "2026-11-19T10:00:00Z", "2026-11-19T10:30:00Z");
-    mvc.perform(get(history).header("X-Demo-Role", "DOCTOR").header("X-Actor-Id", LEBEDEVA))
-        .andExpect(status().isOk());
+    mvc.perform(get(history).with(staff.doctor(LEBEDEVA))).andExpect(status().isOk());
+  }
+
+  @Test
+  void lebedevaCannotMovePetrovsAppointment() throws Exception {
+    var id = book(PETROV, "2026-12-01T09:00:00Z", "2026-12-01T09:30:00Z");
+    change(id, "ADMINISTRATOR", PETROV, "ARRIVED").andExpect(status().isOk());
+
+    change(id, "DOCTOR", LEBEDEVA, "COMPLETED").andExpect(status().isForbidden());
+    mvc.perform(
+            post("/api/v1/appointments/" + id + "/reschedule")
+                .with(staff.doctor(StaffSessions.LEBEDEVA))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"practitionerId":"%s","startsAt":"2026-12-03T10:00:00Z",
+                     "endsAt":"2026-12-03T10:30:00Z"}
+                    """
+                        .formatted(LEBEDEVA)))
+        .andExpect(status().isForbidden());
+    mvc.perform(get("/api/v1/appointments").param("date", "2026-12-01").with(staff.admin()))
+        .andExpect(jsonPath("$[?(@.id == '" + id + "')].status").value("ARRIVED"))
+        .andExpect(jsonPath("$[?(@.id == '" + id + "')].practitionerId").value(PETROV));
+  }
+
+  @Test
+  void administratorChangesWeeklyShiftAndDayOffRejectsBooking() throws Exception {
+    var hours = "/api/v1/practitioners/" + LEBEDEVA + "/working-hours";
+    var original =
+        """
+        {"shifts":[{"dayOfWeek":2,"startsAt":"10:00","endsAt":"19:00"},
+                   {"dayOfWeek":4,"startsAt":"10:00","endsAt":"19:00"}]}
+        """;
+    try {
+      mvc.perform(
+              put(hours)
+                  .with(staff.role("MANAGER"))
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(original))
+          .andExpect(status().isForbidden());
+      mvc.perform(
+              put(hours)
+                  .with(staff.admin())
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(
+                      """
+                      {"shifts":[{"dayOfWeek":1,"startsAt":"09:00","endsAt":"10:00"},
+                                 {"dayOfWeek":1,"startsAt":"11:00","endsAt":"12:00"}]}
+                      """))
+          .andExpect(status().isConflict())
+          .andExpect(jsonPath("$.code").value("INVALID_SHIFT"));
+      mvc.perform(
+              put(hours)
+                  .with(staff.admin())
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(
+                      """
+                      {"shifts":[{"dayOfWeek":1,"startsAt":"10:00","endsAt":"14:00"}]}
+                      """))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.workingHours.length()").value(1))
+          .andExpect(jsonPath("$.workingHours[0].dayOfWeek").value(1));
+
+      // Понедельник теперь рабочий, четверг — выходной.
+      attemptBooking(
+              DMITRY, LEBEDEVA, "2026-12-07T10:00:00Z", "2026-12-07T10:30:00Z", "Повторный приём")
+          .andExpect(status().isCreated());
+      attemptBooking(
+              DMITRY, LEBEDEVA, "2026-12-10T10:00:00Z", "2026-12-10T10:30:00Z", "Повторный приём")
+          .andExpect(status().isConflict())
+          .andExpect(jsonPath("$.code").value("OUTSIDE_WORKING_HOURS"));
+    } finally {
+      mvc.perform(
+          put(hours).with(staff.admin()).contentType(MediaType.APPLICATION_JSON).content(original));
+    }
   }
 }

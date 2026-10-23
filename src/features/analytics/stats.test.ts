@@ -10,8 +10,8 @@ const rows: StatRow[] = [
   { date: '2026-11-01', practitionerId: 'petrov', status: 'COMPLETED', count: 9 },
 ]
 
-describe('аналитика приёмов', () => {
-  it('раскладывает статусы по итогам', () => {
+describe('visit analytics', () => {
+  it('groups statuses by outcome', () => {
     expect(bucketOf('ARRIVED')).toBe('attended')
     expect(bucketOf('IN_PROGRESS')).toBe('attended')
     expect(bucketOf('BOOKED')).toBe('planned')
@@ -19,7 +19,7 @@ describe('аналитика приёмов', () => {
     expect(bucketOf('CANCELLED')).toBe('cancelled')
   })
 
-  it('считает итоги и доли только внутри периода', () => {
+  it('counts totals and shares only inside the period', () => {
     const stats = summarize(rows, '2026-10-06', '2026-10-08')
     expect(stats.totals).toEqual({ attended: 2, planned: 3, noShow: 1, cancelled: 1, total: 7 })
     expect(stats.attendanceRate).toBe(67)
@@ -29,19 +29,19 @@ describe('аналитика приёмов', () => {
     expect(stats.days[1].total).toBe(0)
   })
 
-  it('фильтрует по врачу и группирует по врачам', () => {
+  it('filters by doctor and groups by doctor', () => {
     const stats = summarize(rows, '2026-10-01', '2026-10-31', 'lebedeva')
     expect(stats.totals.total).toBe(4)
     expect([...stats.byPractitioner.keys()]).toEqual(['lebedeva'])
     expect(summarize(rows, '2026-10-01', '2026-10-31').byPractitioner.get('petrov')?.total).toBe(3)
   })
 
-  it('без данных доли не считаются', () => {
+  it('no shares without data', () => {
     expect(rate(0, 0)).toBeNull()
     expect(summarize([], '2026-10-01', '2026-10-02').attendanceRate).toBeNull()
   })
 
-  it('собирает строки статистики из расписания демо-режима', () => {
+  it('builds statistics rows from the demo schedule', () => {
     const base = { time: '09:00', duration: '30 мин', minutes: 30, name: 'Анна', type: 'Приём', status: '', tone: '', practitionerId: 'petrov', patientId: 'p1' }
     const result = rowsFromSchedule([
       { ...base, id: '1', date: '2026-10-06', statusCode: 'COMPLETED' },

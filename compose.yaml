@@ -37,6 +37,11 @@ services:
       DATABASE_USER: ${POSTGRES_USER:-quiet_clinic}
       DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?Задайте POSTGRES_PASSWORD в .env}
       CLINIC_DEV_KMS_KEY: ${CLINIC_KMS_KEY:?Задайте CLINIC_KMS_KEY в .env (scripts/init-env.sh)}
+      # Пустая база: клиника и её администратор admin. Пароль обязателен (scripts/init-env.sh).
+      CLINIC_NAME: ${CLINIC_NAME:-AlphaCRM}
+      CLINIC_ADMIN_NAME: ${CLINIC_ADMIN_NAME:-Администратор}
+      CLINIC_ADMIN_PASSWORD: ${CLINIC_ADMIN_PASSWORD:?Задайте CLINIC_ADMIN_PASSWORD в .env (scripts/init-env.sh)}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
     depends_on:
       postgres:
         condition: service_healthy

@@ -10,9 +10,11 @@ import ru.quietclinic.clinical.VisitAppointments;
 @Component
 class ClinicalAppointmentsAdapter implements VisitAppointments {
   private final AppointmentRepository appointments;
+  private final AppointmentService service;
 
-  ClinicalAppointmentsAdapter(AppointmentRepository appointments) {
+  ClinicalAppointmentsAdapter(AppointmentRepository appointments, AppointmentService service) {
     this.appointments = appointments;
+    this.service = service;
   }
 
   @Override
@@ -20,5 +22,10 @@ class ClinicalAppointmentsAdapter implements VisitAppointments {
     return appointments
         .findById(appointmentId)
         .map(a -> new AppointmentSnapshot(a.id, a.patientId, a.practitionerId, a.status));
+  }
+
+  @Override
+  public void markInProgress(UUID appointmentId) {
+    service.markInProgress(appointmentId);
   }
 }

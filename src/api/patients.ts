@@ -1,4 +1,4 @@
-import { API, failure, headersFor } from './client'
+import { failure, apiFetch } from './client'
 import type { ConsentItem, PatientItem } from './types'
 
 export type PatientInput = { fullName: string; birthDate: string; phone: string }
@@ -19,7 +19,7 @@ export function patientName(id: string) {
 }
 
 export async function loadPatients(): Promise<PatientItem[]> {
-  const response = await fetch(`${API}/patients`, { headers: headersFor() })
+  const response = await apiFetch(`/patients`)
   if (!response.ok) throw new Error('patients unavailable')
   const rows = await response.json()
   return rows.map((row: Record<string, unknown>) => {
@@ -30,9 +30,8 @@ export async function loadPatients(): Promise<PatientItem[]> {
 }
 
 export async function createPatient(input: PatientInput): Promise<PatientItem> {
-  const response = await fetch(`${API}/patients`, {
+  const response = await apiFetch(`/patients`, {
     method: 'POST',
-    headers: headersFor('ADMINISTRATOR'),
     body: JSON.stringify({ ...input, consentVersion: 'v1.2', consentBasis: 'SIGNED_FORM' }),
   })
   if (!response.ok) throw new Error('patient create failed')
@@ -42,9 +41,8 @@ export async function createPatient(input: PatientInput): Promise<PatientItem> {
 }
 
 export async function updatePatient(id: string, input: PatientInput): Promise<PatientItem> {
-  const response = await fetch(`${API}/patients/${id}`, {
+  const response = await apiFetch(`/patients/${id}`, {
     method: 'PUT',
-    headers: headersFor('ADMINISTRATOR'),
     body: JSON.stringify(input),
   })
   if (!response.ok) throw await failure(response, 'Не удалось сохранить изменения', { 404: 'Пациент не найден' })
@@ -64,18 +62,27 @@ export function toPatient(row: Record<string, unknown>): PatientItem {
     phone: contacts.find((contact) => contact.type === 'PHONE')?.value ?? '—',
     consent: consentStatus(consents),
     consents,
+    referralSource: (row.referralSource as string | null | undefined) ?? null,
+    registryNote: (row.registryNote as string | null | undefined) ?? null,
+    phoneSharedWith: (row.phoneSharedWith as PatientItem['phoneSharedWith']) ?? [],
   }
+}
+
+/** Источник и заметка регистратуры. Пустое значение очищает поле. */
+export async function updateRegistry(patientId: string, input: { referralSource: string | null; registryNote: string | null }): Promise<PatientItem> {
+  const response = await apiFetch(`/patients/${patientId}/registry`, { method: 'PUT', body: JSON.stringify(input) })
+  if (!response.ok) throw await failure(response, 'Не удалось сохранить данные регистратуры')
+  return toPatient(await response.json())
 }
 
 /** Как в поиске: действует, если есть согласие без revokedAt. */
 export function consentStatus(consents: ConsentItem[]) {
-  return consents.some((consent) => !consent.revokedAt) ? 'Действует' : 'Требует обновления'
+  return consents.some((consent) => !consent.revokedAt) ? 'ACTIVE' : 'NEEDS_UPDATE'
 }
 
 export async function grantConsent(patientId: string, input: { version: string; basis: string }): Promise<PatientItem> {
-  const response = await fetch(`${API}/patients/${patientId}/consents`, {
+  const response = await apiFetch(`/patients/${patientId}/consents`, {
     method: 'POST',
-    headers: headersFor('ADMINISTRATOR'),
     body: JSON.stringify(input),
   })
   if (!response.ok) throw await failure(response, 'Не удалось сохранить согласие')
@@ -83,9 +90,8 @@ export async function grantConsent(patientId: string, input: { version: string; 
 }
 
 export async function revokeConsent(patientId: string, consentId: string): Promise<PatientItem> {
-  const response = await fetch(`${API}/patients/${patientId}/consents/${consentId}/revoke`, {
+  const response = await apiFetch(`/patients/${patientId}/consents/${consentId}/revoke`, {
     method: 'POST',
-    headers: headersFor('ADMINISTRATOR'),
   })
   if (!response.ok) throw await failure(response, 'Не удалось отозвать согласие')
   return toPatient(await response.json())

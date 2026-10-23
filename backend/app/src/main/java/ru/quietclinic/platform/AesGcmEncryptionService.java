@@ -39,7 +39,7 @@ class AesGcmEncryptionService implements EncryptionService {
                       .put(encrypted)
                       .array());
     } catch (Exception ex) {
-      throw new IllegalStateException("Шифрование не выполнено", ex);
+      throw new IllegalStateException("Encryption failed", ex);
     }
   }
 
@@ -57,7 +57,7 @@ class AesGcmEncryptionService implements EncryptionService {
           new GCMParameterSpec(128, nonce));
       return new String(cipher.doFinal(encrypted), StandardCharsets.UTF_8);
     } catch (Exception ex) {
-      throw new IllegalStateException("Расшифрование не выполнено", ex);
+      throw new IllegalStateException("Decryption failed", ex);
     }
   }
 }

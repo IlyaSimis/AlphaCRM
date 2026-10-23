@@ -1,4 +1,4 @@
-import { API, ApiError, LEBEDEVA_ID, PETROV_ID, failure, headersFor, type ApiRole } from './client'
+import { ApiError, LEBEDEVA_ID, PETROV_ID, failure, apiFetch } from './client'
 import { patientName, rememberPatient } from './patients'
 import type { AppointmentStatus, Practitioner, ScheduleItem, ServiceItem } from './types'
 
@@ -7,10 +7,13 @@ export const demoPractitioners: Practitioner[] = [
   { id: LEBEDEVA_ID, fullName: 'Ольга Лебедева', specialty: 'Психотерапевт', workingHours: [{ dayOfWeek: 2, startsAt: '10:00:00', endsAt: '19:00:00' }, { dayOfWeek: 4, startsAt: '10:00:00', endsAt: '19:00:00' }] },
 ]
 
-/** Справочник услуг на случай, если сервер недоступен. Совпадает с seed в Liquibase. */
+/**
+ * Услуги демо-песочницы — те же, что начальные данные в Liquibase. На живом API форма записи
+ * берёт справочник только с сервера.
+ */
 export const demoServices: ServiceItem[] = [
-  { id: '00000000-0000-0000-0000-000000000601', name: 'Первичный приём', durationMinutes: 50, priceMinor: 450000, currency: 'RUB' },
-  { id: '00000000-0000-0000-0000-000000000602', name: 'Повторный приём', durationMinutes: 30, priceMinor: 300000, currency: 'RUB' },
+  { id: '00000000-0000-0000-0000-000000000601', name: 'Первичный приём', durationMinutes: 50, priceMinor: 450000, currency: 'RUB', active: true },
+  { id: '00000000-0000-0000-0000-000000000602', name: 'Повторный приём', durationMinutes: 30, priceMinor: 300000, currency: 'RUB', active: true },
 ]
 
 const labels: Record<AppointmentStatus, string> = {
@@ -64,7 +67,7 @@ export function toScheduleItem(row: Record<string, string | number | null>, date
 export async function loadSchedule(date: string, patientId?: string): Promise<ScheduleItem[]> {
   const query = new URLSearchParams({ date })
   if (patientId) query.set('patientId', patientId)
-  const response = await fetch(`${API}/appointments?${query}`, { headers: headersFor() })
+  const response = await apiFetch(`/appointments?${query}`)
   if (!response.ok) throw new Error('schedule unavailable')
   const rows = await response.json()
   return rows.map((row: Record<string, string>) => toScheduleItem(row, date))
@@ -75,22 +78,39 @@ export async function loadAppointments(params: { from: string; to: string; patie
   const query = new URLSearchParams({ from: params.from, to: params.to })
   if (params.patientId) query.set('patientId', params.patientId)
   if (params.status) query.set('status', params.status)
-  const response = await fetch(`${API}/appointments?${query}`, { headers: headersFor() })
+  const response = await apiFetch(`/appointments?${query}`)
   if (!response.ok) throw await failure(response, 'Не удалось загрузить записи')
   const rows = await response.json()
   return rows.map((row: Record<string, string>) => toScheduleItem(row))
 }
 
+/** Справочник услуг клиники; выключенные сервер отдаёт только администратору. */
 export async function loadServices(): Promise<ServiceItem[]> {
-  const response = await fetch(`${API}/services`, { headers: headersFor() })
-  if (!response.ok) throw new Error('services unavailable')
+  const response = await apiFetch(`/services?all=true`)
+  if (!response.ok) throw await failure(response, 'Справочник услуг недоступен')
   const rows = (await response.json()) as ServiceItem[]
-  if (!Array.isArray(rows) || rows.length === 0) throw new Error('services empty')
-  return rows
+  return Array.isArray(rows) ? rows.map(toService) : []
+}
+
+/** Ответ сервера без поля active (старая версия API) считается включённой услугой. */
+function toService(row: ServiceItem): ServiceItem {
+  return { ...row, active: row.active !== false }
+}
+
+export async function createService(input: { name: string; durationMinutes: number; priceMinor: number }): Promise<ServiceItem> {
+  const response = await apiFetch('/services', { method: 'POST', body: JSON.stringify({ ...input, currency: 'RUB' }) })
+  if (!response.ok) throw await failure(response, 'Не удалось создать услугу')
+  return toService(await response.json())
+}
+
+export async function setServiceActive(serviceId: string, active: boolean): Promise<ServiceItem> {
+  const response = await apiFetch(`/services/${serviceId}/${active ? 'activate' : 'deactivate'}`, { method: 'POST' })
+  if (!response.ok) throw await failure(response, active ? 'Не удалось включить услугу' : 'Не удалось выключить услугу')
+  return toService(await response.json())
 }
 
 export async function loadPractitioners(): Promise<Practitioner[]> {
-  const response = await fetch(`${API}/practitioners`, { headers: headersFor() })
+  const response = await apiFetch(`/practitioners`)
   if (!response.ok) throw new Error('practitioners unavailable')
   const rows = (await response.json()) as Practitioner[]
   if (!Array.isArray(rows) || rows.length === 0) throw new Error('practitioners empty')
@@ -107,12 +127,11 @@ export type NewAppointment = {
   serviceName: string
 }
 
-export async function createAppointment(input: NewAppointment, role: ApiRole = 'DOCTOR') {
+export async function createAppointment(input: NewAppointment) {
   rememberPatient(input.patientId, input.patientName)
   const { startsAt, endsAt } = intervalOf(input.date, input.time, input.minutes)
-  const response = await fetch(`${API}/appointments`, {
+  const response = await apiFetch(`/appointments`, {
     method: 'POST',
-    headers: headersFor(role),
     body: JSON.stringify({
       patientId: input.patientId,
       practitionerId: input.practitionerId,
@@ -133,28 +152,42 @@ export function intervalOf(date: string, time: string, minutes: number) {
 }
 
 export async function rescheduleAppointment(id: string, input: { practitionerId: string; date: string; time: string; minutes: number }) {
-  const response = await fetch(`${API}/appointments/${id}/reschedule`, {
+  const response = await apiFetch(`/appointments/${id}/reschedule`, {
     method: 'POST',
-    headers: headersFor('ADMINISTRATOR'),
     body: JSON.stringify({ practitionerId: input.practitionerId, ...intervalOf(input.date, input.time, input.minutes) }),
   })
   if (!response.ok) throw await failure(response, 'Не удалось перенести запись', { 404: 'Запись не найдена' })
   return response.json()
 }
 
+/** Недельный график врача целиком; дня нет в списке — выходной. Только администратор. */
+export async function saveWorkingHours(practitionerId: string, shifts: Practitioner['workingHours']): Promise<Practitioner> {
+  const response = await apiFetch(`/practitioners/${practitionerId}/working-hours`, {
+    method: 'PUT',
+    body: JSON.stringify({ shifts: shifts.map((shift) => ({ dayOfWeek: shift.dayOfWeek, startsAt: shift.startsAt.slice(0, 5), endsAt: shift.endsAt.slice(0, 5) })) }),
+  })
+  if (!response.ok) throw await failure(response, 'Не удалось сохранить график')
+  return response.json()
+}
+
+/** Новая цена действует для новых записей; снимок цены уже созданных записей не меняется. */
+export async function saveServicePrice(serviceId: string, priceMinor: number): Promise<ServiceItem> {
+  const response = await apiFetch(`/services/${serviceId}/price`, { method: 'PUT', body: JSON.stringify({ priceMinor }) })
+  if (!response.ok) throw await failure(response, 'Не удалось сохранить цену')
+  return toService(await response.json())
+}
+
 export async function cancelAppointment(id: string) {
-  const response = await fetch(`${API}/appointments/${id}/cancel`, {
+  const response = await apiFetch(`/appointments/${id}/cancel`, {
     method: 'POST',
-    headers: headersFor('ADMINISTRATOR'),
   })
   if (!response.ok) throw await failure(response, 'Не удалось отменить запись', { 404: 'Запись не найдена' })
   return response.json()
 }
 
-export async function changeAppointmentStatus(id: string, status: AppointmentStatus, role: ApiRole) {
-  const response = await fetch(`${API}/appointments/${id}/status`, {
+export async function changeAppointmentStatus(id: string, status: AppointmentStatus) {
+  const response = await apiFetch(`/appointments/${id}/status`, {
     method: 'POST',
-    headers: headersFor(role),
     body: JSON.stringify({ status }),
   })
   if (!response.ok) throw await failure(response, 'Не удалось изменить статус', { 404: 'Запись не найдена' })

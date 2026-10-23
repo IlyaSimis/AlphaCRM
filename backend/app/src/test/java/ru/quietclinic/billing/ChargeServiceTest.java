@@ -9,17 +9,20 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.ActiveProfiles;
 
+// Та же конфигурация, что у HTTP-тестов: Spring переиспользует контекст и базу H2, а не
+// запускает Liquibase второй раз на той же базе в памяти.
 @SpringBootTest
+@AutoConfigureMockMvc
 @ActiveProfiles("local")
 class ChargeServiceTest {
   // 502 — завершённый приём Петрова из seed, счёта по нему нет.
-  static final UUID COMPLETED_APPOINTMENT =
-      UUID.fromString("00000000-0000-0000-0000-000000000502");
+  static final UUID COMPLETED_APPOINTMENT = UUID.fromString("00000000-0000-0000-0000-000000000502");
 
   @Autowired ChargeService charges;
   @Autowired ChargeRepository repository;

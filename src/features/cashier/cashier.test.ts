@@ -7,8 +7,8 @@ const visit = (id: string, date: string, statusCode: ScheduleItem['statusCode'] 
 })
 const charge = (appointmentId: string, status: string, amountMinor = 300000): ChargeItem => ({ chargeId: `c-${appointmentId}`, appointmentId, amountMinor, currency: 'RUB', status, createdAt: '' })
 
-describe('касса', () => {
-  it('сопоставляет завершённые приёмы со счетами и ставит неоплаченные первыми', () => {
+describe('cashier', () => {
+  it('matches completed visits with charges and puts unpaid ones first', () => {
     const rows = buildCashierRows(
       [visit('a', '2026-10-06'), visit('b', '2026-10-13'), visit('c', '2026-10-15'), visit('x', '2026-10-15', 'CANCELLED')],
       [charge('a', 'PAID'), charge('b', 'PENDING', 450000)],
@@ -17,7 +17,7 @@ describe('касса', () => {
     expect(totals(rows)).toEqual({ pending: 450000, paid: 300000, withoutCharge: 1 })
   })
 
-  it('локальный счёт берёт снимок цены записи', () => {
+  it('a local charge takes the appointment price snapshot', () => {
     expect(localCharge(visit('a', '2026-10-06'))).toMatchObject({ appointmentId: 'a', amountMinor: 300000, status: 'PENDING' })
     expect(localCharge(visit('a', '2026-10-06', 'COMPLETED', null))).toBeNull()
   })

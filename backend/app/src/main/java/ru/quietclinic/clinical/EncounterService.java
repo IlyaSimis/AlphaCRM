@@ -21,7 +21,9 @@ import ru.quietclinic.platform.EncryptionService;
  */
 @Service
 class EncounterService {
-  static final Set<String> STARTABLE_STATUSES = Set.of("ARRIVED", "IN_PROGRESS");
+  /** Приём можно начать по любой своей записи, кроме отменённой, неявки и завершённой. */
+  static final Set<String> STARTABLE_STATUSES =
+      Set.of("BOOKED", "CONFIRMED", "ARRIVED", "IN_PROGRESS");
 
   private final EncounterRepository encounters;
   private final ClinicalNoteRepository notes;
@@ -52,20 +54,24 @@ class EncounterService {
   EncounterStart start(StartEncounterRequest request) {
     requireRole("DOCTOR");
     if (!actorId().equals(request.practitionerId())) {
-      throw forbidden("Врач может начать только собственный приём");
+      throw forbidden("OWN_VISIT_ONLY", "A doctor can start only their own visit");
     }
     var appointment =
         appointments
             .find(request.appointmentId())
-            .orElseThrow(() -> notFound("Запись не найдена"));
+            .orElseThrow(() -> notFound("APPOINTMENT_NOT_FOUND", "Appointment not found"));
     if (!appointment.patientId().equals(request.patientId())
         || !appointment.practitionerId().equals(request.practitionerId())) {
-      throw conflict("APPOINTMENT_MISMATCH", "Пациент или врач не совпадают с записью");
+      throw conflict(
+          "APPOINTMENT_MISMATCH", "Patient or practitioner does not match the appointment");
     }
     if (!STARTABLE_STATUSES.contains(appointment.status())) {
       throw conflict(
-          "APPOINTMENT_NOT_ARRIVED", "Приём можно начать, когда пациент пришёл на запись");
+          "APPOINTMENT_NOT_STARTABLE",
+          "Cannot start a visit for a cancelled, missed or completed appointment");
     }
+    // Запись уходит в IN_PROGRESS; другие приёмы врача не закрываются и не подписываются.
+    appointments.markInProgress(request.appointmentId());
     var existing = encounters.findFirstByAppointmentIdOrderByStartedAtAsc(request.appointmentId());
     if (existing.isPresent()) return new EncounterStart(view(existing.get(), null), false);
     var encounter =
@@ -151,7 +157,7 @@ class EncounterService {
     requireRole("DOCTOR");
     var original = findDocument(documentId);
     if (!original.state.equals("SIGNED_LOCKED")) {
-      throw conflict("ORIGINAL_NOT_SIGNED", "Дополнение возможно только к подписанному документу");
+      throw conflict("ORIGINAL_NOT_SIGNED", "Only a signed document can be amended");
     }
     var encounter = findEncounter(original.encounterId);
     requireClinicalAccess(encounter.patientId);
@@ -174,8 +180,7 @@ class EncounterService {
     var note =
         notes
             .findByEncounterId(encounterId)
-            .orElseThrow(
-                () -> conflict("NOTE_REQUIRED", "Сначала сохраните черновик заметки приёма"));
+            .orElseThrow(() -> conflict("NOTE_REQUIRED", "Save the visit note draft first"));
     return canonical(note);
   }
 
@@ -188,11 +193,15 @@ class EncounterService {
   }
 
   private Encounter findEncounter(UUID id) {
-    return encounters.findById(id).orElseThrow(() -> notFound("Приём не найден"));
+    return encounters
+        .findById(id)
+        .orElseThrow(() -> notFound("ENCOUNTER_NOT_FOUND", "Encounter not found"));
   }
 
   private MedicalDocument findDocument(UUID id) {
-    return documents.findById(id).orElseThrow(() -> notFound("Документ не найден"));
+    return documents
+        .findById(id)
+        .orElseThrow(() -> notFound("DOCUMENT_NOT_FOUND", "Document not found"));
   }
 
   private void requireClinicalAccess(UUID patientId) {
@@ -200,7 +209,7 @@ class EncounterService {
     if (!careRelationships.isActive(actorId(), patientId)) {
       audit.record(
           actorId(), "CLINICAL_ACCESS", "PATIENT", patientId, "DENIED", "no-care-relationship");
-      throw forbidden("Нет активной связи с лечением пациента");
+      throw forbidden("NO_CARE_RELATIONSHIP", "No active care relationship with the patient");
     }
   }
 

@@ -11,6 +11,10 @@ import java.util.UUID;
 class Practitioner {
   @Id UUID id;
 
+  /** Клиника врача: расписание и записи видны только сотрудникам этой клиники. */
+  @Column(nullable = false)
+  UUID clinicId;
+
   @Column(nullable = false)
   String fullName;
 

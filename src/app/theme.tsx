@@ -1,14 +1,14 @@
 import { CssBaseline } from '@mui/material'
 import { createTheme, ThemeProvider } from '@mui/material/styles'
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { readStored, storageKeys, writeStored } from '../shared/storage'
 
 export type ColorMode = 'light' | 'dark'
 
-const storageKey = 'quiet-clinic-color-mode'
 const ColorModeContext = createContext<{ mode: ColorMode; toggle: () => void } | null>(null)
 
 function initialMode(): ColorMode {
-  const stored = localStorage.getItem(storageKey)
+  const stored = readStored(storageKeys.colorMode, (value) => value)
   if (stored === 'light' || stored === 'dark') return stored
   return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
@@ -19,7 +19,7 @@ export function ClinicThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     document.documentElement.dataset.theme = mode
     document.documentElement.style.colorScheme = mode
-    localStorage.setItem(storageKey, mode)
+    writeStored(storageKeys.colorMode, mode)
   }, [mode])
 
   const theme = useMemo(

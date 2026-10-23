@@ -2,22 +2,15 @@ import { useCallback, useEffect, useState } from 'react'
 import { HistoryRounded, RefreshRounded } from '@mui/icons-material'
 import { Alert, Box, Button, Chip, CircularProgress, MenuItem, Stack, TextField, Typography } from '@mui/material'
 import { loadAudit } from '../../api/audit'
-import { ACTORS, type ApiRole } from '../../api/client'
-import { demoPractitioners } from '../../api/schedule'
 import type { AuditItem } from '../../api/types'
 import { actionLabels, objectLabels, reasonLabel } from './auditLabels'
-
-const people: Record<string, string> = Object.fromEntries([
-  ...Object.values(ACTORS).map((actor) => [actor.id, actor.name]),
-  ...demoPractitioners.map((item) => [item.id, item.fullName]),
-])
 
 function formatMoment(iso: string) {
   const date = new Date(iso)
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
-export function AuditLog({ apiOnline, role }: { apiOnline: boolean; role: ApiRole }) {
+export function AuditLog({ apiOnline }: { apiOnline: boolean }) {
   const [items, setItems] = useState<AuditItem[]>([])
   const [result, setResult] = useState('')
   const [error, setError] = useState('')
@@ -27,11 +20,11 @@ export function AuditLog({ apiOnline, role }: { apiOnline: boolean; role: ApiRol
     if (!apiOnline) return
     setLoading(true)
     setError('')
-    loadAudit(role, result || undefined)
+    loadAudit(result || undefined)
       .then(setItems)
       .catch((reason: Error) => setError(reason.message))
       .finally(() => setLoading(false))
-  }, [apiOnline, role, result])
+  }, [apiOnline, result])
 
   useEffect(() => { refresh() }, [refresh])
 
@@ -61,7 +54,7 @@ export function AuditLog({ apiOnline, role }: { apiOnline: boolean; role: ApiRol
                 {items.map((item) => (
                   <tr key={item.id}>
                     <td className="nowrap">{formatMoment(item.occurredAt)}</td>
-                    <td>{people[item.actorId] ?? `ID ${item.actorId.slice(-4)}`}</td>
+                    <td>{item.actorName ?? `ID ${item.actorId.slice(-4)}`}</td>
                     <td>{actionLabels[item.action] ?? item.action}</td>
                     <td className="nowrap">{objectLabels[item.objectType] ?? item.objectType} · {item.objectId.slice(-4)}</td>
                     <td><Chip size="small" variant="outlined" label={item.result === 'ALLOWED' ? 'Разрешено' : item.result === 'DENIED' ? 'Отказано' : item.result} color={item.result === 'DENIED' ? 'warning' : 'success'} /></td>

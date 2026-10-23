@@ -14,12 +14,17 @@ export function formatMoney(minor: number, currency = 'RUB') {
   return new Intl.NumberFormat('ru-RU', { style: 'currency', currency }).format(minor / 100)
 }
 
+/** Услуги, которые можно выбрать в новой записи: только включённые. */
+export function bookableServices(services: ServiceItem[]) {
+  return services.filter((item) => item.active)
+}
+
 /** Проверяет черновик записи до отправки; возвращает текст ошибки или null. */
 export function validateBooking(draft: BookingDraft, patients: PatientItem[], services: ServiceItem[], practitioners: Practitioner[]) {
   if (!patients.some((item) => item.id === draft.patientId)) return 'Выберите пациента из списка'
   if (!draft.date) return 'Укажите дату приёма'
   if (!draft.time) return 'Укажите время приёма'
-  const service = services.find((item) => item.id === draft.serviceId)
+  const service = bookableServices(services).find((item) => item.id === draft.serviceId)
   if (!service) return 'Выберите услугу'
   const practitioner = practitioners.find((item) => item.id === draft.practitionerId)
   if (!practitioner) return 'Выберите врача'

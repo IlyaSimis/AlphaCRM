@@ -2,6 +2,11 @@ package ru.quietclinic.platform;
 
 import org.springframework.http.HttpStatus;
 
+/**
+ * Ошибка предметной области. {@code code} — машинный код на английском: по нему интерфейс выбирает
+ * фразу для сотрудника. {@code message} — английское пояснение для разработчика и для экранов,
+ * которые этот код ещё не знают.
+ */
 class DomainException extends RuntimeException {
   final String code;
   final HttpStatus status;
@@ -16,11 +21,19 @@ class DomainException extends RuntimeException {
     return new DomainException(code, message, HttpStatus.CONFLICT);
   }
 
-  static DomainException forbidden(String message) {
-    return new DomainException("ACCESS_DENIED", message, HttpStatus.FORBIDDEN);
+  static DomainException forbidden(String code, String message) {
+    return new DomainException(code, message, HttpStatus.FORBIDDEN);
   }
 
-  static DomainException notFound(String message) {
-    return new DomainException("NOT_FOUND", message, HttpStatus.NOT_FOUND);
+  static DomainException unauthorized(String message) {
+    return unauthorized("UNAUTHORIZED", message);
+  }
+
+  static DomainException unauthorized(String code, String message) {
+    return new DomainException(code, message, HttpStatus.UNAUTHORIZED);
+  }
+
+  static DomainException notFound(String code, String message) {
+    return new DomainException(code, message, HttpStatus.NOT_FOUND);
   }
 }

@@ -2,6 +2,7 @@ package ru.quietclinic.billing;
 
 import static ru.quietclinic.platform.PlatformConfig.actorId;
 import static ru.quietclinic.platform.PlatformConfig.conflict;
+import static ru.quietclinic.platform.PlatformConfig.notFound;
 import static ru.quietclinic.platform.PlatformConfig.requireRole;
 
 import jakarta.validation.Valid;
@@ -60,11 +61,15 @@ public class BillingController {
   @Transactional
   BillingView pay(@PathVariable UUID chargeId, @Valid @RequestBody PaymentRequest request) {
     requireRole("CASHIER");
-    var charge = charges.findById(chargeId).orElseThrow();
+    var charge =
+        charges
+            .findById(chargeId)
+            .filter(chargeService::inClinic)
+            .orElseThrow(() -> notFound("CHARGE_NOT_FOUND", "Charge not found"));
     var existing = payments.findByIdempotencyKey(request.idempotencyKey());
     if (existing.isPresent()) return view(charge, existing.get());
     if (!charge.status.equals("PENDING")) {
-      throw conflict("CHARGE_NOT_PAYABLE", "Начисление уже оплачено");
+      throw conflict("CHARGE_NOT_PAYABLE", "Charge is already paid");
     }
     var provider =
         gateway.capture(charge.id, charge.amountMinor, charge.currency, request.idempotencyKey());

@@ -15,7 +15,7 @@ class AppointmentStatsServiceTest {
   private static Appointment appointment(UUID practitioner, String startsAt, String status) {
     var start = Instant.parse(startsAt);
     var appointment =
-        new Appointment(UUID.randomUUID(), practitioner, start, start.plusSeconds(1800), "Приём");
+        new Appointment(UUID.randomUUID(), practitioner, start, start.plusSeconds(1800), "Visit");
     appointment.status = status;
     return appointment;
   }

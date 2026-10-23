@@ -9,8 +9,9 @@ final class AppointmentStatusPolicy {
 
   private static final Map<String, Set<String>> TRANSITIONS =
       Map.of(
-          "BOOKED", Set.of("CONFIRMED", "ARRIVED", "NO_SHOW"),
-          "CONFIRMED", Set.of("ARRIVED", "NO_SHOW"),
+          // Врач может начать приём и до отметки «пришёл»: несколько пациентов подряд.
+          "BOOKED", Set.of("CONFIRMED", "ARRIVED", "NO_SHOW", "IN_PROGRESS"),
+          "CONFIRMED", Set.of("ARRIVED", "NO_SHOW", "IN_PROGRESS"),
           "ARRIVED", Set.of("IN_PROGRESS", "COMPLETED"),
           "IN_PROGRESS", Set.of("COMPLETED"));
 

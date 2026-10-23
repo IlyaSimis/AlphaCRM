@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { amendDocument, createDocument, loadEncounters, saveNote, signDocument, startEncounter, TEMPLATE_VERSION } from '../../api/clinical'
 import type { DocumentSummary, EncounterView, NoteFields } from '../../api/types'
+import { useSandboxState } from '../../shared/sandbox'
 import { isUuid } from '../../shared/text'
 import { activeDocument, emptyNote, latestSigned, noteComplete, noteOf, upsertDocument, type VisitTarget } from './visit'
 
@@ -22,10 +23,12 @@ function localEncounter(target: VisitTarget): EncounterView {
  * Состояние приёма: старт по записи, черновик заметки, подпись и дополнение.
  * На сервере — настоящие вызовы; без сервера всё живёт до обновления страницы.
  */
-export function useVisit(target: VisitTarget, apiOnline: boolean, notify: (message: string) => void) {
+export function useVisit(target: VisitTarget, apiOnline: boolean, notify: (message: string) => void, onStarted?: () => void) {
   const remote = apiOnline && isUuid(target.patientId) && (Boolean(target.encounter) || isUuid(target.appointmentId ?? ''))
-  const [encounter, setEncounter] = useState<EncounterView | null>(target.encounter ?? (remote ? null : localEncounter(target)))
-  const [note, setNote] = useState<NoteFields>(target.encounter ? noteOf(target.encounter) : emptyNote)
+  // В песочнице приём и черновик живут в памяти вкладки: переход к другому пациенту их не теряет.
+  const sandboxKey = `visit-${target.appointmentId ?? target.encounter?.encounterId ?? target.patientId}`
+  const [encounter, setEncounter] = useSandboxState<EncounterView | null>(`${sandboxKey}-encounter`, target.encounter ?? (remote ? null : localEncounter(target)), !remote)
+  const [note, setNote] = useSandboxState<NoteFields>(`${sandboxKey}-note`, target.encounter ? noteOf(target.encounter) : emptyNote, !remote)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [savedAt, setSavedAt] = useState<Date | null>(null)
@@ -38,6 +41,8 @@ export function useVisit(target: VisitTarget, apiOnline: boolean, notify: (messa
       .then(async (started) => {
         if (cancelled) return
         setEncounter(started)
+        // Сервер перевёл запись в «На приёме» — расписание перечитывает день.
+        onStarted?.()
         try {
           // Текст заметки приходит только из истории — после проверки связи с лечением.
           const full = (await loadEncounters(target.patientId)).find((item) => item.encounterId === started.encounterId)

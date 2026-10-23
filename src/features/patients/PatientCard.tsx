@@ -1,14 +1,15 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { CheckCircleRounded, EditRounded, EventNoteRounded, LockOutlined } from '@mui/icons-material'
 import { Alert, Avatar, Box, Button, Chip, CircularProgress, Divider, Typography } from '@mui/material'
 import { CANCELLABLE } from '../../api/schedule'
 import type { EncounterView, PatientItem, Practitioner, ScheduleItem } from '../../api/types'
 import { localToday } from '../../shared/dates'
-import type { Role } from '../../shared/roles'
+import { roleLabels, type Role } from '../../shared/roles'
 import { initialsOf, isUuid } from '../../shared/text'
 import { Info } from '../../shared/ui'
 import { RESCHEDULABLE } from '../schedule/statusActions'
 import { ConsentDialog, consentBases } from './ConsentDialog'
+import { consentLabels } from './consentLabels'
 import { splitHistory } from './history'
 import { useClinicalHistory } from './useClinicalHistory'
 import { usePatientHistory } from './usePatientHistory'
@@ -21,6 +22,8 @@ type PatientCardProps = {
   appointments: ScheduleItem[]
   practitioners: Practitioner[]
   revision: number
+  /** Регистратура: источник, заметка, задачи, предупреждение о телефоне. Врачу не показывается. */
+  registry?: ReactNode
   onEdit: () => void
   onBack: () => void
   onCancel: (item: ScheduleItem) => void
@@ -54,8 +57,8 @@ export function PatientCard(props: PatientCardProps) {
     <Box className="next-appointment" key={item.id ?? `${item.date}-${item.time}`}>
       <EventNoteRounded />
       <Box sx={{ flex: 1 }}><Typography sx={{ fontWeight: 700 }}>{shortDay(item.date)} {item.time} · {item.status}</Typography><Typography sx={{ fontSize: 13 }}>{doctorName(item.practitionerId)} · {item.type.toLowerCase()}</Typography></Box>
-      {role === 'Администратор' && RESCHEDULABLE.includes(item.statusCode) && <Button size="small" aria-label={`Перенести запись ${item.time} ${item.name}`} onClick={() => props.onReschedule(item)}>Перенести</Button>}
-      {role === 'Администратор' && CANCELLABLE.includes(item.statusCode) && <Button size="small" variant="outlined" aria-label={`Отменить запись ${item.time} ${item.name}`} onClick={() => props.onCancel(item)}>Отменить</Button>}
+      {role === 'ADMINISTRATOR' && RESCHEDULABLE.includes(item.statusCode) && <Button size="small" aria-label={`Перенести запись ${item.time} ${item.name}`} onClick={() => props.onReschedule(item)}>Перенести</Button>}
+      {role === 'ADMINISTRATOR' && CANCELLABLE.includes(item.statusCode) && <Button size="small" variant="outlined" aria-label={`Отменить запись ${item.time} ${item.name}`} onClick={() => props.onCancel(item)}>Отменить</Button>}
     </Box>
   )
 
@@ -65,22 +68,23 @@ export function PatientCard(props: PatientCardProps) {
       <Box className="patient-header">
         <Avatar sx={{ width: 64, height: 64, bgcolor: 'action.selected', color: 'primary.main', fontSize: 22 }}>{initialsOf(patient.name)}</Avatar>
         <Box><Typography variant="h4" sx={{ fontWeight: 750 }}>{patient.name}</Typography><Typography sx={{ color: 'text.secondary' }}>{patient.birth}{patient.id.startsWith('P-') ? ` · ${patient.id}` : ''}</Typography></Box>
-        <Chip icon={<CheckCircleRounded />} label={patient.consent === 'Действует' ? 'Согласие действует' : patient.consent} color={patient.consent === 'Действует' ? 'success' : 'warning'} variant="outlined" />
-        {role === 'Администратор' && <Button variant="outlined" startIcon={<EditRounded />} onClick={onEdit}>Редактировать</Button>}
+        <Chip icon={<CheckCircleRounded />} label={patient.consent === 'ACTIVE' ? 'Согласие действует' : consentLabels[patient.consent]} color={patient.consent === 'ACTIVE' ? 'success' : 'warning'} variant="outlined" />
+        {role === 'ADMINISTRATOR' && <Button variant="outlined" startIcon={<EditRounded />} onClick={onEdit}>Редактировать</Button>}
       </Box>
       <Box className="patient-columns">
         <Box className="panel">
           <Typography className="panel-label">АДМИНИСТРАТИВНЫЕ ДАННЫЕ</Typography>
           <Info label="Телефон" value={patient.phone} />
           <Info label="Предпочтительный канал" value="SMS · нейтральный шаблон" />
-          <Divider />
+          {props.registry}
+          <Divider sx={{ mt: 2 }} />
           <Typography sx={{ fontWeight: 700, mt: 2 }}>Ближайшие записи</Typography>
           {history.loading && <CircularProgress size={22} sx={{ mt: 1 }} aria-label="Загрузка записей" />}
           {history.error && <Alert severity="warning" sx={{ mt: 1 }}>{history.error}</Alert>}
           {!history.loading && (upcoming.length ? upcoming.map(row) : <Typography sx={{ color: 'text.secondary', mt: 1 }}>Ближайших записей нет</Typography>)}
           <Typography sx={{ fontWeight: 700, mt: 2.5 }}>Прошедшие записи</Typography>
           {!history.loading && (past.length ? past.map(row) : <Typography sx={{ color: 'text.secondary', mt: 1 }}>Прошедших записей нет</Typography>)}
-          {role === 'Администратор' && <>
+          {role === 'ADMINISTRATOR' && <>
             <Divider sx={{ my: 2 }} />
             <Box className="panel-title-row"><Typography sx={{ fontWeight: 700 }}>Согласие на обработку данных</Typography><Button size="small" onClick={() => { setConsentError(''); setConsentDialog(true) }}>Обновить согласие</Button></Box>
             {patient.consents.length === 0 && <Typography sx={{ color: 'text.secondary', mt: 1 }}>Согласий нет</Typography>}
@@ -109,13 +113,13 @@ function documentLine(state: string, amends?: string | null, signedAt?: string |
 }
 
 function ClinicalPanel({ patient, role, doctorId, apiOnline, revision, onOpenEncounter }: PatientCardProps) {
-  const enabled = role === 'Врач' && apiOnline && isUuid(patient.id)
+  const enabled = role === 'DOCTOR' && apiOnline && isUuid(patient.id)
   const clinical = useClinicalHistory(patient.id, enabled, doctorId, revision)
   return (
     <Box className="panel clinical-panel">
       <Box className="panel-title-row"><Typography className="panel-label">КЛИНИЧЕСКИЙ КОНТУР</Typography><LockOutlined fontSize="small" /></Box>
-      {role !== 'Врач' && <Box className="locked-state"><LockOutlined /><Typography sx={{ fontWeight: 750 }}>Клинические данные недоступны</Typography><Typography sx={{ fontSize: 14 }}>Роль «{role}» не имеет доступа к жалобам, диагнозам, назначениям и медицинским документам.</Typography></Box>}
-      {role === 'Врач' && !enabled && <Box className="locked-state"><EventNoteRounded /><Typography sx={{ fontWeight: 750 }}>История приёмов хранится на сервере</Typography><Typography sx={{ fontSize: 14 }}>{apiOnline ? 'У этого пациента нет карты на сервере.' : 'Демо-режим: сервер недоступен, клиническая история не загружается.'}</Typography></Box>}
+      {role !== 'DOCTOR' && <Box className="locked-state"><LockOutlined /><Typography sx={{ fontWeight: 750 }}>Клинические данные недоступны</Typography><Typography sx={{ fontSize: 14 }}>Роль «{roleLabels[role]}» не имеет доступа к жалобам, диагнозам, назначениям и медицинским документам.</Typography></Box>}
+      {role === 'DOCTOR' && !enabled && <Box className="locked-state"><EventNoteRounded /><Typography sx={{ fontWeight: 750 }}>История приёмов хранится на сервере</Typography><Typography sx={{ fontSize: 14 }}>{apiOnline ? 'У этого пациента нет карты на сервере.' : 'Демо-режим: сервер недоступен, клиническая история не загружается.'}</Typography></Box>}
       {enabled && clinical.loading && <CircularProgress size={24} aria-label="Загрузка истории приёмов" />}
       {enabled && clinical.error && <Alert severity="warning">{clinical.error}</Alert>}
       {enabled && !clinical.loading && !clinical.error && (clinical.encounters.length === 0

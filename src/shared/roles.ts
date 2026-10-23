@@ -1,38 +1,26 @@
-import { ACTORS, LEBEDEVA_ID, PETROV_ID, type ApiRole } from '../api/client'
+import type { StaffItem, StaffRole } from '../api/types'
+import { initialsOf } from './text'
 
-export type Role = 'Администратор' | 'Врач' | 'Менеджер' | 'Кассир'
+/** Роль в интерфейсе — тот же машинный код, что у учётной записи на сервере. */
+export type Role = StaffRole
 
-export const roles: Role[] = ['Врач', 'Администратор', 'Менеджер', 'Кассир']
+/** Название роли на экране. */
+export const roleLabels: Record<StaffRole, string> = { ADMINISTRATOR: 'Администратор', DOCTOR: 'Врач', MANAGER: 'Менеджер', CASHIER: 'Кассир' }
 
-export const apiRoles: Record<Role, ApiRole> = { Администратор: 'ADMINISTRATOR', Врач: 'DOCTOR', Менеджер: 'MANAGER', Кассир: 'CASHIER' }
+export const staffRoles: StaffRole[] = ['ADMINISTRATOR', 'DOCTOR', 'MANAGER', 'CASHIER']
 
-/** Врачи, от имени которых может работать роль «Врач». */
-export const doctors = [
-  { id: PETROV_ID, name: 'Александр Петров', initials: 'АП' },
-  { id: LEBEDEVA_ID, name: 'Ольга Лебедева', initials: 'ОЛ' },
-]
-
-const staff: Record<Exclude<Role, 'Врач'>, { name: string; initials: string }> = {
-  Администратор: { name: ACTORS.ADMINISTRATOR.name, initials: 'ЕС' },
-  Менеджер: { name: ACTORS.MANAGER.name, initials: 'ИК' },
-  Кассир: { name: ACTORS.CASHIER.name, initials: 'НО' },
-}
-
-export function profileFor(role: Role, doctorId: string) {
-  if (role === 'Врач') return doctors.find((doctor) => doctor.id === doctorId) ?? doctors[0]
-  return staff[role]
-}
-
-/** Разбирает сохранённую роль; «Регистратор» — старое название администратора. */
-export function parseRole(value: string | null): Role {
-  if (value === 'Менеджер' || value === 'Кассир') return value
-  return value === 'Администратор' || value === 'Регистратор' ? 'Администратор' : 'Врач'
-}
-
-export function parseDoctor(value: string | null) {
-  return doctors.some((doctor) => doctor.id === value) ? (value as string) : PETROV_ID
+/** Имя, инициалы и название роли сотрудника для боковой панели. */
+export function profileOf(staff: Pick<StaffItem, 'fullName' | 'role'>) {
+  return { name: staff.fullName, initials: initialsOf(staff.fullName), role: roleLabels[staff.role] }
 }
 
 /** Аналитика и журнал — администратору и менеджеру; касса — кассиру и администратору. */
-export const canSeeAnalytics = (role: Role) => role === 'Администратор' || role === 'Менеджер'
-export const canSeeCashier = (role: Role) => role === 'Кассир' || role === 'Администратор'
+export const canSeeAnalytics = (role: Role) => role === 'ADMINISTRATOR' || role === 'MANAGER'
+export const canSeeCashier = (role: Role) => role === 'CASHIER' || role === 'ADMINISTRATOR'
+/** Регистратура: задачи видят все, кроме врача; лист ожидания — администратор и менеджер. */
+export const canSeeRegistry = (role: Role) => role !== 'DOCTOR'
+export const canSeeWaitlist = (role: Role) => role === 'ADMINISTRATOR' || role === 'MANAGER'
+/** Архив подписанных документов — врачу (свои подписи) и менеджеру (все). */
+export const canSeeSignedDocuments = (role: Role) => role === 'DOCTOR' || role === 'MANAGER'
+/** График, цены и учётные записи меняет только администратор. */
+export const canManageClinic = (role: Role) => role === 'ADMINISTRATOR'

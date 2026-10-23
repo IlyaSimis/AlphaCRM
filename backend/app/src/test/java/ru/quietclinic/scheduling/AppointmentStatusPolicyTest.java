@@ -15,6 +15,8 @@ class AppointmentStatusPolicyTest {
     "BOOKED, NO_SHOW",
     "CONFIRMED, ARRIVED",
     "CONFIRMED, NO_SHOW",
+    "BOOKED, IN_PROGRESS",
+    "CONFIRMED, IN_PROGRESS",
     "ARRIVED, IN_PROGRESS",
     "ARRIVED, COMPLETED",
     "IN_PROGRESS, COMPLETED"
@@ -26,6 +28,10 @@ class AppointmentStatusPolicyTest {
   @ParameterizedTest
   @CsvSource({
     "BOOKED, COMPLETED",
+    "CONFIRMED, COMPLETED",
+    "COMPLETED, IN_PROGRESS",
+    "NO_SHOW, IN_PROGRESS",
+    "CANCELLED, IN_PROGRESS",
     "CONFIRMED, CONFIRMED",
     "ARRIVED, NO_SHOW",
     "COMPLETED, ARRIVED",

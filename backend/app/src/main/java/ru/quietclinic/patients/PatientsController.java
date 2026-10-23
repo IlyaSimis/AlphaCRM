@@ -55,4 +55,9 @@ public class PatientsController {
   PatientView revokeConsent(@PathVariable UUID id, @PathVariable UUID consentId) {
     return patients.revokeConsent(id, consentId);
   }
+
+  @PutMapping("/{id}/registry")
+  PatientView updateRegistry(@PathVariable UUID id, @Valid @RequestBody RegistryRequest request) {
+    return patients.updateRegistry(id, request);
+  }
 }

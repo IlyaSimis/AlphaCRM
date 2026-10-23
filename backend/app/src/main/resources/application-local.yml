@@ -11,3 +11,8 @@ logging:
   structured:
     format:
       console:
+
+clinic:
+  # Только для локальной разработки: вход admin / admin сразу, без смены пароля.
+  admin-password: admin
+  admin-must-change-password: false

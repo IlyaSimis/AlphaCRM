@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { PaymentsRounded, RefreshRounded } from '@mui/icons-material'
 import { Alert, Box, Button, Chip, CircularProgress, Stack, Typography } from '@mui/material'
 import { createCharge, loadCharges, payCharge } from '../../api/billing'
-import type { ApiRole } from '../../api/client'
 import { loadAppointments } from '../../api/schedule'
 import type { ChargeItem, Practitioner, ScheduleItem } from '../../api/types'
 import { localToday, shiftDate } from '../../shared/dates'
@@ -13,7 +12,6 @@ import { buildCashierRows, stateLabels, totals, type CashierRow } from './cashie
 
 type CashierProps = {
   role: Role
-  apiRole: ApiRole
   apiOnline: boolean
   practitioners: Practitioner[]
   /** Демо-режим: завершённые приёмы и счета из памяти интерфейса. */
@@ -32,7 +30,7 @@ function shortDay(iso: string) {
 }
 
 /** Касса: только деньги — пациент, врач, услуга, сумма и статус счёта. Без диагнозов и текста приёма. */
-export function Cashier({ role, apiRole, apiOnline, practitioners, localAppointments, localCharges, onLocalCharge, onLocalPay, notify }: CashierProps) {
+export function Cashier({ role, apiOnline, practitioners, localAppointments, localCharges, onLocalCharge, onLocalPay, notify }: CashierProps) {
   const [remote, setRemote] = useState<{ appointments: ScheduleItem[]; charges: ChargeItem[] } | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
@@ -42,11 +40,11 @@ export function Cashier({ role, apiRole, apiOnline, practitioners, localAppointm
   useEffect(() => {
     if (!apiOnline) return
     let cancelled = false
-    Promise.all([loadAppointments({ from: shiftDate(today, -PERIOD_DAYS), to: today, status: 'COMPLETED' }), loadCharges(apiRole)])
+    Promise.all([loadAppointments({ from: shiftDate(today, -PERIOD_DAYS), to: today, status: 'COMPLETED' }), loadCharges()])
       .then(([appointments, charges]) => { if (!cancelled) { setRemote({ appointments, charges }); setError('') } })
       .catch((reason: Error) => { if (!cancelled) setError(reason.message) })
     return () => { cancelled = true }
-  }, [apiOnline, apiRole, today, revision])
+  }, [apiOnline, today, revision])
 
   const source = apiOnline ? remote : { appointments: localAppointments.filter((item) => item.statusCode === 'COMPLETED'), charges: localCharges }
   const rows = source ? buildCashierRows(source.appointments, source.charges) : []
@@ -76,7 +74,7 @@ export function Cashier({ role, apiRole, apiOnline, practitioners, localAppointm
     if (appointment.amountMinor == null || !appointment.id) return
     const appointmentId = appointment.id
     const amountMinor = appointment.amountMinor
-    void act(appointmentId, async () => { await createCharge({ appointmentId, amountMinor, currency: appointment.currency ?? 'RUB' }, apiRole) }, 'Счёт выставлен')
+    void act(appointmentId, async () => { await createCharge({ appointmentId, amountMinor, currency: appointment.currency ?? 'RUB' }) }, 'Счёт выставлен')
   }
 
   const pay = (row: CashierRow) => {
@@ -102,7 +100,7 @@ export function Cashier({ role, apiRole, apiOnline, practitioners, localAppointm
       <Box className="summary-grid" sx={{ mb: 2 }}>
         <Metric value={formatMoney(sums.pending)} label="ожидает оплаты" note="выставленные счета" accent={sums.pending > 0} />
         <Metric value={formatMoney(sums.paid)} label="оплачено" note="за период" />
-        <Metric value={String(sums.withoutCharge)} label="без счёта" note={role === 'Администратор' ? 'можно выставить' : 'выставляет администратор'} />
+        <Metric value={String(sums.withoutCharge)} label="без счёта" note={role === 'ADMINISTRATOR' ? 'можно выставить' : 'выставляет администратор'} />
       </Box>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       <Box className="panel audit-panel">
@@ -123,8 +121,8 @@ export function Cashier({ role, apiRole, apiOnline, practitioners, localAppointm
                     <td className="nowrap">{amount == null ? '—' : formatMoney(amount, row.charge?.currency ?? row.appointment.currency ?? 'RUB')}</td>
                     <td><Chip size="small" variant="outlined" label={stateLabels[row.state]} color={row.state === 'PAID' ? 'success' : row.state === 'PENDING' ? 'warning' : 'default'} /></td>
                     <td className="nowrap">
-                      {row.state === 'NO_CHARGE' && role === 'Администратор' && <Button size="small" disabled={busy !== null || row.appointment.amountMinor == null} aria-label={`Выставить счёт ${row.appointment.name} ${row.appointment.time}`} onClick={() => issue(row)}>Выставить счёт</Button>}
-                      {row.state === 'PENDING' && role === 'Кассир' && <Button size="small" variant="contained" disabled={busy !== null} aria-label={`Принять оплату ${row.appointment.name} ${row.appointment.time}`} onClick={() => pay(row)}>Принять оплату</Button>}
+                      {row.state === 'NO_CHARGE' && role === 'ADMINISTRATOR' && <Button size="small" disabled={busy !== null || row.appointment.amountMinor == null} aria-label={`Выставить счёт ${row.appointment.name} ${row.appointment.time}`} onClick={() => issue(row)}>Выставить счёт</Button>}
+                      {row.state === 'PENDING' && role === 'CASHIER' && <Button size="small" variant="contained" disabled={busy !== null} aria-label={`Принять оплату ${row.appointment.name} ${row.appointment.time}`} onClick={() => pay(row)}>Принять оплату</Button>}
                     </td>
                   </tr>
                 )

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { CloseRounded } from '@mui/icons-material'
 import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, MenuItem, Stack, TextField } from '@mui/material'
 import type { PatientItem, Practitioner, ServiceItem } from '../../api/types'
-import { formatMoney, validateBooking, type BookingDraft } from './booking'
+import { bookableServices, formatMoney, validateBooking, type BookingDraft } from './booking'
 import { OUTSIDE_WORKING_HOURS } from './workingHours'
 
 type BookingDialogProps = {
@@ -17,9 +17,11 @@ type BookingDialogProps = {
   onSave: (draft: BookingDraft) => void
 }
 
-export function BookingDialog({ open, patients, practitioners, services, defaultPractitionerId, error, initialDate, onClose, onSave }: BookingDialogProps) {
-  const fallbackPatientId = patients.find((item) => item.name === 'Анна Михайлова')?.id ?? patients[0]?.id ?? ''
-  const fallbackServiceId = services.find((item) => item.name === 'Повторный приём')?.id ?? services[0]?.id ?? ''
+export function BookingDialog({ open, patients, practitioners, services: catalog, defaultPractitionerId, error, initialDate, onClose, onSave }: BookingDialogProps) {
+  // Список услуг — из справочника клиники; выключенные в новую запись не предлагаются.
+  const services = bookableServices(catalog)
+  const fallbackPatientId = patients[0]?.id ?? ''
+  const fallbackServiceId = services[0]?.id ?? ''
   const [patientId, setPatientId] = useState(fallbackPatientId)
   const [date, setDate] = useState(initialDate)
   const [time, setTime] = useState('13:00')
@@ -49,6 +51,7 @@ export function BookingDialog({ open, patients, practitioners, services, default
     <DialogContent>
       <Stack spacing={2} sx={{ mt: 1 }}>
         {shown && <Alert severity="error">{shown}</Alert>}
+        {services.length === 0 && <Alert severity="warning">В справочнике нет включённых услуг. Администратор добавляет их на странице «График и цены».</Alert>}
         <TextField select label="Пациент" value={selectedPatientId} onChange={(event) => setPatientId(event.target.value)}>
           {patients.map((patient) => <MenuItem key={patient.id} value={patient.id}>{patient.name}</MenuItem>)}
         </TextField>

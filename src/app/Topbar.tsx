@@ -1,19 +1,21 @@
-import { DarkModeRounded, LightModeRounded, MenuRounded } from '@mui/icons-material'
-import { Box, FormControl, IconButton, MenuItem, Select, Tooltip, Typography } from '@mui/material'
-import { doctors, roles, type Role } from '../shared/roles'
+import { DarkModeRounded, KeyRounded, LightModeRounded, LogoutRounded, MenuRounded } from '@mui/icons-material'
+import { Box, Button, Chip, IconButton, Tooltip, Typography } from '@mui/material'
 import { useColorMode } from './theme'
 
 type TopbarProps = {
   eyebrow: string
   title: string
-  role: Role
-  doctorId: string
-  onRole: (role: Role) => void
-  onDoctor: (doctorId: string) => void
+  /** false — демо-песочница без сервера. */
+  live: boolean
+  /** Клиника сотрудника — с сервера; в песочнице её нет. */
+  clinicName?: string | null
+  onPassword: () => void
+  onSignOut: () => void
   onMenu: () => void
 }
 
-export function Topbar({ eyebrow, title, role, doctorId, onRole, onDoctor, onMenu }: TopbarProps) {
+/** Шапка: кто вошёл, видно в боковой панели; здесь — тема, пароль и выход. Роль сменить нельзя. */
+export function Topbar({ eyebrow, title, live, clinicName, onPassword, onSignOut, onMenu }: TopbarProps) {
   const { mode, toggle } = useColorMode()
   const themeLabel = mode === 'light' ? 'Включить тёмную тему' : 'Включить светлую тему'
   return (
@@ -21,22 +23,15 @@ export function Topbar({ eyebrow, title, role, doctorId, onRole, onDoctor, onMen
       <IconButton className="mobile-menu" onClick={onMenu}><MenuRounded /></IconButton>
       <Box><Typography className="eyebrow">{eyebrow}</Typography><Typography variant="h5" sx={{ fontWeight: 750 }}>{title}</Typography></Box>
       <Box className="role-switch">
+        {live && clinicName && <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>{clinicName}</Typography>}
+        {!live && <Chip size="small" color="warning" variant="outlined" label="Демо-песочница: данные не сохраняются" />}
         <Tooltip title={themeLabel}>
           <IconButton onClick={toggle} aria-label={themeLabel}>
             {mode === 'light' ? <DarkModeRounded /> : <LightModeRounded />}
           </IconButton>
         </Tooltip>
-        <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>Режим просмотра</Typography>
-        <FormControl size="small">
-          <Select value={role} onChange={(event) => onRole(event.target.value as Role)} aria-label="Роль пользователя">
-            {roles.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
-          </Select>
-        </FormControl>
-        {role === 'Врач' && <FormControl size="small">
-          <Select value={doctorId} onChange={(event) => onDoctor(event.target.value)} aria-label="Работать от имени врача">
-            {doctors.map((doctor) => <MenuItem key={doctor.id} value={doctor.id}>{doctor.name}</MenuItem>)}
-          </Select>
-        </FormControl>}
+        {live && <Button size="small" startIcon={<KeyRounded />} onClick={onPassword}>Сменить пароль</Button>}
+        <Button size="small" variant="outlined" startIcon={<LogoutRounded />} onClick={onSignOut}>Выйти</Button>
       </Box>
     </Box>
   )

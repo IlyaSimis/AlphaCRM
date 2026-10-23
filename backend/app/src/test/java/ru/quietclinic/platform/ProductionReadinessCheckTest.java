@@ -1,5 +1,6 @@
 package ru.quietclinic.platform;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -8,6 +9,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class ProductionReadinessCheckTest {
+  static final String KEY = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08";
+  static final String ADMIN_PASSWORD = "long-enough-admin-1";
+
   @ParameterizedTest
   @ValueSource(
       strings = {
@@ -17,17 +21,32 @@ class ProductionReadinessCheckTest {
         "local-only-demo-key-change-before-sharing"
       })
   void rejectsMissingShortOrDefaultKeys(String key) {
-    assertThatThrownBy(() -> new ProductionReadinessCheck(key))
+    assertThatThrownBy(() -> new ProductionReadinessCheck(key, ADMIN_PASSWORD))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("CLINIC_DEV_KMS_KEY");
   }
 
   @Test
-  void acceptsRandomKey() {
-    assertThatCode(
-            () ->
-                new ProductionReadinessCheck(
-                    "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"))
+  void acceptsRandomKeyAndStrongAdminPassword() {
+    assertThatCode(() -> new ProductionReadinessCheck(KEY, ADMIN_PASSWORD))
         .doesNotThrowAnyException();
+  }
+
+  /** В prod пароль начального администратора обязателен, не короче 12 символов и не admin. */
+  @ParameterizedTest
+  @ValueSource(strings = {"", "   ", "admin", "ADMIN", "short-pass1"})
+  void rejectsMissingShortOrDefaultAdminPassword(String password) {
+    assertThatThrownBy(() -> new ProductionReadinessCheck(KEY, password))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("CLINIC_ADMIN_PASSWORD");
+  }
+
+  @Test
+  void explainsWhyAdminPasswordIsRejected() {
+    assertThat(ProductionReadinessCheck.adminPasswordProblem(null))
+        .contains("Set CLINIC_ADMIN_PASSWORD");
+    assertThat(ProductionReadinessCheck.adminPasswordProblem("admin")).contains("admin");
+    assertThat(ProductionReadinessCheck.adminPasswordProblem("a".repeat(11))).contains("12");
+    assertThat(ProductionReadinessCheck.adminPasswordProblem("a".repeat(12))).isNull();
   }
 }

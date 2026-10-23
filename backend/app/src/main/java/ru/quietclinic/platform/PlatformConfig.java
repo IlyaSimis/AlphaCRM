@@ -7,7 +7,7 @@ public final class PlatformConfig {
 
   public static void requireRole(String... roles) {
     var allowed = java.util.Arrays.stream(roles).anyMatch(PlatformConfig::hasRole);
-    if (!allowed) throw DomainException.forbidden("Недостаточно прав для операции");
+    if (!allowed) throw DomainException.forbidden("ACCESS_DENIED", "Not allowed for this role");
   }
 
   public static boolean hasRole(String role) {
@@ -21,15 +21,32 @@ public final class PlatformConfig {
         SecurityContextHolder.getContext().getAuthentication().getName());
   }
 
+  /** Клиника сотрудника из сессии. Без входа — 401: данные чужой клиники не отдаются никогда. */
+  public static java.util.UUID clinicId() {
+    var auth = SecurityContextHolder.getContext().getAuthentication();
+    if (auth != null && auth.getPrincipal() instanceof ClinicMember member) {
+      return member.clinicId();
+    }
+    throw DomainException.unauthorized("Sign-in required");
+  }
+
   public static RuntimeException conflict(String code, String message) {
     return DomainException.conflict(code, message);
   }
 
-  public static RuntimeException forbidden(String message) {
-    return DomainException.forbidden(message);
+  public static RuntimeException forbidden(String code, String message) {
+    return DomainException.forbidden(code, message);
   }
 
-  public static RuntimeException notFound(String message) {
-    return DomainException.notFound(message);
+  public static RuntimeException unauthorized(String message) {
+    return DomainException.unauthorized(message);
+  }
+
+  public static RuntimeException unauthorized(String code, String message) {
+    return DomainException.unauthorized(code, message);
+  }
+
+  public static RuntimeException notFound(String code, String message) {
+    return DomainException.notFound(code, message);
   }
 }

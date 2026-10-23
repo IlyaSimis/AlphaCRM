@@ -4,6 +4,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -15,6 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import ru.quietclinic.StaffSessions;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -32,9 +34,18 @@ class PostgresAppointmentIntegrationTest {
     registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
     registry.add("spring.datasource.username", POSTGRES::getUsername);
     registry.add("spring.datasource.password", POSTGRES::getPassword);
+    // Пустая база: начальный администратор admin / admin без смены пароля, как в профиле local.
+    registry.add("clinic.admin-password", () -> "admin");
+    registry.add("clinic.admin-must-change-password", () -> "false");
   }
 
   @Autowired MockMvc mvc;
+  StaffSessions staff;
+
+  @BeforeEach
+  void signIn() {
+    staff = new StaffSessions(mvc);
+  }
 
   @Test
   void rejectsOverlappingAppointment() throws Exception {
@@ -52,14 +63,14 @@ class PostgresAppointmentIntegrationTest {
 
     mvc.perform(
             post("/api/v1/appointments")
-                .header("X-Demo-Role", "ADMINISTRATOR")
+                .with(staff.role("ADMINISTRATOR"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(first))
         .andExpect(status().isCreated());
 
     mvc.perform(
             post("/api/v1/appointments")
-                .header("X-Demo-Role", "ADMINISTRATOR")
+                .with(staff.role("ADMINISTRATOR"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(overlap))
         .andExpect(status().isConflict())

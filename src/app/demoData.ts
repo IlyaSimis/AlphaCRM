@@ -1,6 +1,6 @@
 import { LEBEDEVA_ID, PETROV_ID } from '../api/client'
 import { demoServices, statusLabel, toneFor } from '../api/schedule'
-import type { AppointmentStatus, PatientItem, ScheduleItem } from '../api/types'
+import type { AppointmentStatus, PatientItem, ScheduleItem, StaffItem, TaskItem, WaitlistItem } from '../api/types'
 
 /** День, на который рассчитаны демо-данные. */
 export const clinicDay = '2026-10-20'
@@ -38,7 +38,29 @@ export const demoAppointments: ScheduleItem[] = [
 ]
 
 export const demoPatients: PatientItem[] = [
-  { name: 'Анна Михайлова', birth: '14.05.1991', birthDate: '1991-05-14', phone: '+7 916 245-18-72', id: 'P-10482', consent: 'Действует', consents: [{ id: 'demo-consent-1', version: 'v1.2', basis: 'SIGNED_FORM', grantedAt: '2026-01-15T09:00:00Z', revokedAt: null }] },
-  { name: 'Дмитрий Волков', birth: '02.11.1985', birthDate: '1985-11-02', phone: '+7 903 782-44-16', id: 'P-10396', consent: 'Действует', consents: [{ id: 'demo-consent-2', version: 'v1.2', basis: 'SIGNED_FORM', grantedAt: '2026-02-03T09:00:00Z', revokedAt: null }] },
-  { name: 'Мария Соколова', birth: '28.02.1996', birthDate: '1996-02-28', phone: '+7 925 663-02-41', id: 'P-10251', consent: 'Требует обновления', consents: [{ id: 'demo-consent-3', version: 'v1.1', basis: 'SIGNED_FORM', grantedAt: '2025-03-10T09:00:00Z', revokedAt: '2026-03-10T09:00:00Z' }] },
+  { name: 'Анна Михайлова', birth: '14.05.1991', birthDate: '1991-05-14', phone: '+7 916 245-18-72', id: 'P-10482', referralSource: 'RECOMMENDATION', registryNote: 'Просит звонить после 18:00', consent: 'ACTIVE', consents: [{ id: 'demo-consent-1', version: 'v1.2', basis: 'SIGNED_FORM', grantedAt: '2026-01-15T09:00:00Z', revokedAt: null }] },
+  { name: 'Дмитрий Волков', birth: '02.11.1985', birthDate: '1985-11-02', phone: '+7 903 782-44-16', id: 'P-10396', consent: 'ACTIVE', consents: [{ id: 'demo-consent-2', version: 'v1.2', basis: 'SIGNED_FORM', grantedAt: '2026-02-03T09:00:00Z', revokedAt: null }] },
+  { name: 'Мария Соколова', birth: '28.02.1996', birthDate: '1996-02-28', phone: '+7 925 663-02-41', id: 'P-10251', consent: 'NEEDS_UPDATE', consents: [{ id: 'demo-consent-3', version: 'v1.1', basis: 'SIGNED_FORM', grantedAt: '2025-03-10T09:00:00Z', revokedAt: '2026-03-10T09:00:00Z' }] },
+]
+
+/**
+ * Учётные записи песочницы без сервера: по одной на роль, без имён реальных или демо-людей.
+ * Врач песочницы ведёт записи первого демо-врача из расписания.
+ */
+export const sandboxStaff: StaffItem[] = [
+  { id: 'sandbox-admin', fullName: 'Администратор песочницы', username: 'sandbox-admin', role: 'ADMINISTRATOR', practitionerId: null, active: true },
+  { id: 'sandbox-doctor', fullName: 'Врач песочницы', username: 'sandbox-doctor', role: 'DOCTOR', practitionerId: PETROV_ID, active: true },
+  { id: 'sandbox-manager', fullName: 'Менеджер песочницы', username: 'sandbox-manager', role: 'MANAGER', practitionerId: null, active: true },
+  { id: 'sandbox-cashier', fullName: 'Кассир песочницы', username: 'sandbox-cashier', role: 'CASHIER', practitionerId: null, active: true },
+]
+
+export const demoTasks: TaskItem[] = [
+  { id: 'demo-task-701', patientId: 'P-10251', title: 'Обновить согласие', dueDate: clinicDay, assigneeId: 'sandbox-admin', status: 'OPEN' },
+  { id: 'demo-task-702', patientId: 'P-10396', title: 'Перезвонить', dueDate: '2026-10-19', assigneeId: 'sandbox-cashier', status: 'OPEN' },
+  // Задача не про пациента: видна в списке на сегодня, но ни в одной карточке.
+  { id: 'demo-task-703', patientId: null, title: 'Заказать бланки согласий', dueDate: clinicDay, assigneeId: 'sandbox-manager', status: 'OPEN' },
+]
+
+export const demoWaitlist: WaitlistItem[] = [
+  { id: 'demo-wait-801', patientId: 'P-10251', practitionerId: PETROV_ID, serviceId: '00000000-0000-0000-0000-000000000602', wishFrom: '2026-10-19', wishTo: '2026-10-30', status: 'ACTIVE' },
 ]

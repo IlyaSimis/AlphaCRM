@@ -1,5 +1,12 @@
 server:
   port: ${PORT:8081}
+  servlet:
+    session:
+      timeout: 8h
+      cookie:
+        http-only: true
+        same-site: lax
+        secure: ${SESSION_COOKIE_SECURE:false}
 
 spring:
   application:
@@ -38,3 +45,13 @@ logging:
 
 clinic:
   dev-kms-key: ${CLINIC_DEV_KMS_KEY:local-dev-key-change-me}
+  # Пустая база: клиника и её администратор admin (см. ClinicBootstrap). Пароля в коде нет.
+  name: ${CLINIC_NAME:AlphaCRM}
+  # ФИО начального администратора — данные, поэтому по-русски и в конфигурации, а не в коде.
+  admin-full-name: ${CLINIC_ADMIN_NAME:Администратор}
+  admin-password: ${CLINIC_ADMIN_PASSWORD:}
+  # Начальный администратор меняет пароль до остальных страниц (в профиле local — нет).
+  admin-must-change-password: true
+  cors:
+    # Явные origin фронтенда для локальной разработки; cookie сессии разрешены, «*» — нет.
+    allowed-origins: ${CLINIC_CORS_ORIGINS:http://localhost:43127,http://127.0.0.1:43127}

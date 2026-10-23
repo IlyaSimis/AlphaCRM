@@ -6,4 +6,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 interface PractitionerScheduleRepository extends JpaRepository<PractitionerSchedule, UUID> {
   List<PractitionerSchedule> findByPractitionerIdOrderByDayOfWeek(UUID practitionerId);
+
+  void deleteByPractitionerId(UUID practitionerId);
 }

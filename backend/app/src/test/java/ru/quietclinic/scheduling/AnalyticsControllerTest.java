@@ -4,18 +4,26 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import ru.quietclinic.StaffSessions;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("local")
 class AnalyticsControllerTest {
   @Autowired MockMvc mvc;
+  StaffSessions staff;
+
+  @BeforeEach
+  void signIn() {
+    staff = new StaffSessions(mvc);
+  }
 
   @Test
   void aggregatesSeededHistoryByDayPractitionerAndStatus() throws Exception {
@@ -23,7 +31,7 @@ class AnalyticsControllerTest {
             get("/api/v1/analytics/appointments")
                 .param("from", "2026-10-06")
                 .param("to", "2026-10-06")
-                .header("X-Demo-Role", "MANAGER"))
+                .with(staff.role("MANAGER")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.rows.length()").value(2))
         .andExpect(
@@ -40,13 +48,13 @@ class AnalyticsControllerTest {
             get("/api/v1/analytics/appointments")
                 .param("from", "2026-10-01")
                 .param("to", "2026-10-31")
-                .header("X-Demo-Role", "DOCTOR"))
+                .with(staff.role("DOCTOR")))
         .andExpect(status().isForbidden());
     mvc.perform(
             get("/api/v1/analytics/appointments")
                 .param("from", "2026-10-31")
                 .param("to", "2026-10-01")
-                .header("X-Demo-Role", "MANAGER"))
+                .with(staff.role("MANAGER")))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("INVALID_RANGE"));
   }

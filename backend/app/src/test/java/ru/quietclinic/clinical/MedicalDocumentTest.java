@@ -15,7 +15,8 @@ class MedicalDocumentTest {
 
     assertThat(document.state).isEqualTo("SIGNED_LOCKED");
     assertThat(document.contentHash).hasSize(64);
-    assertThatThrownBy(() -> document.updateSnapshot("changed")).hasMessageContaining("неизменяем");
+    assertThatThrownBy(() -> document.updateSnapshot("changed"))
+        .hasMessageContaining("cannot be changed");
   }
 
   @Test

@@ -54,12 +54,12 @@ class MedicalDocument {
 
   void updateSnapshot(String snapshotEncrypted) {
     if (!state.equals("DRAFT"))
-      throw conflict("DOCUMENT_LOCKED", "Подписанный документ неизменяем");
+      throw conflict("DOCUMENT_LOCKED", "A signed document cannot be changed");
     this.snapshotEncrypted = snapshotEncrypted;
   }
 
   void sign(UUID signer, String canonicalPlaintext) {
-    if (!state.equals("DRAFT")) throw conflict("DOCUMENT_LOCKED", "Документ уже подписан");
+    if (!state.equals("DRAFT")) throw conflict("DOCUMENT_LOCKED", "Document is already signed");
     try {
       contentHash =
           HexFormat.of()

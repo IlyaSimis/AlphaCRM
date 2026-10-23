@@ -4,8 +4,8 @@ import { createAppointment, statusLabel, toScheduleItem, toneFor, withStatus } f
 
 afterEach(() => vi.unstubAllGlobals())
 
-describe('API расписания', () => {
-  it('превращает ответ сервера в строку расписания', () => {
+describe('schedule API', () => {
+  it('turns a server answer into a schedule row', () => {
     const item = toScheduleItem({
       id: 'a1',
       patientId: '00000000-0000-0000-0000-000000000102',
@@ -18,7 +18,7 @@ describe('API расписания', () => {
     expect(item).toMatchObject({ time: '10:10', duration: '30 мин', name: 'Дмитрий Волков', status: 'Неявка', tone: 'red' })
   })
 
-  it('подписывает все статусы и меняет статус строки целиком', () => {
+  it('labels every status and replaces the row status as a whole', () => {
     expect(statusLabel('COMPLETED')).toBe('Завершён')
     expect(statusLabel('UNKNOWN')).toBe('UNKNOWN')
     expect(toneFor('CANCELLED')).toBe('muted')
@@ -26,8 +26,8 @@ describe('API расписания', () => {
     expect(withStatus(item, 'ARRIVED')).toMatchObject({ statusCode: 'ARRIVED', status: 'Прибыл', tone: 'green' })
   })
 
-  it('отдаёт сообщение сервера при конфликте записи', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 409, json: async () => ({ code: 'SLOT_ALREADY_BOOKED', message: 'Интервал врача уже занят' }) })))
+  it('returns the server error on a booking conflict', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 409, json: async () => ({ code: 'SLOT_ALREADY_BOOKED', message: "The practitioner's slot is already booked" }) })))
     const attempt = createAppointment({ patientId: 'p', patientName: 'Анна', practitionerId: 'd', date: '2026-10-20', time: '10:00', minutes: 30, serviceName: 'Приём' })
     await expect(attempt).rejects.toMatchObject({ status: 409, code: 'SLOT_ALREADY_BOOKED' })
     await expect(attempt).rejects.toBeInstanceOf(ApiError)
