@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { LockOutlined } from '@mui/icons-material'
 import { Alert, Box, Button, Typography } from '@mui/material'
-import { downloadPatientFile, fileSize, loadSignedFiles } from '../../api/files'
+import { downloadPatientFile, fileSize, loadSignedFiles, printPatientFile } from '../../api/files'
 import type { PatientFileItem } from '../../api/types'
 import { formatClinicMoment } from '../../shared/clinicTime'
 import type { Role } from '../../shared/roles'
@@ -46,6 +46,7 @@ export function SignedPdfList({ role, apiOnline }: SignedPdfListProps) {
             <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}><LockOutlined sx={{ fontSize: 15, verticalAlign: 'middle', mr: 0.5 }} />{file.patientName ?? 'Пациент'} · {file.originalName}</Typography>
             <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>Подписал {file.signedByName ?? 'сотрудник'} · {formatClinicMoment(file.signedAt)} · {fileSize(file.sizeBytes)}</Typography>
           </Box>
+          <Button size="small" aria-label={`Печать ${file.originalName}`} onClick={() => { if (!printPatientFile(file)) setError('Браузер не открыл новую вкладку: разрешите всплывающие окна для этого сайта') }}>Печать</Button>
           <Button size="small" aria-label={`Скачать ${file.originalName}`} onClick={() => void download(file)}>Скачать</Button>
         </Box>
       ))}

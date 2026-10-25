@@ -51,15 +51,25 @@ public class PatientFileController {
   /** Расшифрованные байты как вложение: файл скачивается, а не открывается по ссылке. */
   @GetMapping("/patient-files/{id}/content")
   ResponseEntity<byte[]> download(@PathVariable UUID id) {
-    var file = files.download(id);
+    return pdf(files.download(id), ContentDisposition.attachment());
+  }
+
+  /**
+   * Те же байты и те же права, но для просмотра в браузере: интерфейс открывает файл в новой
+   * вкладке с сессией сотрудника и вызывает печать. Ссылка без сессии не работает.
+   */
+  @GetMapping("/patient-files/{id}/inline")
+  ResponseEntity<byte[]> inline(@PathVariable UUID id) {
+    return pdf(files.download(id), ContentDisposition.inline());
+  }
+
+  private static ResponseEntity<byte[]> pdf(
+      FileDownload file, ContentDisposition.Builder disposition) {
     return ResponseEntity.ok()
         .contentType(MediaType.APPLICATION_PDF)
         .header(
             HttpHeaders.CONTENT_DISPOSITION,
-            ContentDisposition.attachment()
-                .filename(file.originalName(), StandardCharsets.UTF_8)
-                .build()
-                .toString())
+            disposition.filename(file.originalName(), StandardCharsets.UTF_8).build().toString())
         .header(HttpHeaders.CACHE_CONTROL, "no-store")
         .body(file.content());
   }

@@ -1,4 +1,4 @@
-import { apiFetch, failure } from './client'
+import { API, apiFetch, failure } from './client'
 import type { PatientFileItem } from './types'
 
 /** Предел размера PDF — как на сервере. */
@@ -10,9 +10,11 @@ export async function loadPatientFiles(patientId: string): Promise<PatientFileIt
   return fileRows(await response.json())
 }
 
-export async function uploadPatientFile(patientId: string, file: File): Promise<PatientFileItem> {
+/** appointmentId — привязать файл к записи: так врач загружает заключение со страницы приёма. */
+export async function uploadPatientFile(patientId: string, file: File, appointmentId?: string): Promise<PatientFileItem> {
   const body = new FormData()
   body.append('file', file, file.name)
+  if (appointmentId) body.append('appointmentId', appointmentId)
   const response = await apiFetch(`/patients/${patientId}/files`, { method: 'POST', body })
   if (!response.ok) throw await failure(response, 'Не удалось загрузить файл', { 413: 'Файл больше 10 МБ' })
   return response.json()
@@ -53,6 +55,25 @@ export async function downloadPatientFile(file: Pick<PatientFileItem, 'id' | 'or
 /** Только строки файлов: ответ без имени файла — не файл. */
 function fileRows(rows: unknown): PatientFileItem[] {
   return Array.isArray(rows) ? rows.filter((row): row is PatientFileItem => typeof row?.originalName === 'string' && typeof row?.id === 'string') : []
+}
+
+/**
+ * Печать: файл открывается в новой вкладке встроенным просмотрщиком PDF (сессия та же, права
+ * проверяет сервер), затем вызывается печать. Вызывать прямо из обработчика нажатия — иначе
+ * браузер заблокирует новую вкладку. false — вкладку открыть не удалось.
+ */
+export function printPatientFile(file: Pick<PatientFileItem, 'id'>) {
+  const tab = window.open(`${API}/patient-files/${file.id}/inline`, '_blank')
+  if (!tab) return false
+  tab.addEventListener('load', () => {
+    try {
+      tab.focus()
+      tab.print()
+    } catch {
+      // Просмотрщик не дал вызвать печать — в нём есть своя кнопка печати.
+    }
+  })
+  return true
 }
 
 /** «2,4 МБ», «350 КБ». */

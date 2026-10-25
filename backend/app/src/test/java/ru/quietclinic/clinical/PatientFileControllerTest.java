@@ -138,6 +138,8 @@ class PatientFileControllerTest {
     mvc.perform(get("/api/v1/patient-files/" + id + "/content").with(staff.role("MANAGER")))
         .andExpect(status().isForbidden())
         .andExpect(jsonPath("$.code").value("FILE_NOT_SIGNED"));
+    mvc.perform(get("/api/v1/patient-files/" + id + "/inline").with(staff.role("MANAGER")))
+        .andExpect(status().isForbidden());
     mvc.perform(get("/api/v1/patients/" + ANNA + "/files").with(staff.role("MANAGER")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[*].id").value(not(hasItem(id))));
@@ -168,6 +170,13 @@ class PatientFileControllerTest {
         .andExpect(content().bytes(bytes));
     mvc.perform(get("/api/v1/patient-files/" + id + "/content").with(staff.role("CASHIER")))
         .andExpect(status().isForbidden());
+    // Для печати — тот же файл с теми же правами, но для показа в браузере.
+    mvc.perform(get("/api/v1/patient-files/" + id + "/inline").with(staff.role("MANAGER")))
+        .andExpect(status().isOk())
+        .andExpect(header().string("Content-Disposition", containsString("inline")))
+        .andExpect(content().bytes(bytes));
+    mvc.perform(get("/api/v1/patient-files/" + id + "/inline").with(staff.role("CASHIER")))
+        .andExpect(status().isForbidden());
 
     // Архив: менеджер — все подписанные файлы клиники, врач — подписанные им самим.
     mvc.perform(get("/api/v1/patient-files/signed").with(staff.role("MANAGER")))
@@ -184,7 +193,7 @@ class PatientFileControllerTest {
     // В аудит — только id файла, без имени и содержимого.
     assertThat(audit("PDF_UPLOADED", id)).isEqualTo("1");
     assertThat(audit("PDF_SIGNED", id)).isEqualTo("1");
-    assertThat(audit("PDF_READ", id)).isEqualTo("1");
+    assertThat(audit("PDF_READ", id)).isEqualTo("2");
   }
 
   @Test
@@ -273,6 +282,36 @@ class PatientFileControllerTest {
     // Новый файл — новая строка, подписанный остаётся как был.
     var replacement = uploaded(staff.admin(), ANNA, pdf("новая версия"));
     assertThat(replacement).isNotEqualTo(id);
+  }
+
+  @Test
+  void doctorAttachesAConclusionToTheirAppointment() throws Exception {
+    var body =
+        mvc.perform(
+                multipart("/api/v1/patients/" + ANNA + "/files")
+                    .file(
+                        new MockMultipartFile(
+                            "file", "заключение.pdf", "application/pdf", pdf("заключение приёма")))
+                    .param("appointmentId", "00000000-0000-0000-0000-000000000301")
+                    .with(staff.doctor(StaffSessions.PETROV)))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.appointmentId").value("00000000-0000-0000-0000-000000000301"))
+            .andExpect(jsonPath("$.uploadedBy").value(staff.userId("t.petrov")))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    String id = JsonPath.read(body, "$.id");
+    mvc.perform(get("/api/v1/patients/" + ANNA + "/files").with(staff.doctor(StaffSessions.PETROV)))
+        .andExpect(jsonPath("$[?(@.id == '" + id + "')].appointmentId")
+            .value(hasItem("00000000-0000-0000-0000-000000000301")));
+    // Запись другого пациента к файлу Анны не привязывается.
+    mvc.perform(
+            multipart("/api/v1/patients/" + ANNA + "/files")
+                .file(new MockMultipartFile("file", "x.pdf", "application/pdf", pdf("чужая запись")))
+                .param("appointmentId", "00000000-0000-0000-0000-000000000302")
+                .with(staff.doctor(StaffSessions.PETROV)))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("APPOINTMENT_NOT_FOUND"));
   }
 
   private long count(String patientId) {

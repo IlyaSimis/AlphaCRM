@@ -6,6 +6,7 @@ import type { AppointmentStatus, DocumentSummary, NoteFields } from '../../api/t
 import { clinicTimeZone } from '../../shared/clinicTime'
 import { formatDay } from '../../shared/dates'
 import { FormSection, Info } from '../../shared/ui'
+import { PatientFiles } from '../files/PatientFiles'
 import { SignDialog } from './SignDialog'
 import { useVisit } from './useVisit'
 import { activeDocument, isLocked, latestSigned, noteComplete, noteSections, visitTimeLabel, type VisitTarget } from './visit'
@@ -90,6 +91,8 @@ export function Visit({ target, doctorName, apiOnline, notify, appointmentStatus
           </Box>
         </Box>
       </Box>}
+      {/* Заключение в PDF: загрузить, подписать и распечатать прямо со страницы приёма. */}
+      {visit.encounter && target.appointmentId && <PatientFiles patientId={target.patientId} appointmentId={target.appointmentId} role="DOCTOR" apiOnline={apiOnline} notify={notify} />}
       <SignDialog open={signDialog} onClose={() => setSignDialog(false)} onConfirm={async () => {
         setSignDialog(false)
         await visit.sign()

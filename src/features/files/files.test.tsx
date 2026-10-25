@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { PatientFileItem } from '../../api/types'
 import { anna, jsonResponse, renderApp, withAuth } from '../../test/helpers'
 import { fileRights, SIGN_NOTICE } from './fileRules'
@@ -97,6 +97,49 @@ describe('PDF пациента', () => {
     const archive = await screen.findByRole('region', { name: 'Подписанные PDF' })
     expect(await within(archive).findByText('Анна Михайлова · выписка.pdf')).toBeInTheDocument()
     expect(within(archive).getByText('Все подписанные файлы клиники.')).toBeInTheDocument()
+  })
+
+  it('the doctor uploads a conclusion from the visit page; it is tied to the appointment and prints from a new tab', async () => {
+    const appointmentId = '00000000-0000-0000-0000-000000000301'
+    let rows: PatientFileItem[] = [file({ id: '00000000-0000-0000-0000-0000000f0009', originalName: 'другой приём.pdf', appointmentId: '00000000-0000-0000-0000-000000000399' })]
+    let form: FormData | null = null
+    const encounter = { encounterId: 'e1', appointmentId, patientId: anna.id, practitionerId: '00000000-0000-0000-0000-000000000201', status: 'IN_PROGRESS', startedAt: '2026-10-20T09:01:00Z', documents: [] }
+    withAuth((address, init) => {
+      const method = init?.method ?? 'GET'
+      if (address.endsWith(`/patients/${anna.id}/files`) && method === 'POST') {
+        form = init?.body as FormData
+        const created = file({ id: '00000000-0000-0000-0000-0000000f0010', originalName: 'заключение.pdf', appointmentId: String(form.get('appointmentId')) })
+        rows = [created, ...rows]
+        return jsonResponse(created, 201)
+      }
+      if (address.endsWith(`/patients/${anna.id}/files`)) return jsonResponse(rows)
+      if (address.endsWith('/clinical/encounters') && method === 'POST') return jsonResponse(encounter, 201)
+      if (address.includes('/clinical/patients/')) return jsonResponse([encounter])
+      if (address.includes('/patients')) return jsonResponse([anna])
+      if (address.includes('/appointments')) return jsonResponse([{ id: appointmentId, patientId: anna.id, practitionerId: '00000000-0000-0000-0000-000000000201', startsAt: '2026-10-20T09:00:00Z', endsAt: '2026-10-20T09:50:00Z', serviceName: 'Первичный приём', status: 'ARRIVED' }])
+      return jsonResponse({}, 404)
+    }, 't.petrov')
+    const tab = { addEventListener: vi.fn(), focus: vi.fn(), print: vi.fn() }
+    const open = vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window)
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByText('API подключён')).toBeInTheDocument()
+    await user.click(await screen.findByRole('button', { name: 'Начать приём 09:00 Анна Михайлова' }))
+    const block = await screen.findByRole('region', { name: 'Заключения и файлы приёма' })
+    // Файлы других приёмов здесь не показываются — они в карточке пациента.
+    expect(await within(block).findByText('К этому приёму файлов нет.')).toBeInTheDocument()
+    expect(within(block).queryByText(/другой приём/)).not.toBeInTheDocument()
+
+    await user.upload(within(block).getByLabelText('Файл PDF'), new File(['%PDF-1.4 conclusion'], 'заключение.pdf', { type: 'application/pdf' }))
+    await waitFor(() => expect(form).not.toBeNull())
+    expect(form!.get('appointmentId')).toBe(appointmentId)
+    await user.click(await within(block).findByRole('button', { name: 'Печать заключение.pdf' }))
+    expect(open).toHaveBeenCalledWith('/api/v1/patient-files/00000000-0000-0000-0000-0000000f0010/inline', '_blank')
+    // Печать — после загрузки вкладки.
+    const onLoad = tab.addEventListener.mock.calls.find(([event]) => event === 'load')?.[1] as () => void
+    onLoad()
+    expect(tab.print).toHaveBeenCalled()
+    open.mockRestore()
   })
 
   it('the cashier sees no PDF block on the card', async () => {

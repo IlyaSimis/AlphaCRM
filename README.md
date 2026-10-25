@@ -355,7 +355,10 @@ Frontend запускается так же, как в варианте 1. Не 
 | `POST /api/v1/patients/{patientId}/files` | `ADMINISTRATOR`, `DOCTOR` со связью | multipart `file` (+ необязательный `appointmentId` записи этого пациента): только PDF (начинается с `%PDF-`, иначе `409 NOT_A_PDF`), до 10 МБ (`413 FILE_TOO_LARGE`), путь из имени отбрасывается. Состояние `DRAFT` |
 | `POST /api/v1/patient-files/{id}/sign` | `ADMINISTRATOR` — любой файл клиники, `DOCTOR` — со связью | `SIGNED_LOCKED`: SHA-256 открытых байтов, кто и когда подписал. Повторно — `409 ALREADY_SIGNED` |
 | `GET /api/v1/patient-files/{id}/content` | черновик — `ADMINISTRATOR` и `DOCTOR` со связью; подписанный — ещё `MANAGER` и подписавший врач | расшифрованные байты, `Content-Disposition: attachment`; менеджеру черновик — `403 FILE_NOT_SIGNED` |
+| `GET /api/v1/patient-files/{id}/inline` | те же, что у `content` | те же байты с `Content-Disposition: inline` — для кнопки «Печать»: интерфейс открывает файл в новой вкладке встроенным просмотрщиком браузера с сессией сотрудника и вызывает печать. nginx отдаёт этот маршрут со своей узкой CSP (`object-src 'self'`), иначе просмотрщик PDF не открывается |
 | `GET /api/v1/patient-files/signed` | `DOCTOR` — подписанные им, `MANAGER` — все клиники | список подписанных PDF для архива «Подписанные документы» |
+
+Где загружать: в карточке пациента — блок «Документы PDF» со всеми файлами; на странице приёма — блок «Заключения и файлы приёма»: файл сразу привязывается к этой записи (`appointmentId`), там же «Подписать», «Печать» и «Скачать». «Печать» есть и в архиве подписанных PDF.
 
 Файл шифруется тем же AES-GCM и ключом `KmsPort`, что и заметки приёма; в `patient_file.ciphertext` нет открытых байтов. После подписи байты, имя, хеш и подписант не меняются: отказ в коде и триггер `patient_file_immutable` в PostgreSQL. Замена — новый файл, удаления нет. Без связи с лечением врач получает тот же `403 NO_CARE_RELATIONSHIP`, что при чтении клинических данных. В аудит — `PDF_UPLOADED`, `PDF_SIGNED`, `PDF_READ` только с id файла. Лимит multipart — 10 МБ на файл; nginx пропускает в `/api/` до 11 МБ.
 
