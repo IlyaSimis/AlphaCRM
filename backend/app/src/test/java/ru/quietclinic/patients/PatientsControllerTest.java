@@ -77,6 +77,35 @@ class PatientsControllerTest {
   }
 
   @Test
+  void newPatientNeedsPastBirthDateAndBoundedName() throws Exception {
+    mvc.perform(
+            post("/api/v1/patients")
+                .with(staff.admin())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"fullName":"%s","birthDate":"2999-01-01","phone":"+70000000088",
+                     "consentVersion":"v1.2","consentBasis":"SIGNED_FORM"}
+                    """
+                        .formatted("x".repeat(256))))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.fields.birthDate").exists())
+        .andExpect(jsonPath("$.fields.fullName").exists());
+  }
+
+  @Test
+  void patientListIsOneAuditEventNotOnePerPatient() throws Exception {
+    mvc.perform(get("/api/v1/patients").with(staff.role("MANAGER"))).andExpect(status().isOk());
+    var reasons =
+        jdbc.queryForList(
+            "select reason from audit_event where action = 'PATIENT_LIST_READ'"
+                + " order by occurred_at desc",
+            String.class);
+    org.assertj.core.api.Assertions.assertThat(reasons).isNotEmpty();
+    org.assertj.core.api.Assertions.assertThat(reasons.get(0)).startsWith("list:");
+  }
+
+  @Test
   void administratorGrantsAndRevokesConsentWithoutDeletingHistory() throws Exception {
     var created =
         mvc.perform(

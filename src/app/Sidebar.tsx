@@ -57,7 +57,7 @@ export function Sidebar({ className, page, staff, live, visits, activeVisit, onN
       </Box>
       <Box className="profile">
         <Avatar sx={{ bgcolor: 'action.selected', color: 'primary.main' }}>{profile.initials}</Avatar>
-        <Box sx={{ minWidth: 0, flex: 1 }}><Typography noWrap sx={{ fontWeight: 700, fontSize: 14 }}>{profile.name}</Typography><Typography sx={{ color: 'text.secondary', fontSize: 12 }}>{role}{live ? '' : ' · демо'}</Typography></Box>
+        <Box sx={{ minWidth: 0, flex: 1 }}><Typography noWrap sx={{ fontWeight: 700, fontSize: 14 }}>{profile.name}</Typography><Typography sx={{ color: 'text.secondary', fontSize: 12 }}>{profile.role}{live ? '' : ' · демо'}</Typography></Box>
       </Box>
     </Box>
   )

@@ -47,7 +47,7 @@ export function RescheduleDialog({ item, practitioners, error, onClose, onSave }
           {practitioners.map((doctor) => <MenuItem key={doctor.id} value={doctor.id}>{doctor.fullName}</MenuItem>)}
         </TextField>
         {!shown && outside && <Alert severity="warning">{OUTSIDE_WORKING_HOURS}</Alert>}
-        <Alert severity="info">Статус записи не меняется. Пациенту ничего не отправляется.</Alert>
+        <Alert severity="info">Статус записи не меняется. Если канал уведомлений подключён, пациент получит подтверждение на новое время.</Alert>
       </Stack>
     </DialogContent>
     <DialogActions><Button onClick={onClose}>Отмена</Button><Button variant="contained" disabled={!date || !time || unchanged} onClick={submit}>Перенести</Button></DialogActions>

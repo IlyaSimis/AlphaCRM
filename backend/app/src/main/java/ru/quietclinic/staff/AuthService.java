@@ -1,6 +1,7 @@
 package ru.quietclinic.staff;
 
 import static ru.quietclinic.platform.PlatformConfig.conflict;
+import static ru.quietclinic.platform.PlatformConfig.tooManyRequests;
 import static ru.quietclinic.platform.PlatformConfig.unauthorized;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -17,6 +18,7 @@ import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.quietclinic.audit.AuditService;
+import ru.quietclinic.platform.ClinicTime;
 
 /** Вход, текущий сотрудник и смена собственного пароля. Пароли не логируются. */
 @Service
@@ -27,6 +29,8 @@ class AuthService {
   private final ClinicRepository clinics;
   private final PasswordEncoder encoder;
   private final AuditService audit;
+  private final LoginThrottle throttle;
+  private final ClinicTime time;
   private final SecurityContextRepository contexts = new HttpSessionSecurityContextRepository();
 
   /** Хеш случайной строки: с ним сверяется пароль неизвестного логина, чтобы уравнять время. */
@@ -36,23 +40,36 @@ class AuthService {
       StaffRepository staff,
       ClinicRepository clinics,
       PasswordEncoder encoder,
-      AuditService audit) {
+      AuditService audit,
+      LoginThrottle throttle,
+      ClinicTime time) {
     this.staff = staff;
     this.clinics = clinics;
     this.encoder = encoder;
     this.audit = audit;
+    this.throttle = throttle;
+    this.time = time;
     unknownUserHash = encoder.encode(UUID.randomUUID().toString());
   }
 
   /** Один и тот же ответ на неизвестный логин, неверный пароль и выключенную учётную запись. */
   @Transactional(readOnly = true)
   StaffView login(LoginRequest request, HttpServletRequest http, HttpServletResponse response) {
-    var user = staff.findByUsername(request.username().trim().toLowerCase(Locale.ROOT));
+    var address = http.getRemoteAddr();
+    var username = request.username().trim().toLowerCase(Locale.ROOT);
+    var now = time.now();
+    // Подбор пароля: после серии неудач вход с этого адреса закрыт на время окна.
+    if (throttle.blocked(address, username, now)) {
+      throw tooManyRequests("TOO_MANY_LOGIN_ATTEMPTS", "Too many failed sign-in attempts");
+    }
+    var user = staff.findByUsername(username);
     var hash = user.map(u -> u.passwordHash).orElse(unknownUserHash);
     var matches = encoder.matches(request.password(), hash);
     if (user.isEmpty() || !matches || !user.get().active) {
+      throttle.failed(address, username, now);
       throw unauthorized("INVALID_CREDENTIALS", INVALID_CREDENTIALS);
     }
+    throttle.succeeded(address, username);
     var principal = StaffPrincipal.of(user.get());
     var authentication =
         UsernamePasswordAuthenticationToken.authenticated(
@@ -100,6 +117,8 @@ class AuthService {
 
   StaffView view(StaffUser user) {
     return StaffView.of(
-        user, clinics.findById(user.clinicId).map(clinic -> clinic.name).orElse(null));
+        user,
+        clinics.findById(user.clinicId).map(clinic -> clinic.name).orElse(null),
+        time.zone().getId());
   }
 }

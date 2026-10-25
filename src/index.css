@@ -230,7 +230,15 @@ button, input, textarea { font: inherit; }
   .status-chip { margin-left: 75px; }
   .free-slot { grid-template-columns: 48px 1fr; }
   .free-slot button { grid-column: 2; justify-self: start; }
-  .section-intro { align-items: flex-start; gap: 12px; }
+  .section-intro { align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+  .topbar { padding: 12px; gap: 8px; }
+  .topbar > div:nth-child(2) { min-width: 0; }
+  .topbar h5 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .role-switch { gap: 4px; }
+  .role-switch .MuiChip-root { max-width: 110px; }
+  .topbar-label { display: none; }
+  .topbar-action { min-width: 40px !important; padding: 6px !important; }
+  .topbar-action .MuiButton-startIcon { margin: 0; }
   .section-intro h4 { font-size: 25px; }
   .patient-row { grid-template-columns: auto 1fr auto; padding: 14px; }
   .patient-row > :nth-child(3), .patient-row > :nth-child(4) { display: none; }

@@ -37,6 +37,18 @@ describe('cashier', () => {
     expect(await screen.findByText('Оплачен')).toBeInTheDocument()
   })
 
+  it('the administrator issues all missing charges at once', async () => {
+    goOffline()
+    const user = userEvent.setup()
+    renderApp()
+    await enterDemo(user, 'ADMINISTRATOR')
+    await user.click(screen.getByRole('button', { name: 'Касса' }))
+    await user.click(screen.getByRole('button', { name: /^Выставить все счета/ }))
+    expect(await screen.findByText(/выставлено счетов/i)).toBeInTheDocument()
+    expect(screen.queryByText('Счёт не выставлен')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Выставить все счета/ })).not.toBeInTheDocument()
+  })
+
   it('a cashier pays a server charge under their own name', async () => {
     const appointmentId = '00000000-0000-0000-0000-000000000502'
     const fetchMock = withAuth(async (url: string, init?: RequestInit) => {

@@ -1,4 +1,5 @@
 import type { SignedDocumentItem } from '../../api/types'
+import { clinicTimeZone } from '../../shared/clinicTime'
 
 /** Поля подписанного снимка в порядке заметки приёма. */
 export const snapshotFields: Array<{ key: 'complaints' | 'mentalStatus' | 'diagnosis' | 'recommendations'; label: string }> = [
@@ -10,7 +11,7 @@ export const snapshotFields: Array<{ key: 'complaints' | 'mentalStatus' | 'diagn
 
 export function signedMoment(iso: string) {
   const date = new Date(iso)
-  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })
+  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: clinicTimeZone() })
 }
 
 /** «Дополнение к документу от 20.10.2026 09:40» или «Документ приёма». */

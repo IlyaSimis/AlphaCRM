@@ -3,12 +3,10 @@ import { HistoryRounded, RefreshRounded } from '@mui/icons-material'
 import { Alert, Box, Button, Chip, CircularProgress, MenuItem, Stack, TextField, Typography } from '@mui/material'
 import { loadAudit } from '../../api/audit'
 import type { AuditItem } from '../../api/types'
+import { formatClinicMoment } from '../../shared/clinicTime'
 import { actionLabels, objectLabels, reasonLabel } from './auditLabels'
 
-function formatMoment(iso: string) {
-  const date = new Date(iso)
-  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
-}
+const formatMoment = (iso: string) => formatClinicMoment(iso, true)
 
 export function AuditLog({ apiOnline }: { apiOnline: boolean }) {
   const [items, setItems] = useState<AuditItem[]>([])

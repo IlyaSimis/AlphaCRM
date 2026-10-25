@@ -3,6 +3,7 @@ import { CheckCircleRounded, EditRounded, EventNoteRounded, LockOutlined } from 
 import { Alert, Avatar, Box, Button, Chip, CircularProgress, Divider, Typography } from '@mui/material'
 import { CANCELLABLE } from '../../api/schedule'
 import type { EncounterView, PatientItem, Practitioner, ScheduleItem } from '../../api/types'
+import { clinicTimeZone } from '../../shared/clinicTime'
 import { localToday } from '../../shared/dates'
 import { roleLabels, type Role } from '../../shared/roles'
 import { initialsOf, isUuid } from '../../shared/text'
@@ -36,7 +37,7 @@ type PatientCardProps = {
 function formatDateTime(iso?: string | null) {
   if (!iso) return '—'
   const date = new Date(iso)
-  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })
+  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: clinicTimeZone() })
 }
 
 function shortDay(iso: string) {

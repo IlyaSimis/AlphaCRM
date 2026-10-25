@@ -46,6 +46,10 @@ public final class PlatformConfig {
     return DomainException.unauthorized(code, message);
   }
 
+  public static RuntimeException tooManyRequests(String code, String message) {
+    return DomainException.tooManyRequests(code, message);
+  }
+
   public static RuntimeException notFound(String code, String message) {
     return DomainException.notFound(code, message);
   }

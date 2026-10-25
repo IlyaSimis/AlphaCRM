@@ -4,6 +4,7 @@ import static ru.quietclinic.platform.PlatformConfig.conflict;
 import static ru.quietclinic.platform.PlatformConfig.requireRole;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
@@ -12,6 +13,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.quietclinic.platform.ClinicTime;
 
 /** Агрегаты по записям без персональных данных: только дата, врач, статус и количество. */
 @Service
@@ -20,10 +22,13 @@ class AppointmentStatsService {
 
   private final AppointmentRepository appointments;
   private final ClinicScope clinic;
+  private final ClinicTime time;
 
-  AppointmentStatsService(AppointmentRepository appointments, ClinicScope clinic) {
+  AppointmentStatsService(
+      AppointmentRepository appointments, ClinicScope clinic, ClinicTime time) {
     this.appointments = appointments;
     this.clinic = clinic;
+    this.time = time;
   }
 
   @Transactional(readOnly = true)
@@ -37,25 +42,29 @@ class AppointmentStatsService {
     }
     var inRange =
         appointments.findByStartsAtGreaterThanEqualAndStartsAtLessThanOrderByStartsAt(
-            from.atStartOfDay().toInstant(ZoneOffset.UTC),
-            to.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC));
+            time.startOf(from), time.startOf(to.plusDays(1)));
     var ownPractitioners = clinic.practitionerIds();
     var filtered =
         inRange.stream()
             .filter(a -> ownPractitioners.contains(a.practitionerId))
             .filter(a -> practitionerId == null || a.practitionerId.equals(practitionerId))
             .toList();
-    return new AppointmentStatsView(from, to, aggregate(filtered));
+    return new AppointmentStatsView(from, to, aggregate(filtered, time.zone()));
   }
 
   /** Группирует записи по дню (UTC), врачу и статусу. */
   static List<AppointmentStatRow> aggregate(List<Appointment> appointments) {
+    return aggregate(appointments, ZoneOffset.UTC);
+  }
+
+  /** Группирует записи по дню в поясе клиники, врачу и статусу. */
+  static List<AppointmentStatRow> aggregate(List<Appointment> appointments, ZoneId zone) {
     return appointments.stream()
         .collect(
             Collectors.groupingBy(
                 a ->
                     new Key(
-                        LocalDate.ofInstant(a.startsAt, ZoneOffset.UTC),
+                        LocalDate.ofInstant(a.startsAt, zone),
                         a.practitionerId,
                         a.status),
                 Collectors.counting()))

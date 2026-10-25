@@ -1,3 +1,5 @@
+import { clinicToday } from './clinicTime'
+
 const weekdays = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота']
 const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
 
@@ -49,7 +51,7 @@ export function weekOf(iso: string) {
   return daysBetween(monday, shiftDate(monday, 6))
 }
 
+/** Сегодня на часах клиники (по умолчанию UTC, как расписание). */
 export function localToday() {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  return clinicToday()
 }

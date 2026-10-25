@@ -44,6 +44,24 @@ class AuthControllerTest {
   }
 
   @Test
+  void repeatedFailuresCloseSignInForThatLogin() throws Exception {
+    for (var i = 0; i < 5; i++) {
+      login("throttle.target", "wrong-" + i).andExpect(status().isUnauthorized());
+    }
+    login("throttle.target", "wrong-again")
+        .andExpect(status().isTooManyRequests())
+        .andExpect(jsonPath("$.code").value("TOO_MANY_LOGIN_ATTEMPTS"));
+    // Другой логин с того же адреса пока не закрыт.
+    login("throttle.other", "wrong").andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void meCarriesTheClinicTimeZone() throws Exception {
+    mvc.perform(get("/api/v1/auth/me").with(staff.admin()))
+        .andExpect(jsonPath("$.timeZone").value("UTC"));
+  }
+
+  @Test
   void apiWithoutSessionAnswers401AndIgnoresDemoHeaders() throws Exception {
     mvc.perform(get("/api/v1/patients"))
         .andExpect(status().isUnauthorized())

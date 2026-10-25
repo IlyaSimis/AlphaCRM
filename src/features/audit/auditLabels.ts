@@ -1,8 +1,10 @@
 import { statusLabel } from '../../api/schedule'
+import { clinicParts } from '../../shared/clinicTime'
 import { channelLabels, templateLabels } from '../outbox/outboxLabels'
 
 export const actionLabels: Record<string, string> = {
   PATIENT_ADMIN_READ: 'Просмотр карточки пациента',
+  PATIENT_LIST_READ: 'Просмотр списка пациентов',
   PATIENT_CREATED: 'Регистрация пациента',
   PATIENT_UPDATED: 'Изменение данных пациента',
   PATIENT_CONSENT_CHANGED: 'Согласие на обработку данных',
@@ -44,7 +46,7 @@ export const actionLabels: Record<string, string> = {
 
 export const objectLabels: Record<string, string> = {
   PATIENT: 'Пациент', APPOINTMENT: 'Запись', ENCOUNTER: 'Приём', DOCUMENT: 'Документ', CHARGE: 'Счёт', PAYMENT: 'Платёж', CONSENT: 'Согласие',
-  TASK: 'Задача', WAITLIST: 'Лист ожидания', PRACTITIONER: 'Врач', SERVICE: 'Услуга', STAFF: 'Сотрудник', OUTBOX: 'Внешний вывод',
+  TASK: 'Задача', WAITLIST: 'Лист ожидания', PRACTITIONER: 'Врач', SERVICE: 'Услуга', STAFF: 'Сотрудник', OUTBOX: 'Внешний вывод', CLINIC: 'Клиника',
 }
 
 /** Коды, которые только повторяют колонку «Действие». */
@@ -73,6 +75,11 @@ const roleNames: Record<string, string> = { ADMINISTRATOR: 'администра
 const dayNames = ['', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс']
 
 const fieldNames: Record<string, string> = { phone: 'телефон', fullName: 'ФИО', birthDate: 'дата рождения', referralSource: 'источник', registryNote: 'заметка регистратуры', telegram: 'Telegram' }
+
+function clinicMoment(iso: string) {
+  const { date, time } = clinicParts(iso)
+  return `${date.slice(8, 10)}.${date.slice(5, 7)}.${date.slice(0, 4)} ${time}`
+}
 
 const statusCodes = new Set(['BOOKED', 'CONFIRMED', 'ARRIVED', 'IN_PROGRESS', 'COMPLETED', 'NO_SHOW', 'CANCELLED'])
 
@@ -109,10 +116,15 @@ export function reasonLabel(code: string | null | undefined): string {
   const delivered = /^([a-z-]+):(webhook|telegram|cashbox)$/.exec(code)
   if (delivered && templateLabels[delivered[1]]) return `${templateLabels[delivered[1]]} · ${channelLabels[delivered[2].toUpperCase()]}`
 
+  // Список пациентов: «list:12» — открыт весь список, «search:3» — поиск, найдено 3.
+  const listed = /^(list|search):(\d+)$/.exec(code)
+  if (listed) return listed[1] === 'list' ? `весь список, ${listed[2]}` : `поиск, найдено ${listed[2]}`
+
+  // Перенос: время в коде — UTC, на экране — на часах клиники.
   const moved = reschedulePattern.exec(code)
   if (moved) {
     const [, y1, m1, d1, t1, y2, m2, d2, t2, doctorChanged] = moved
-    return `${d1}.${m1}.${y1} ${t1} → ${d2}.${m2}.${y2} ${t2}${doctorChanged ? ', другой врач' : ''}`
+    return `${clinicMoment(`${y1}-${m1}-${d1}T${t1}:00Z`)} → ${clinicMoment(`${y2}-${m2}-${d2}T${t2}:00Z`)}${doctorChanged ? ', другой врач' : ''}`
   }
 
   return code

@@ -1,5 +1,6 @@
 import { statusLabel, toneFor } from '../../api/schedule'
 import type { PatientItem, Practitioner, ScheduleItem, ServiceItem } from '../../api/types'
+import { clinicInstant } from '../../shared/clinicTime'
 import { OUTSIDE_WORKING_HOURS, fitsWorkingHours } from './workingHours'
 
 export type BookingDraft = {
@@ -19,11 +20,17 @@ export function bookableServices(services: ServiceItem[]) {
   return services.filter((item) => item.active)
 }
 
-/** Проверяет черновик записи до отправки; возвращает текст ошибки или null. */
-export function validateBooking(draft: BookingDraft, patients: PatientItem[], services: ServiceItem[], practitioners: Practitioner[]) {
+export const PAST_TIME = 'Это время уже прошло: выберите будущее'
+
+/**
+ * Проверяет черновик записи до отправки; возвращает текст ошибки или null. now — проверять, что
+ * время не прошло (на сервере; демо-песочница живёт в своём дне и это не проверяет).
+ */
+export function validateBooking(draft: BookingDraft, patients: PatientItem[], services: ServiceItem[], practitioners: Practitioner[], now?: Date) {
   if (!patients.some((item) => item.id === draft.patientId)) return 'Выберите пациента из списка'
   if (!draft.date) return 'Укажите дату приёма'
   if (!draft.time) return 'Укажите время приёма'
+  if (now && clinicInstant(draft.date, draft.time).getTime() < now.getTime()) return PAST_TIME
   const service = bookableServices(services).find((item) => item.id === draft.serviceId)
   if (!service) return 'Выберите услугу'
   const practitioner = practitioners.find((item) => item.id === draft.practitionerId)

@@ -218,6 +218,15 @@ class SchedulingControllerTest {
   }
 
   @Test
+  void rejectsBookingInThePast() throws Exception {
+    // «Сейчас» в тестах — 19.10.2026 (clinic.fixed-time): вторник 13.10 уже прошёл.
+    attemptBooking(
+            DMITRY, PETROV, "2026-10-13T09:00:00Z", "2026-10-13T09:30:00Z", "Повторный приём")
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("APPOINTMENT_IN_PAST"));
+  }
+
+  @Test
   void rejectsBookingOutsideWorkingHours() throws Exception {
     // Среда: у Петрова нет смены.
     attemptBooking(

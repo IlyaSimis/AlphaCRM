@@ -4,6 +4,9 @@ import { afterEach, beforeEach, vi } from 'vitest'
 import { resetSandbox } from '../shared/sandbox'
 
 beforeEach(() => {
+  // «Сегодня» в тестах — день демо-данных: расписание, «не в прошлом» и сроки задач не зависят
+  // от дня запуска. Подменяется только Date, таймеры настоящие (нужны userEvent).
+  vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-20T06:00:00Z') })
   localStorage.clear()
   resetSandbox()
   document.cookie = 'XSRF-TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'
@@ -23,4 +26,5 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  vi.useRealTimers()
 })

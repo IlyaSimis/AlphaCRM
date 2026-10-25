@@ -6,6 +6,7 @@
 export const errorMessages: Record<string, string> = {
   UNAUTHORIZED: 'Сессия закончилась. Войдите снова.',
   INVALID_CREDENTIALS: 'Неверный логин или пароль',
+  TOO_MANY_LOGIN_ATTEMPTS: 'Слишком много неудачных попыток входа. Подождите 15 минут и попробуйте снова',
   CSRF_INVALID: 'Обновите страницу и повторите действие',
   ACCESS_DENIED: 'Недостаточно прав для операции',
   PASSWORD_CHANGE_REQUIRED: 'Сначала смените временный пароль',
@@ -27,6 +28,7 @@ export const errorMessages: Record<string, string> = {
   WAITLIST_NOT_FOUND: 'Ожидание не найдено',
 
   SLOT_ALREADY_BOOKED: 'Интервал врача уже занят',
+  APPOINTMENT_IN_PAST: 'Это время уже прошло: выберите будущее',
   OUTSIDE_WORKING_HOURS: 'Время вне рабочего графика врача',
   INVALID_INTERVAL: 'Окончание записи должно быть позже начала',
   UNKNOWN_SERVICE: 'Такой услуги нет в справочнике',

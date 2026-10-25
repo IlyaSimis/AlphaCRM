@@ -15,9 +15,11 @@ type BookingDialogProps = {
   initialDate: string
   onClose: () => void
   onSave: (draft: BookingDraft) => void
+  /** Работаем с сервером: прошедшее время не принимается. */
+  checkPast?: boolean
 }
 
-export function BookingDialog({ open, patients, practitioners, services: catalog, defaultPractitionerId, error, initialDate, onClose, onSave }: BookingDialogProps) {
+export function BookingDialog({ open, patients, practitioners, services: catalog, defaultPractitionerId, error, initialDate, onClose, onSave, checkPast = false }: BookingDialogProps) {
   // Список услуг — из справочника клиники; выключенные в новую запись не предлагаются.
   const services = bookableServices(catalog)
   const fallbackPatientId = patients[0]?.id ?? ''
@@ -32,7 +34,7 @@ export function BookingDialog({ open, patients, practitioners, services: catalog
   const selectedPractitionerId = practitioners.some((item) => item.id === practitionerId) ? practitionerId : practitioners[0]?.id ?? ''
   const selectedServiceId = services.some((item) => item.id === serviceId) ? serviceId : fallbackServiceId
   const draft: BookingDraft = { patientId: selectedPatientId, date, time, serviceId: selectedServiceId, practitionerId: selectedPractitionerId }
-  const problem = validateBooking(draft, patients, services, practitioners)
+  const problem = validateBooking(draft, patients, services, practitioners, checkPast ? new Date() : undefined)
   const service = services.find((item) => item.id === selectedServiceId)
 
   const submit = () => {
@@ -63,7 +65,7 @@ export function BookingDialog({ open, patients, practitioners, services: catalog
           {services.map((item) => <MenuItem key={item.id} value={item.id}>{item.name} · {item.durationMinutes} мин · {formatMoney(item.priceMinor, item.currency)}</MenuItem>)}
         </TextField>
         {!shown && problem === OUTSIDE_WORKING_HOURS && <Alert severity="warning">{OUTSIDE_WORKING_HOURS}</Alert>}
-        {service && <Alert severity="info">Стоимость {formatMoney(service.priceMinor, service.currency)} сохранится в записи. Пациенту ничего не отправляется.</Alert>}
+        {service && <Alert severity="info">Стоимость {formatMoney(service.priceMinor, service.currency)} сохранится в записи. Если канал уведомлений подключён, пациент получит подтверждение и напоминание за сутки.</Alert>}
       </Stack>
     </DialogContent>
     <DialogActions><Button onClick={onClose}>Отмена</Button><Button variant="contained" disabled={!selectedPatientId || !selectedPractitionerId || !selectedServiceId || !date || !time} onClick={submit}>Создать запись</Button></DialogActions>

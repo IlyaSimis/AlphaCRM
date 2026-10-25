@@ -51,6 +51,12 @@ describe('failure', () => {
     expect(error.message).toBe('Услуга выключена и недоступна для новой записи')
   })
 
+  it('explains a sign-in lockout after too many attempts', async () => {
+    const error = await failure(reply(429, { code: 'TOO_MANY_LOGIN_ATTEMPTS', message: 'Too many failed sign-in attempts' }), 'fallback')
+    expect(error.status).toBe(429)
+    expect(error.message).toContain('Слишком много неудачных попыток входа')
+  })
+
   it('shows the server message, not the raw code, when the screen does not know the code', async () => {
     const error = await failure(reply(409, { code: 'BRAND_NEW_CODE', message: 'Something new happened' }), 'fallback')
     expect(error.message).toBe('Something new happened')

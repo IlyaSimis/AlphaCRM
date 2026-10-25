@@ -39,6 +39,8 @@ describe('staff sign-in', () => {
     await signIn(user, 'admin', 'admin')
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
     expect(screen.getAllByText('Администратор', { selector: '.profile *' }).length).toBeGreaterThan(0)
+    // Роль под именем — название, а не код API.
+    expect(screen.queryByText('ADMINISTRATOR')).not.toBeInTheDocument()
     expect(screen.getByText('AlphaCRM', { selector: '.topbar *' })).toBeInTheDocument()
     expect(screen.queryByText(/временным паролем/)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Сотрудники' })).toBeInTheDocument()

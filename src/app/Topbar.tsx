@@ -30,8 +30,9 @@ export function Topbar({ eyebrow, title, live, clinicName, onPassword, onSignOut
             {mode === 'light' ? <DarkModeRounded /> : <LightModeRounded />}
           </IconButton>
         </Tooltip>
-        {live && <Button size="small" startIcon={<KeyRounded />} onClick={onPassword}>Сменить пароль</Button>}
-        <Button size="small" variant="outlined" startIcon={<LogoutRounded />} onClick={onSignOut}>Выйти</Button>
+        {/* На узком экране подписи кнопок скрываются, имя для экранных чтецов остаётся. */}
+        {live && <Button size="small" className="topbar-action" aria-label="Сменить пароль" startIcon={<KeyRounded />} onClick={onPassword}><span className="topbar-label">Сменить пароль</span></Button>}
+        <Button size="small" className="topbar-action" variant="outlined" aria-label="Выйти" startIcon={<LogoutRounded />} onClick={onSignOut}><span className="topbar-label">Выйти</span></Button>
       </Box>
     </Box>
   )

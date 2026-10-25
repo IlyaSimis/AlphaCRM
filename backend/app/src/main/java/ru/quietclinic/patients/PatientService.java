@@ -48,8 +48,15 @@ class PatientService {
                 : patients.findTop20ByClinicIdAndFullNameContainingIgnoreCaseOrderByFullName(
                     clinicId(), query))
             .stream().map(p -> PatientView.of(p, index.sharedWith(p))).toList();
-    result.forEach(
-        p -> audit.record(actorId(), "PATIENT_ADMIN_READ", "PATIENT", p.id(), "ALLOWED", "search"));
+    // Одно событие на просмотр списка, а не по событию на каждого пациента: иначе журнал из
+    // последних 100 событий целиком забивается одним открытием списка.
+    audit.record(
+        actorId(),
+        "PATIENT_LIST_READ",
+        "CLINIC",
+        clinicId(),
+        "ALLOWED",
+        (query.isBlank() ? "list:" : "search:") + result.size());
     return result;
   }
 

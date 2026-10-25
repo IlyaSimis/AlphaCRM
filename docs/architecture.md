@@ -146,7 +146,8 @@ sequenceDiagram
 
 ## Безопасность
 
-- **Вход** — `POST /api/v1/auth/login`, логин и пароль из `staff_user` (bcrypt). Неверный логин и неверный пароль дают одинаковый `401 INVALID_CREDENTIALS`. Внешнего OIDC/Keycloak нет.
+- **Вход** — `POST /api/v1/auth/login`, логин и пароль из `staff_user` (bcrypt). Неверный логин и неверный пароль дают одинаковый `401 INVALID_CREDENTIALS`. Серия неудач закрывает вход с адреса на 15 минут (`LoginThrottle`, `429 TOO_MANY_LOGIN_ATTEMPTS`). Внешнего OIDC/Keycloak нет.
+- **Время** — `platform.ClinicTime`: пояс клиники (`CLINIC_TIME_ZONE`) для дней, смен и экрана, моменты в базе — UTC; запись в прошлое отклоняется (`409 APPOINTMENT_IN_PAST`). Интерфейс берёт пояс из `/auth/me` (`shared/clinicTime.ts`).
 - **Сессия** — cookie `JSESSIONID`, `HttpOnly`, `SameSite=Lax`, 8 часов, `Secure` при `SESSION_COOKIE_SECURE=true`. Хранится в памяти backend.
 - **CSRF** — `CookieCsrfTokenRepository`: сервер кладёт `XSRF-TOKEN`, интерфейс отправляет его в `X-XSRF-TOKEN` на изменяющих запросах (`src/api/client.ts`).
 - **Роль и автор действия** сервер берёт только из сессии. Права проверяются в сервисах (`requireRole`), а не в интерфейсе: интерфейс лишь прячет недоступные кнопки.

@@ -3,19 +3,17 @@ import { OutboxRounded, RefreshRounded } from '@mui/icons-material'
 import { Alert, Box, Button, Chip, CircularProgress, Typography } from '@mui/material'
 import { loadOutbox } from '../../api/outbox'
 import type { OutboxItem } from '../../api/types'
+import { clinicParts, formatClinicMoment } from '../../shared/clinicTime'
 import { channelLabels, reasonText, statusLabels, statusTone, templateLabels } from './outboxLabels'
 
-/** Время записи — как в расписании (UTC); время событий — как в журнале аудита. */
+/** Время записи и событий — на часах клиники, как в расписании и журнале. */
 function appointmentTime(iso: string | null) {
   if (!iso) return '—'
-  return `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)} ${iso.slice(11, 16)}`
+  const { date, time } = clinicParts(iso)
+  return `${date.slice(8, 10)}.${date.slice(5, 7)}.${date.slice(0, 4)} ${time}`
 }
 
-function moment(iso: string | null) {
-  if (!iso) return '—'
-  const date = new Date(iso)
-  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-}
+const moment = (iso: string | null) => formatClinicMoment(iso)
 
 /** Последние внешние выводы клиники: сообщения пациентам и чеки. Только администратору. */
 export function OutboxPage({ apiOnline }: { apiOnline: boolean }) {

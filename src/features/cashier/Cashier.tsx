@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { PaymentsRounded, RefreshRounded } from '@mui/icons-material'
 import { Alert, Box, Button, Chip, CircularProgress, Stack, Typography } from '@mui/material'
 import { createCharge, loadCharges, payCharge } from '../../api/billing'
+import type { ApiError } from '../../api/client'
 import { loadAppointments } from '../../api/schedule'
 import type { ChargeItem, Practitioner, ScheduleItem } from '../../api/types'
 import { localToday, shiftDate } from '../../shared/dates'
@@ -77,6 +78,35 @@ export function Cashier({ role, apiOnline, practitioners, localAppointments, loc
     void act(appointmentId, async () => { await createCharge({ appointmentId, amountMinor, currency: appointment.currency ?? 'RUB' }) }, 'Счёт выставлен')
   }
 
+  /** Все недостающие счета разом: по одному запросу на приём, уже выставленные пропускаются. */
+  const issueAll = async () => {
+    const missing = rows.filter((row) => row.state === 'NO_CHARGE' && row.appointment.amountMinor != null && row.appointment.id)
+    if (missing.length === 0) return
+    if (!apiOnline) {
+      missing.forEach((row) => onLocalCharge(row.appointment))
+      notify(`Демо-режим: выставлено счетов — ${missing.length}, видны до обновления страницы`)
+      return
+    }
+    setBusy('all')
+    let issued = 0
+    try {
+      for (const row of missing) {
+        try {
+          await createCharge({ appointmentId: row.appointment.id as string, amountMinor: row.appointment.amountMinor as number, currency: row.appointment.currency ?? 'RUB' })
+          issued++
+        } catch (reason) {
+          if ((reason as ApiError).code !== 'CHARGE_ALREADY_EXISTS') throw reason
+        }
+      }
+      notify(`Выставлено счетов: ${issued}`)
+    } catch (reason) {
+      setError(`${(reason as Error).message}. Выставлено до ошибки: ${issued}`)
+    } finally {
+      setBusy(null)
+      setRevision((value) => value + 1)
+    }
+  }
+
   const pay = (row: CashierRow) => {
     if (!row.charge) return
     const chargeId = row.charge.chargeId
@@ -99,6 +129,7 @@ export function Cashier({ role, apiOnline, practitioners, localAppointments, loc
         <Box><Typography variant="h4" sx={{ fontWeight: 750 }}>Касса</Typography><Typography sx={{ color: 'text.secondary' }}>Завершённые приёмы за {PERIOD_DAYS} дней: к оплате и оплаченные</Typography></Box>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
           <Chip size="small" label={apiOnline ? 'Данные API' : 'Демо-режим'} color={apiOnline ? 'success' : 'default'} variant="outlined" />
+          {role === 'ADMINISTRATOR' && sums.withoutCharge > 0 && <Button variant="contained" disabled={busy !== null} onClick={() => void issueAll()}>Выставить все счета ({sums.withoutCharge})</Button>}
           <Button variant="outlined" startIcon={<RefreshRounded />} disabled={!apiOnline} onClick={() => setRevision((value) => value + 1)}>Обновить</Button>
         </Stack>
       </Box>

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { currentStaff, login, logout } from '../api/auth'
 import { ApiError, onUnauthorized } from '../api/client'
 import type { StaffItem } from '../api/types'
+import { setClinicTimeZone } from '../shared/clinicTime'
 
 /**
  * Сессия сотрудника.
@@ -15,6 +16,12 @@ export type SessionState =
 
 const SERVER_DOWN = 'Сервер недоступен'
 
+/** Вошли на сервер: время на экране — в поясе клиники из /auth/me. Песочница — UTC. */
+function signedIn(staff: StaffItem, live: boolean): SessionState {
+  setClinicTimeZone(live ? staff.timeZone : 'UTC')
+  return { status: 'signedIn', staff, live }
+}
+
 export function useSession() {
   const [state, setState] = useState<SessionState>({ status: 'loading' })
 
@@ -22,7 +29,7 @@ export function useSession() {
     setState({ status: 'loading' })
     try {
       const staff = await currentStaff()
-      setState(staff ? { status: 'signedIn', staff, live: true } : { status: 'signedOut', serverOnline: true })
+      setState(staff ? signedIn(staff, true) : { status: 'signedOut', serverOnline: true })
     } catch {
       setState({ status: 'signedOut', serverOnline: false })
     }
@@ -42,7 +49,7 @@ export function useSession() {
   const signIn = async (username: string, password: string): Promise<string | null> => {
     try {
       const staff = await login(username, password)
-      setState({ status: 'signedIn', staff, live: true })
+      setState(signedIn(staff, true))
       return null
     } catch (error) {
       if (error instanceof ApiError) return error.message
@@ -51,7 +58,7 @@ export function useSession() {
     }
   }
 
-  const enterDemo = (staff: StaffItem) => setState({ status: 'signedIn', staff, live: false })
+  const enterDemo = (staff: StaffItem) => setState(signedIn(staff, false))
 
   const signOut = async () => {
     if (state.status === 'signedIn' && state.live) {

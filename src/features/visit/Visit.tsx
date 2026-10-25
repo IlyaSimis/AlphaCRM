@@ -3,6 +3,7 @@ import { LockOutlined } from '@mui/icons-material'
 import { Alert, Box, Button, Chip, CircularProgress, Divider, Stack, TextField, Typography } from '@mui/material'
 import { TEMPLATE_VERSION } from '../../api/clinical'
 import type { AppointmentStatus, DocumentSummary, NoteFields } from '../../api/types'
+import { clinicTimeZone } from '../../shared/clinicTime'
 import { formatDay } from '../../shared/dates'
 import { FormSection, Info } from '../../shared/ui'
 import { SignDialog } from './SignDialog'
@@ -24,7 +25,7 @@ type VisitProps = {
 function formatMoment(iso?: string | null) {
   if (!iso) return '—'
   const date = new Date(iso)
-  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: clinicTimeZone() })
 }
 
 function versionLabel(doc: DocumentSummary) {

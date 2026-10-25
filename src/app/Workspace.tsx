@@ -161,7 +161,7 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
     ? 'КЛИНИЧЕСКИЙ КОНТУР · ДОСТУП ПО СВЯЗИ С ЛЕЧЕНИЕМ'
     : page === 'documents' ? 'КЛИНИЧЕСКИЙ АРХИВ · ТОЛЬКО ЧТЕНИЕ' : page === 'analytics' || page === 'audit' || page === 'cashier' || page === 'settings' || page === 'staff' || page === 'outbox'
       ? 'УПРАВЛЕНИЕ КЛИНИКОЙ'
-      : page === 'registry' ? 'АДМИНИСТРАТИВНЫЙ КОНТУР' : formatDay(scheduleDate).toLocaleUpperCase('ru-RU')
+      : page === 'registry' ? 'АДМИНИСТРАТИВНЫЙ КОНТУР' : page === 'patients' || page === 'patient' ? 'КАРТОТЕКА ПАЦИЕНТОВ' : formatDay(scheduleDate).toLocaleUpperCase('ru-RU')
 
   return (
     <Box className="app-shell">
@@ -187,7 +187,7 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
         </Box>
       </Box>
 
-      <BookingDialog key={bookingKey} open={Boolean(booking)} patients={patientItems} practitioners={practitioners} services={clinic.services} defaultPractitionerId={booking?.practitionerId ?? (doctorFilter === 'all' ? practitioners[0]?.id ?? PETROV_ID : doctorFilter)} error={bookingError} initialDate={booking?.date ?? scheduleDate} onClose={() => { setBooking(null); setBookingError('') }} onSave={async (draft) => {
+      <BookingDialog key={bookingKey} checkPast={clinic.apiOnline} open={Boolean(booking)} patients={patientItems} practitioners={practitioners} services={clinic.services} defaultPractitionerId={booking?.practitionerId ?? (doctorFilter === 'all' ? practitioners[0]?.id ?? PETROV_ID : doctorFilter)} error={bookingError} initialDate={booking?.date ?? scheduleDate} onClose={() => { setBooking(null); setBookingError('') }} onSave={async (draft) => {
         const result = await clinic.book(draft)
         if (result.status === 'error') setBookingError(result.message)
         if (result.status === 'done') {

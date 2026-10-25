@@ -39,7 +39,7 @@ import type { ScheduleView } from '../features/schedule/scheduleView'
 import { availableActions } from '../features/schedule/statusActions'
 import { OUTSIDE_WORKING_HOURS, fitsWorkingHours } from '../features/schedule/workingHours'
 import type { Role } from '../shared/roles'
-import { weekOf } from '../shared/dates'
+import { localToday, weekOf } from '../shared/dates'
 import { useSandboxState } from '../shared/sandbox'
 import { readStored, storageKeys, writeStored } from '../shared/storage'
 import { isUuid } from '../shared/text'
@@ -47,7 +47,8 @@ import { clinicDay, demoAppointments, demoPatients } from './demoData'
 
 const scheduleDateKey = storageKeys.scheduleDate
 
-const parseDate = (value: string | null) => (value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : clinicDay)
+/** Сохранённый день расписания; без него — сегодня (в демо-песочнице — день демо-данных). */
+const parseDate = (fallback: string) => (value: string | null) => (value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : fallback)
 
 function sortSchedule(items: ScheduleItem[]) {
   return [...items].sort((left, right) => left.date.localeCompare(right.date) || left.time.localeCompare(right.time))
@@ -79,7 +80,7 @@ export function useClinicData(doctorId: string, live: boolean) {
   const [localCharges, setLocalCharges] = useSandboxState<ChargeItem[]>('charges', [], sandbox)
   const [selectedPatientId, setSelectedPatientId] = useState(demoPatients[0].id)
   const [apiOnline, setApiOnline] = useState(false)
-  const [scheduleDate, setScheduleDate] = useState(() => readStored(scheduleDateKey, parseDate))
+  const [scheduleDate, setScheduleDate] = useState(() => readStored(scheduleDateKey, parseDate(live ? localToday() : clinicDay)))
   const [scheduleView, setScheduleView] = useState<ScheduleView>('day')
   const [notice, setNotice] = useState({ message: '', open: false })
   // Растёт после каждого изменения записей: карточка пациента и касса по нему перечитывают данные.
@@ -249,7 +250,7 @@ export function useClinicData(doctorId: string, live: boolean) {
   }
 
   const book = async (draft: BookingDraft): Promise<DialogResult> => {
-    const invalid = validateBooking(draft, patientItems, services, practitioners)
+    const invalid = validateBooking(draft, patientItems, services, practitioners, apiOnline ? new Date() : undefined)
     if (invalid) return { status: 'error', message: invalid }
     const patient = patientItems.find((item) => item.id === draft.patientId) as PatientItem
     const service = services.find((item) => item.id === draft.serviceId) as ServiceItem

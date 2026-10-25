@@ -52,6 +52,12 @@ describe('audit log reason column', () => {
     expect(reasonLabel('list')).toBe('из списка')
   })
 
+  it('labels a patient list read as one event', () => {
+    expect(actionLabels.PATIENT_LIST_READ).toBe('Просмотр списка пациентов')
+    expect(reasonLabel('list:12')).toBe('весь список, 12')
+    expect(reasonLabel('search:3')).toBe('поиск, найдено 3')
+  })
+
   it('labels outbox deliveries without text or address', () => {
     expect(actionLabels.NOTIFICATION_DELIVERED).toBe('Сообщение пациенту доставлено')
     expect(reasonLabel('appointment-reminder:telegram')).toBe('Напоминание за сутки · Telegram')

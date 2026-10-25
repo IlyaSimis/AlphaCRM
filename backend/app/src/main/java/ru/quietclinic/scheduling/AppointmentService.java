@@ -10,7 +10,6 @@ import static ru.quietclinic.platform.PlatformConfig.requireRole;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Set;
@@ -22,6 +21,7 @@ import ru.quietclinic.audit.AuditService;
 import ru.quietclinic.billing.ChargeService;
 import ru.quietclinic.clinical.CareRelationshipService;
 import ru.quietclinic.communications.OutboxService;
+import ru.quietclinic.platform.ClinicTime;
 
 /** Записи на приём: расписание, история, создание, перенос, отмена и смена статуса. */
 @Service
@@ -37,6 +37,7 @@ class AppointmentService {
   private final AuditService audit;
   private final OutboxService outbox;
   private final ClinicScope clinic;
+  private final ClinicTime time;
 
   AppointmentService(
       AppointmentRepository appointments,
@@ -46,7 +47,8 @@ class AppointmentService {
       ChargeService charges,
       AuditService audit,
       OutboxService outbox,
-      ClinicScope clinic) {
+      ClinicScope clinic,
+      ClinicTime time) {
     this.appointments = appointments;
     this.workingHours = workingHours;
     this.services = services;
@@ -55,6 +57,7 @@ class AppointmentService {
     this.audit = audit;
     this.outbox = outbox;
     this.clinic = clinic;
+    this.time = time;
   }
 
   /**
@@ -81,8 +84,9 @@ class AppointmentService {
     } else {
       throw conflict("INVALID_RANGE", "Pass a day (date) or a period (from and to)");
     }
-    var start = from.atStartOfDay().toInstant(ZoneOffset.UTC);
-    var end = to.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC);
+    // День — в часовом поясе клиники.
+    var start = time.startOf(from);
+    var end = time.startOf(to.plusDays(1));
     var rows =
         query.patientId() == null
             ? appointments.findByStartsAtGreaterThanEqualAndStartsAtLessThanOrderByStartsAt(
@@ -259,8 +263,15 @@ class AppointmentService {
     if (!clinic.hasPractitioner(practitionerId)) {
       throw notFound("PRACTITIONER_NOT_FOUND", "Practitioner not found");
     }
+    // Запись в прошлое и перенос в прошлое не принимаются: время приёма уже прошло.
+    if (startsAt.isBefore(time.now())) {
+      throw conflict("APPOINTMENT_IN_PAST", "The appointment time has already passed");
+    }
     if (!WorkingHoursPolicy.fits(
-        workingHours.findByPractitionerIdOrderByDayOfWeek(practitionerId), startsAt, endsAt)) {
+        workingHours.findByPractitionerIdOrderByDayOfWeek(practitionerId),
+        startsAt,
+        endsAt,
+        time.zone())) {
       throw conflict("OUTSIDE_WORKING_HOURS", "Outside the practitioner's working hours");
     }
     var overlaps =

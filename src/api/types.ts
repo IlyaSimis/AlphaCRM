@@ -55,6 +55,8 @@ export type StaffItem = {
   active: boolean
   mustChangePassword?: boolean
   clinicName?: string | null
+  /** Часовой пояс клиники (IANA), в нём интерфейс показывает время. */
+  timeZone?: string | null
 }
 
 /** Подписанный документ из архива: текст — из снимка подписи, а не из текущей заметки. */

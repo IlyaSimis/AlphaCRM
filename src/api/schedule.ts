@@ -1,4 +1,5 @@
 import { ApiError, LEBEDEVA_ID, PETROV_ID, failure, apiFetch } from './client'
+import { clinicInstant, clinicParts } from '../shared/clinicTime'
 import { patientName, rememberPatient } from './patients'
 import type { AppointmentStatus, Practitioner, ScheduleItem, ServiceItem } from './types'
 
@@ -48,8 +49,8 @@ export function toScheduleItem(row: Record<string, string | number | null>, date
   const patientId = String(row.patientId ?? '')
   return {
     id: row.id as string,
-    date: date ?? startsAt.slice(0, 10),
-    time: start.toISOString().slice(11, 16),
+    date: date ?? clinicParts(start).date,
+    time: clinicParts(start).time,
     duration: `${minutes} мин`,
     minutes,
     name: patientName(patientId),
@@ -144,9 +145,9 @@ export async function createAppointment(input: NewAppointment) {
   return response.json()
 }
 
-/** Начало и конец интервала в той же шкале, что и расписание: UTC. */
+/** Начало и конец интервала: дата и время — на часах клиники, ответ — моменты UTC. */
 export function intervalOf(date: string, time: string, minutes: number) {
-  const start = new Date(`${date}T${time}:00Z`)
+  const start = clinicInstant(date, time)
   if (Number.isNaN(start.getTime())) throw new ApiError('Некорректные дата или время', 400, 'INVALID_INTERVAL')
   return { startsAt: start.toISOString(), endsAt: new Date(start.getTime() + minutes * 60_000).toISOString() }
 }

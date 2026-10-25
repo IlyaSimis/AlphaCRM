@@ -237,6 +237,24 @@ describe('schedule', () => {
     expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === 'POST')).toBe(false)
   })
 
+  it('on the server does not offer a time that has already passed', async () => {
+    const fetchMock = withAuth(async (url: string, init?: RequestInit) => {
+      const address = String(url)
+      if (address.includes('/patients')) return jsonResponse([anna])
+      if (address.includes('/appointments') && init?.method !== 'POST') return jsonResponse([])
+      return jsonResponse({}, 404)
+    })
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByText('API подключён')).toBeInTheDocument()
+    // «Сейчас» в тестах — 20.10.2026 06:00 UTC: 05:00 того же дня уже прошло.
+    await user.click(screen.getByRole('button', { name: /новая запись/i }))
+    fireEvent.change(screen.getByLabelText('Дата'), { target: { value: '2026-10-13' } })
+    await user.click(screen.getByRole('button', { name: /создать запись/i }))
+    expect(screen.getByRole('dialog')).toHaveTextContent('Это время уже прошло')
+    expect(fetchMock.mock.calls.some(([url, init]) => String(url).endsWith('/appointments') && init?.method === 'POST')).toBe(false)
+  })
+
   it('shows the server answer on a reschedule error', async () => {
     withAuth(async (url: string, init?: RequestInit) => {
       const address = String(url)
