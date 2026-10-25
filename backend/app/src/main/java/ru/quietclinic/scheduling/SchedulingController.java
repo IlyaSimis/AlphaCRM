@@ -32,6 +32,18 @@ public class SchedulingController {
     return practitioners.list();
   }
 
+  @PostMapping("/practitioners")
+  @ResponseStatus(HttpStatus.CREATED)
+  PractitionerView createPractitioner(@Valid @RequestBody CreatePractitionerRequest request) {
+    return practitioners.create(request);
+  }
+
+  @PutMapping("/practitioners/{id}")
+  PractitionerView updatePractitioner(
+      @PathVariable UUID id, @Valid @RequestBody UpdatePractitionerRequest request) {
+    return practitioners.update(id, request);
+  }
+
   @PutMapping("/practitioners/{id}/working-hours")
   PractitionerView replaceWorkingHours(
       @PathVariable UUID id, @Valid @RequestBody WorkingHoursRequest request) {

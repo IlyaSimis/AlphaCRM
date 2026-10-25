@@ -162,6 +162,13 @@ export async function rescheduleAppointment(id: string, input: { practitionerId:
 }
 
 /** Недельный график врача целиком; дня нет в списке — выходной. Только администратор. */
+/** Специальность и кабинет врача; пустой кабинет стирает подпись. */
+export async function savePractitionerCard(practitionerId: string, input: { specialty: string; room: string }): Promise<Practitioner> {
+  const response = await apiFetch(`/practitioners/${practitionerId}`, { method: 'PUT', body: JSON.stringify(input) })
+  if (!response.ok) throw await failure(response, 'Не удалось сохранить карточку врача')
+  return response.json()
+}
+
 export async function saveWorkingHours(practitionerId: string, shifts: Practitioner['workingHours']): Promise<Practitioner> {
   const response = await apiFetch(`/practitioners/${practitionerId}/working-hours`, {
     method: 'PUT',

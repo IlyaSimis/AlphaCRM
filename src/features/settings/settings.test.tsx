@@ -67,6 +67,47 @@ describe('working hours and prices', () => {
     expect(JSON.parse(String(saved?.[1]?.body))).toEqual({ priceMinor: 320050 })
   })
 
+  it('specialty and room are edited next to the shifts; the room shows in the schedule header', async () => {
+    goOffline()
+    const user = userEvent.setup()
+    renderApp()
+    await enterDemo(user, 'ADMINISTRATOR')
+    await user.click(screen.getByRole('button', { name: 'График и цены' }))
+    expect(screen.getByRole('button', { name: 'Сохранить карточку Александр Петров' })).toBeDisabled()
+    await user.type(screen.getByLabelText('Александр Петров, кабинет'), '204')
+    await user.click(screen.getByRole('button', { name: 'Сохранить карточку Александр Петров' }))
+    expect(await screen.findByText('Демо-режим: карточка видна только до обновления страницы')).toBeInTheDocument()
+    expect(screen.getByText(/Психиатр · кабинет 204 · время клиники/)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Расписание' }))
+    expect(screen.getByText(/Психиатр · кабинет 204 · /)).toBeInTheDocument()
+    // Без кабинета подписи нет.
+    expect(screen.queryByText(/Психотерапевт · кабинет/)).not.toBeInTheDocument()
+  })
+
+  it('on the server the card goes to PUT /practitioners/{id}', async () => {
+    const fetchMock = withAuth((address, init) => {
+      const method = init?.method ?? 'GET'
+      if (address.endsWith('/practitioners/00000000-0000-0000-0000-000000000201') && method === 'PUT') return jsonResponse({ id: '00000000-0000-0000-0000-000000000201', fullName: 'Александр Петров', ...JSON.parse(String(init?.body)), workingHours: [] })
+      if (address.includes('/patients')) return jsonResponse([anna])
+      if (address.includes('/appointments')) return jsonResponse([])
+      return jsonResponse({}, 404)
+    }, 'admin')
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByText('API подключён')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'График и цены' }))
+    const specialty = screen.getByLabelText('Александр Петров, специальность')
+    await user.clear(specialty)
+    await user.type(specialty, 'Психиатр-нарколог')
+    await user.type(screen.getByLabelText('Александр Петров, кабинет'), ' 12 ')
+    await user.click(screen.getByRole('button', { name: 'Сохранить карточку Александр Петров' }))
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => String(url).endsWith('/practitioners/00000000-0000-0000-0000-000000000201') && init?.method === 'PUT')).toBe(true))
+    const put = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith('/practitioners/00000000-0000-0000-0000-000000000201') && init?.method === 'PUT')
+    expect(JSON.parse(String(put?.[1]?.body))).toEqual({ specialty: 'Психиатр-нарколог', room: '12' })
+    expect(await screen.findByText(/Психиатр-нарколог · кабинет 12/)).toBeInTheDocument()
+  })
+
   it('manager and cashier see neither hours, prices nor staff', async () => {
     goOffline()
     const user = userEvent.setup()

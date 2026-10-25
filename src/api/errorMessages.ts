@@ -60,7 +60,16 @@ export const errorMessages: Record<string, string> = {
   PRACTITIONER_REQUIRED: 'Для врача выберите карточку врача',
   PRACTITIONER_TAKEN: 'У этого врача уже есть учётная запись',
   PRACTITIONER_NOT_ALLOWED: 'Карточка врача привязывается только к роли «Врач»',
+  PRACTITIONER_AMBIGUOUS: 'Выберите одно: новая карточка или карточка из справочника',
   CANNOT_DEACTIVATE_SELF: 'Нельзя отключить свою учётную запись',
+  NOT_A_PDF: 'Можно загрузить только PDF',
+  FILE_TOO_LARGE: 'Файл больше 10 МБ',
+  FILE_NOT_FOUND: 'Файл не найден',
+  FILE_NOT_SIGNED: 'Черновик файла доступен только администратору и лечащему врачу',
+  ALREADY_SIGNED: 'Файл уже подписан',
+  FILE_LOCKED: 'Подписанный файл изменить нельзя',
+  INVALID_ASSIGNED_STAFF: 'Постоянным администратором может быть только активный администратор клиники',
+  INVALID_OUTBOX_STATUS: 'Неизвестный статус внешнего вывода',
 }
 
 /** Фраза для сотрудника по коду ответа или undefined, если экран этот код ещё не знает. */

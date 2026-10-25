@@ -37,6 +37,10 @@ class DomainException extends RuntimeException {
     return new DomainException(code, message, HttpStatus.TOO_MANY_REQUESTS);
   }
 
+  static DomainException payloadTooLarge(String code, String message) {
+    return new DomainException(code, message, HttpStatus.PAYLOAD_TOO_LARGE);
+  }
+
   static DomainException notFound(String code, String message) {
     return new DomainException(code, message, HttpStatus.NOT_FOUND);
   }

@@ -42,7 +42,9 @@ async function csrfToken() {
  */
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const method = (init.method ?? 'GET').toUpperCase()
-  const headers: Record<string, string> = { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...((init.headers as Record<string, string> | undefined) ?? {}) }
+  // FormData (загрузка файла) — без Content-Type: границу multipart браузер подставит сам.
+  const json = Boolean(init.body) && !(typeof FormData !== 'undefined' && init.body instanceof FormData)
+  const headers: Record<string, string> = { ...(json ? { 'Content-Type': 'application/json' } : {}), ...((init.headers as Record<string, string> | undefined) ?? {}) }
   if (!SAFE_METHODS.includes(method)) {
     const token = await csrfToken()
     if (token) headers['X-XSRF-TOKEN'] = token

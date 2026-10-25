@@ -24,8 +24,7 @@ class AppointmentStatsService {
   private final ClinicScope clinic;
   private final ClinicTime time;
 
-  AppointmentStatsService(
-      AppointmentRepository appointments, ClinicScope clinic, ClinicTime time) {
+  AppointmentStatsService(AppointmentRepository appointments, ClinicScope clinic, ClinicTime time) {
     this.appointments = appointments;
     this.clinic = clinic;
     this.time = time;
@@ -62,11 +61,7 @@ class AppointmentStatsService {
     return appointments.stream()
         .collect(
             Collectors.groupingBy(
-                a ->
-                    new Key(
-                        LocalDate.ofInstant(a.startsAt, zone),
-                        a.practitionerId,
-                        a.status),
+                a -> new Key(LocalDate.ofInstant(a.startsAt, zone), a.practitionerId, a.status),
                 Collectors.counting()))
         .entrySet()
         .stream()

@@ -11,6 +11,12 @@ server:
 spring:
   application:
     name: quiet-clinic-api
+  servlet:
+    multipart:
+      # PDF пациента — не больше 10 МБ (PatientFileService.MAX_BYTES). Запрос чуть больше файла:
+      # в нём ещё граница multipart и поле appointmentId.
+      max-file-size: 10MB
+      max-request-size: 10304KB
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:55432/quiet_clinic}
     username: ${DATABASE_USER:quiet_clinic}

@@ -30,6 +30,11 @@ export const actionLabels: Record<string, string> = {
   WAITLIST_BOOKED: 'Запись из листа ожидания',
   WAITLIST_CANCELLED: 'Удаление из листа ожидания',
   PRACTITIONER_HOURS_CHANGED: 'Изменение графика врача',
+  PRACTITIONER_CREATED: 'Новая карточка врача',
+  PRACTITIONER_UPDATED: 'Изменение карточки врача',
+  PDF_UPLOADED: 'Загрузка PDF пациента',
+  PDF_SIGNED: 'Подписание PDF',
+  PDF_READ: 'Скачивание PDF',
   SERVICE_PRICE_CHANGED: 'Изменение цены услуги',
   SERVICE_CREATED: 'Новая услуга',
   SERVICE_DEACTIVATED: 'Выключение услуги',
@@ -46,7 +51,7 @@ export const actionLabels: Record<string, string> = {
 
 export const objectLabels: Record<string, string> = {
   PATIENT: 'Пациент', APPOINTMENT: 'Запись', ENCOUNTER: 'Приём', DOCUMENT: 'Документ', CHARGE: 'Счёт', PAYMENT: 'Платёж', CONSENT: 'Согласие',
-  TASK: 'Задача', WAITLIST: 'Лист ожидания', PRACTITIONER: 'Врач', SERVICE: 'Услуга', STAFF: 'Сотрудник', OUTBOX: 'Внешний вывод', CLINIC: 'Клиника',
+  TASK: 'Задача', WAITLIST: 'Лист ожидания', PRACTITIONER: 'Врач', SERVICE: 'Услуга', STAFF: 'Сотрудник', OUTBOX: 'Внешний вывод', CLINIC: 'Клиника', PATIENT_FILE: 'Файл PDF',
 }
 
 /** Коды, которые только повторяют колонку «Действие». */
@@ -74,7 +79,11 @@ const roleNames: Record<string, string> = { ADMINISTRATOR: 'администра
 
 const dayNames = ['', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс']
 
-const fieldNames: Record<string, string> = { phone: 'телефон', fullName: 'ФИО', birthDate: 'дата рождения', referralSource: 'источник', registryNote: 'заметка регистратуры', telegram: 'Telegram' }
+const fieldNames: Record<string, string> = {
+  phone: 'телефон', fullName: 'ФИО', birthDate: 'дата рождения', referralSource: 'источник', registryNote: 'заметка регистратуры', telegram: 'Telegram',
+  email: 'e-mail', secondPhone: 'второй телефон', assignedStaff: 'постоянный администратор',
+  specialty: 'специальность', room: 'кабинет', shifts: 'график',
+}
 
 function clinicMoment(iso: string) {
   const { date, time } = clinicParts(iso)
@@ -103,6 +112,10 @@ export function reasonLabel(code: string | null | undefined): string {
 
   const fields = code.split(',')
   if (fields.every((field) => fieldNames[field])) return `изменены: ${fields.map((field) => fieldNames[field]).join(', ')}`
+
+  // Карточка врача: «fields:fullName,specialty,room» — какие поля заданы, без значений.
+  const filled = /^fields:(.+)$/.exec(code)
+  if (filled && filled[1].split(',').every((field) => fieldNames[field])) return `поля: ${filled[1].split(',').map((field) => fieldNames[field]).join(', ')}`
 
   const transition = /^([A-Z_]+)->([A-Z_]+)$/.exec(code)
   if (transition && statusCodes.has(transition[1]) && statusCodes.has(transition[2])) {

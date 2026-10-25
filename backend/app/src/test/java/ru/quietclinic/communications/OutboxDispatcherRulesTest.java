@@ -40,8 +40,7 @@ class OutboxDispatcherRulesTest {
   @Test
   void reminderGoesOnlyForActiveAppointmentAtTheSameTime() {
     var reminder = message(NoticeTemplates.REMINDER, STARTS);
-    assertThat(OutboxDispatcher.skipReason(reminder, notice("BOOKED", STARTS, true), NOW))
-        .isNull();
+    assertThat(OutboxDispatcher.skipReason(reminder, notice("BOOKED", STARTS, true), NOW)).isNull();
     assertThat(OutboxDispatcher.skipReason(reminder, notice("CANCELLED", STARTS, true), NOW))
         .isEqualTo("APPOINTMENT_CANCELLED");
     assertThat(OutboxDispatcher.skipReason(reminder, notice("NO_SHOW", STARTS, true), NOW))
@@ -50,8 +49,7 @@ class OutboxDispatcherRulesTest {
             OutboxDispatcher.skipReason(
                 reminder, notice("CONFIRMED", STARTS.plusSeconds(3600), true), NOW))
         .isEqualTo("RESCHEDULED");
-    assertThat(
-            OutboxDispatcher.skipReason(reminder, notice("BOOKED", STARTS, true), STARTS))
+    assertThat(OutboxDispatcher.skipReason(reminder, notice("BOOKED", STARTS, true), STARTS))
         .isEqualTo("EXPIRED");
   }
 

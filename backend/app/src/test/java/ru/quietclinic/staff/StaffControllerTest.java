@@ -6,6 +6,7 @@ import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -213,5 +214,188 @@ class StaffControllerTest {
         .andExpect(status().isNotFound());
     mvc.perform(get("/api/v1/staff").with(staff.admin()))
         .andExpect(jsonPath("$[*].username").value(not(hasItem(SecondClinic.ADMIN_USERNAME))));
+  }
+
+  private long practitionersNamed(String fullName) {
+    var count =
+        jdbc.queryForObject(
+            "select count(*) from practitioner where full_name = ?", Long.class, fullName);
+    return count == null ? 0 : count;
+  }
+
+  @Test
+  void doctorAccountAndNewCardWithRoomAndShiftComeFromOneRequest() throws Exception {
+    var created =
+        create(
+                """
+                {"fullName":"Новый Врач","username":"new.doctor","password":"doctor-pass-1",
+                 "role":"DOCTOR","newPractitioner":{"specialty":"Психотерапевт","room":" 204 ",
+                 "shifts":[{"dayOfWeek":3,"startsAt":"09:00","endsAt":"15:00"}]}}
+                """)
+            .andExpect(status().isCreated())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    String id = JsonPath.read(created, "$.id");
+    String practitionerId = JsonPath.read(created, "$.practitionerId");
+    // Как у существующих врачей: id учётной записи совпадает с id карточки.
+    assertThat(id).isEqualTo(practitionerId);
+    var card = "$[?(@.id == '" + practitionerId + "')]";
+    mvc.perform(get("/api/v1/practitioners").with(staff.admin()))
+        .andExpect(jsonPath(card + ".fullName").value(contains("Новый Врач")))
+        .andExpect(jsonPath(card + ".room").value(contains("204")))
+        .andExpect(jsonPath(card + ".workingHours[0].dayOfWeek").value(contains(3)));
+    String reason =
+        jdbc.queryForObject(
+            "select reason from audit_event where action = 'PRACTITIONER_CREATED'"
+                + " and object_id = ?",
+            String.class,
+            java.util.UUID.fromString(practitionerId));
+    assertThat(reason).isEqualTo("fields:fullName,specialty,room,shifts");
+
+    // Пустой кабинет хранится как NULL; специальность и кабинет меняются отдельно от графика.
+    mvc.perform(
+            put("/api/v1/practitioners/" + practitionerId)
+                .with(staff.admin())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"specialty\":\"Психиатр\",\"room\":\"  \"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.specialty").value("Психиатр"))
+        .andExpect(jsonPath("$.room").doesNotExist())
+        .andExpect(jsonPath("$.workingHours.length()").value(1));
+    assertThat(
+            jdbc.queryForObject(
+                "select room from practitioner where id = ?",
+                String.class,
+                java.util.UUID.fromString(practitionerId)))
+        .isNull();
+    assertThat(
+            jdbc.queryForObject(
+                "select reason from audit_event where action = 'PRACTITIONER_UPDATED'"
+                    + " and object_id = ?",
+                String.class,
+                java.util.UUID.fromString(practitionerId)))
+        .isEqualTo("fields:specialty,room");
+
+    // Чужая клиника не видит и не меняет карточку.
+    SecondClinic.ensure(jdbc);
+    var other = staff.login(SecondClinic.ADMIN_USERNAME, SecondClinic.ADMIN_PASSWORD);
+    mvc.perform(
+            put("/api/v1/practitioners/" + practitionerId)
+                .with(other)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"specialty\":\"Чужой\",\"room\":\"1\"}"))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("PRACTITIONER_NOT_FOUND"));
+  }
+
+  @Test
+  void failedDoctorAccountLeavesNoPractitionerCard() throws Exception {
+    create(
+            """
+            {"fullName":"Врач Занятый Логин","username":"admin","password":"doctor-pass-1",
+             "role":"DOCTOR","newPractitioner":{"specialty":"Психиатр","room":"1","shifts":[]}}
+            """)
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("USERNAME_TAKEN"));
+    assertThat(practitionersNamed("Врач Занятый Логин")).isZero();
+
+    create(
+            """
+            {"fullName":"Врач Неверная Смена","username":"bad.shift","password":"doctor-pass-1",
+             "role":"DOCTOR","newPractitioner":{"specialty":"Психиатр","shifts":[
+               {"dayOfWeek":2,"startsAt":"15:00","endsAt":"09:00"}]}}
+            """)
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("INVALID_SHIFT"));
+    create(
+            """
+            {"fullName":"Врач Неверная Смена","username":"bad.shift","password":"doctor-pass-1",
+             "role":"DOCTOR","newPractitioner":{"specialty":"Психиатр","shifts":[
+               {"dayOfWeek":2,"startsAt":"09:00","endsAt":"12:00"},
+               {"dayOfWeek":2,"startsAt":"13:00","endsAt":"15:00"}]}}
+            """)
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("INVALID_SHIFT"));
+    assertThat(practitionersNamed("Врач Неверная Смена")).isZero();
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from staff_user where username = 'bad.shift'", Long.class))
+        .isZero();
+
+    // Либо существующая карточка, либо новая — не обе сразу; и только для роли «Врач».
+    create(
+            """
+            {"fullName":"Врач Обе Карточки","username":"both.cards","password":"doctor-pass-1",
+             "role":"DOCTOR","practitionerId":"%s",
+             "newPractitioner":{"specialty":"Психиатр","shifts":[]}}
+            """
+                .formatted(StaffSessions.LEBEDEVA))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("PRACTITIONER_AMBIGUOUS"));
+    create(
+            """
+            {"fullName":"Кассир С Карточкой","username":"cashier.card","password":"cashier-pass-1",
+             "role":"CASHIER","newPractitioner":{"specialty":"Психиатр","shifts":[]}}
+            """)
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("PRACTITIONER_NOT_ALLOWED"));
+    assertThat(practitionersNamed("Врач Обе Карточки")).isZero();
+    assertThat(practitionersNamed("Кассир С Карточкой")).isZero();
+  }
+
+  @Test
+  void standaloneCardIsBoundToAccountLater() throws Exception {
+    mvc.perform(
+            post("/api/v1/practitioners")
+                .with(staff.role("MANAGER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"fullName":"Карточка Менеджера","specialty":"Психиатр","shifts":[]}
+                    """))
+        .andExpect(status().isForbidden());
+    var card =
+        mvc.perform(
+                post("/api/v1/practitioners")
+                    .with(staff.admin())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"fullName":"Карточка Без Входа","specialty":"Психиатр","room":"",
+                         "shifts":[{"dayOfWeek":5,"startsAt":"10:00","endsAt":"18:00"}]}
+                        """))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.room").doesNotExist())
+            .andExpect(jsonPath("$.workingHours.length()").value(1))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    String practitionerId = JsonPath.read(card, "$.id");
+    // Чужая клиника не может привязать к этой карточке своего врача.
+    SecondClinic.ensure(jdbc);
+    var other = staff.login(SecondClinic.ADMIN_USERNAME, SecondClinic.ADMIN_PASSWORD);
+    mvc.perform(
+            post("/api/v1/staff")
+                .with(other)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"fullName":"Чужой Врач","username":"foreign.bind","password":"doctor-pass-1",
+                     "role":"DOCTOR","practitionerId":"%s"}
+                    """
+                        .formatted(practitionerId)))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("PRACTITIONER_NOT_FOUND"));
+    create(
+            """
+            {"fullName":"Карточка Без Входа","username":"bound.doctor","password":"doctor-pass-1",
+             "role":"DOCTOR","practitionerId":"%s"}
+            """
+                .formatted(practitionerId))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.id").value(practitionerId))
+        .andExpect(jsonPath("$.practitionerId").value(practitionerId));
+    assertThat(practitionersNamed("Карточка Без Входа")).isEqualTo(1);
   }
 }

@@ -23,8 +23,8 @@ import ru.quietclinic.StaffSessions;
 import ru.quietclinic.audit.AuditService;
 
 /**
- * Доставщик outbox с поддельным каналом: проверяется, что и когда уходит пациенту. Фоновый запуск
- * в тестах выключен (src/test/resources/application.properties), доставщик зовётся вручную.
+ * Доставщик outbox с поддельным каналом: проверяется, что и когда уходит пациенту. Фоновый запуск в
+ * тестах выключен (src/test/resources/application.properties), доставщик зовётся вручную.
  */
 @SpringBootTest
 @AutoConfigureMockMvc

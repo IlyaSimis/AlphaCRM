@@ -21,5 +21,22 @@ class Practitioner {
   @Column(nullable = false)
   String specialty;
 
+  /** Кабинет — подпись для экрана, не ресурс: двое врачей могут делить один кабинет. */
+  @Column(length = 80)
+  String room;
+
   protected Practitioner() {}
+
+  Practitioner(UUID clinicId, String fullName, String specialty, String room) {
+    id = UUID.randomUUID();
+    this.clinicId = clinicId;
+    this.fullName = fullName;
+    this.specialty = specialty;
+    this.room = room;
+  }
+
+  /** Пустая строка кабинета хранится как NULL. */
+  static String roomOrNull(String room) {
+    return room == null || room.isBlank() ? null : room.trim();
+  }
 }

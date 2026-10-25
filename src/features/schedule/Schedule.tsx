@@ -4,6 +4,7 @@ import { Avatar, Box, Button, Chip, Divider, IconButton, Menu, MenuItem, Stack, 
 import { PETROV_ID } from '../../api/client'
 import type { AppointmentStatus, Practitioner, ScheduleItem } from '../../api/types'
 import { formatDay, localToday, shiftDate, shortDate, weekOf } from '../../shared/dates'
+import { specialtyAndRoom } from '../../shared/practitioners'
 import type { Role } from '../../shared/roles'
 import { initialsOf } from '../../shared/text'
 import { Metric } from '../../shared/ui'
@@ -57,7 +58,7 @@ export function Schedule(props: ScheduleProps) {
   const doctorHeading = (doctor: Practitioner, subtitle: string, chip?: string) => (
     <Box className="doctor-heading">
       <Avatar sx={{ bgcolor: doctor.id === PETROV_ID ? '#244d48' : '#3d4f7a' }}>{initialsOf(doctor.fullName)}</Avatar>
-      <Box><Typography sx={{ fontWeight: 750 }}>{doctor.fullName}</Typography><Typography sx={{ fontSize: 13, color: 'text.secondary' }}>{doctor.specialty} · {subtitle}</Typography></Box>
+      <Box><Typography sx={{ fontWeight: 750 }}>{doctor.fullName}</Typography><Typography sx={{ fontSize: 13, color: 'text.secondary' }}>{specialtyAndRoom(doctor)} · {subtitle}</Typography></Box>
       {chip && <Chip label={chip} size="small" variant="outlined" color={isDayOff(doctor, date) ? 'warning' : 'default'} />}
     </Box>
   )

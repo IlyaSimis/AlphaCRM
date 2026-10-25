@@ -25,13 +25,14 @@ import {
   loadSchedule,
   loadServices,
   rescheduleAppointment,
+  savePractitionerCard,
   saveServicePrice,
   saveWorkingHours,
   setServiceActive,
   statusLabel,
   withStatus,
 } from '../api/schedule'
-import type { AppointmentStatus, ChargeItem, PatientItem, Practitioner, RegistryInput, ScheduleItem, ServiceItem } from '../api/types'
+import type { AppointmentStatus, AssignedStaff, ChargeItem, PatientItem, Practitioner, RegistryInput, ScheduleItem, ServiceItem } from '../api/types'
 import { localCharge } from '../features/cashier/cashier'
 import { localBooking, validateBooking, type BookingDraft } from '../features/schedule/booking'
 import type { RescheduleDraft } from '../features/schedule/RescheduleDialog'
@@ -284,28 +285,33 @@ export function useClinicData(doctorId: string, live: boolean) {
     }
   }
 
-  const createPatient = async (input: PatientInput) => {
+  /** Возвращает текст ошибки для формы или null. assigned — подпись администратора для песочницы. */
+  const createPatient = async (input: PatientInput, assigned: AssignedStaff | null = null): Promise<string | null> => {
+    const local = () => localPatient(crypto.randomUUID(), input, undefined, assigned)
     if (apiOnline) {
       try {
         const created = await createPatientApi(input)
         setPatientItems((items) => [created, ...items])
         notify('Пациент сохранён')
-        return
-      } catch {
+        return null
+      } catch (error) {
+        if (error instanceof ApiError && error.status < 500) return error.message
         setApiOnline(false)
-        setPatientItems((items) => [localPatient(crypto.randomUUID(), input), ...items])
+        setPatientItems((items) => [local(), ...items])
         notify('Сервер недоступен: пациент виден только до обновления страницы')
-        return
+        return null
       }
     }
-    setPatientItems((items) => [localPatient(crypto.randomUUID(), input), ...items])
+    setPatientItems((items) => [local(), ...items])
     notify('Демо-режим: пациент виден только до обновления страницы')
+    return null
   }
 
   const replacePatient = (updated: PatientItem) => setPatientItems((items) => items.map((item) => item.id === updated.id ? updated : item))
 
   /** Возвращает текст ошибки для формы или null, если форму можно закрыть. */
-  const updatePatient = async (patient: PatientItem, input: PatientInput): Promise<string | null> => {
+  const updatePatient = async (patient: PatientItem, input: PatientInput, assigned: AssignedStaff | null = null): Promise<string | null> => {
+    const local = (): PatientItem => ({ ...patient, ...localPatient(patient.id, input, patient.consents, assigned) })
     const applyLocally = (updated: PatientItem) => {
       replacePatient(updated)
       if (updated.name !== patient.name) {
@@ -320,12 +326,12 @@ export function useClinicData(doctorId: string, live: boolean) {
       } catch (error) {
         if (error instanceof ApiError && error.status < 500) return error.message
         setApiOnline(false)
-        applyLocally(localPatient(patient.id, input, patient.consents))
+        applyLocally(local())
         notify('Сервер недоступен: изменения видны только до обновления страницы')
       }
       return null
     }
-    applyLocally(localPatient(patient.id, input, patient.consents))
+    applyLocally(local())
     notify('Демо-режим: изменения видны только до обновления страницы')
     return null
   }
@@ -376,6 +382,34 @@ export function useClinicData(doctorId: string, live: boolean) {
     replace({ ...practitioner, workingHours: shifts })
     notify('Демо-режим: график виден только до обновления страницы')
     return null
+  }
+
+  /** Специальность и кабинет врача. Возвращает текст ошибки или null. */
+  const saveCard = async (practitioner: Practitioner, input: { specialty: string; room: string }): Promise<string | null> => {
+    const replace = (updated: Practitioner) => setPractitioners((items) => items.map((item) => item.id === updated.id ? updated : item))
+    if (apiOnline && isUuid(practitioner.id)) {
+      try {
+        replace(await savePractitionerCard(practitioner.id, input))
+        notify('Карточка врача сохранена')
+        return null
+      } catch (error) {
+        return (error as Error).message
+      }
+    }
+    replace({ ...practitioner, specialty: input.specialty, room: input.room || null })
+    notify('Демо-режим: карточка видна только до обновления страницы')
+    return null
+  }
+
+  /** Новая карточка врача из «Сотрудников»: на сервере — перечитать справочник, в песочнице — добавить. */
+  const practitionerAdded = (local?: Practitioner) => {
+    if (local) {
+      setPractitioners((items) => [...items, local].sort((a, b) => a.fullName.localeCompare(b.fullName, 'ru')))
+      return
+    }
+    loadPractitioners()
+      .then(setPractitioners)
+      .catch(() => notify('Не удалось обновить список врачей'))
   }
 
   /** Новая цена — только для новых записей: снимок цены в уже созданных записях не трогаем. */
@@ -454,6 +488,8 @@ export function useClinicData(doctorId: string, live: boolean) {
     scheduleView,
     setScheduleView,
     saveHours,
+    saveCard,
+    practitionerAdded,
     savePrice,
     updateRegistry,
     scheduleItems,

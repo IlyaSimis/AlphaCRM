@@ -9,9 +9,9 @@ import org.springframework.stereotype.Component;
 
 /**
  * Время клиники. Записи хранятся как моменты (UTC), а дни, смены врачей и время на экране — в
- * часовом поясе клиники {@code clinic.time-zone} (CLINIC_TIME_ZONE, по умолчанию UTC).
- * {@code clinic.fixed-time} задаёт «сейчас» для тестов, чтобы правило «не в прошлом» не зависело
- * от дня запуска.
+ * часовом поясе клиники {@code clinic.time-zone} (CLINIC_TIME_ZONE, по умолчанию UTC). {@code
+ * clinic.fixed-time} задаёт «сейчас» для тестов, чтобы правило «не в прошлом» не зависело от дня
+ * запуска.
  */
 @Component
 public class ClinicTime {

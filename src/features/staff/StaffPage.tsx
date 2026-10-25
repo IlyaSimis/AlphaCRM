@@ -4,21 +4,25 @@ import { Alert, Box, Button, Chip, Typography } from '@mui/material'
 import { createStaff, loadStaff, resetStaffPassword, setStaffActive } from '../../api/staff'
 import type { Practitioner, StaffItem } from '../../api/types'
 import { sandboxStaff as initialSandboxStaff } from '../../app/demoData'
+import { specialtyAndRoom } from '../../shared/practitioners'
 import { roleLabels } from '../../shared/roles'
 import { useSandboxState } from '../../shared/sandbox'
 import { PasswordDialog } from '../auth/PasswordDialog'
 import { StaffDialog } from './StaffDialog'
-import { canDeactivate, staffProblem, type StaffDraft } from './staffRules'
+import { fromRows } from '../settings/shifts'
+import { canDeactivate, freePractitioners, staffProblem, toCreateStaffInput, type StaffDraft } from './staffRules'
 
 type StaffPageProps = {
   self: StaffItem
   live: boolean
   practitioners: Practitioner[]
   notify: (message: string) => void
+  /** Справочник врачей изменился: на сервере — перечитать, в песочнице — добавить карточку. */
+  onPractitionerAdded: (local?: Practitioner) => void
 }
 
 /** Учётные записи сотрудников. Только администратор; хеши паролей сюда не приходят. */
-export function StaffPage({ self, live, practitioners, notify }: StaffPageProps) {
+export function StaffPage({ self, live, practitioners, notify, onPractitionerAdded }: StaffPageProps) {
   const [sandboxStaff, setSandboxStaff] = useSandboxState<StaffItem[]>('staff', initialSandboxStaff, !live)
   const [remote, setRemote] = useState<StaffItem[] | null>(null)
   const [error, setError] = useState('')
@@ -30,6 +34,7 @@ export function StaffPage({ self, live, practitioners, notify }: StaffPageProps)
   // Временный пароль показывается один раз — сразу после того, как администратор его ввёл.
   const [issued, setIssued] = useState<{ username: string; password: string } | null>(null)
   const items = live ? remote ?? [] : sandboxStaff
+  const cardOf = (item: StaffItem) => item.practitionerId ? practitioners.find((card) => card.id === item.practitionerId) : undefined
 
   useEffect(() => {
     if (!live) return
@@ -48,17 +53,24 @@ export function StaffPage({ self, live, practitioners, notify }: StaffPageProps)
     }
     if (live) {
       try {
-        await createStaff(draft)
+        await createStaff(toCreateStaffInput(draft))
       } catch (reason) {
         setCreateError((reason as Error).message)
         return
       }
       setRevision((value) => value + 1)
+      if (draft.newPractitioner) onPractitionerAdded()
       notify('Сотрудник создан')
       setIssued({ username: draft.username.toLowerCase(), password: draft.password })
     } else {
+      const card = draft.role === 'DOCTOR' ? draft.newPractitioner : null
       const id = draft.role === 'DOCTOR' && draft.practitionerId ? draft.practitionerId : crypto.randomUUID()
-      setSandboxStaff((rows) => [...rows, { id, fullName: draft.fullName, username: draft.username.toLowerCase(), role: draft.role, practitionerId: draft.practitionerId, active: true, mustChangePassword: true }])
+      if (card) {
+        const shifts = fromRows(card.rows)
+        onPractitionerAdded({ id, fullName: draft.fullName, specialty: card.specialty.trim(), room: card.room.trim() || null, workingHours: 'error' in shifts ? [] : shifts.shifts })
+      }
+      const practitionerId = draft.role === 'DOCTOR' ? (card ? id : draft.practitionerId) : null
+      setSandboxStaff((rows) => [...rows, { id, fullName: draft.fullName, username: draft.username.toLowerCase(), role: draft.role, practitionerId, active: true, mustChangePassword: true }])
       notify('Демо-режим: сотрудник виден только до обновления страницы, войти им нельзя')
     }
     setCreating(false)
@@ -112,7 +124,7 @@ export function StaffPage({ self, live, practitioners, notify }: StaffPageProps)
           <Box className="history-item" key={item.id}>
             <Box>
               <Typography sx={{ fontWeight: 650 }}>{item.fullName}{item.id === self.id ? ' (вы)' : ''}</Typography>
-              <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>{item.username} · {roleLabels[item.role]}</Typography>
+              <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>{item.username} · {roleLabels[item.role]}{cardOf(item) ? ` · ${specialtyAndRoom(cardOf(item)!)}` : ''}</Typography>
             </Box>
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
               <Chip size="small" variant="outlined" label={item.active ? 'Активен' : 'Отключён'} color={item.active ? 'success' : 'default'} />
@@ -125,7 +137,7 @@ export function StaffPage({ self, live, practitioners, notify }: StaffPageProps)
           </Box>
         ))}
       </Box>
-      {creating && <StaffDialog practitioners={practitioners} error={createError} onClose={() => setCreating(false)} onSave={(draft) => void create(draft)} />}
+      {creating && <StaffDialog practitioners={freePractitioners(practitioners, items)} error={createError} onClose={() => setCreating(false)} onSave={(draft) => void create(draft)} />}
       {resetting && <PasswordDialog requireCurrent={false} title={`Временный пароль: ${resetting.fullName}`} error={resetError} onClose={() => setResetting(null)} onSave={(input) => void reset(input.newPassword)} />}
     </>
   )

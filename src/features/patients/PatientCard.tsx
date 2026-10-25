@@ -25,6 +25,8 @@ type PatientCardProps = {
   revision: number
   /** Регистратура: источник, заметка, задачи, предупреждение о телефоне. Врачу не показывается. */
   registry?: ReactNode
+  /** Блок «Документы PDF»; кассиру не передаётся. */
+  files?: ReactNode
   onEdit: () => void
   onBack: () => void
   onCancel: (item: ScheduleItem) => void
@@ -76,6 +78,9 @@ export function PatientCard(props: PatientCardProps) {
         <Box className="panel">
           <Typography className="panel-label">АДМИНИСТРАТИВНЫЕ ДАННЫЕ</Typography>
           <Info label="Телефон" value={patient.phone} />
+          {patient.secondPhone && <Info label="Второй телефон" value={patient.secondPhone} />}
+          {patient.email && <Info label="E-mail" value={patient.email} />}
+          <Info label="Постоянный администратор" value={patient.assignedStaff ? `${patient.assignedStaff.fullName}${patient.assignedStaff.active ? '' : ' · учётная запись отключена'}` : 'не назначен'} />
           <Info label="Предпочтительный канал" value="SMS · нейтральный шаблон" />
           {props.registry}
           <Divider sx={{ mt: 2 }} />
@@ -99,6 +104,7 @@ export function PatientCard(props: PatientCardProps) {
         </Box>
         <ClinicalPanel {...props} />
       </Box>
+      {props.files}
       {consentDialog && <ConsentDialog error={consentError} onClose={() => setConsentDialog(false)} onSave={async (input) => {
         const error = await props.onGrantConsent(input)
         if (error) setConsentError(error)

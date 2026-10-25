@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-import { anna, enterDemo, goOffline, jsonResponse, renderApp, withAuth } from '../../test/helpers'
+import { anna, enterDemo, goOffline, jsonResponse, openSchedule, renderApp, withAuth } from '../../test/helpers'
 
 describe('week in the schedule', () => {
   it('shows seven days with the same appointments and actions; a day off takes no booking', async () => {
@@ -9,6 +9,7 @@ describe('week in the schedule', () => {
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user, 'ADMINISTRATOR')
+    await openSchedule(user)
     await user.click(screen.getByRole('button', { name: 'Неделя' }))
     expect(screen.getByText('Неделя 19.10 – 25.10')).toBeInTheDocument()
 
@@ -34,6 +35,7 @@ describe('week in the schedule', () => {
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user, 'ADMINISTRATOR')
+    await openSchedule(user)
     expect(screen.getAllByText('09:00–18:00').length).toBeGreaterThan(0)
     await user.click(screen.getByRole('button', { name: 'Следующий день' }))
     expect(screen.getByText('На этот день записей нет')).toBeInTheDocument()

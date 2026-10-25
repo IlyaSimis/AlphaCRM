@@ -39,6 +39,12 @@ class Patient {
   /** Заметка регистратуры: административная, в клинический контур не попадает. */
   String registryNote;
 
+  /**
+   * Постоянный администратор пациента: активный администратор этой клиники. Отключённый остаётся
+   * привязанным, пока карточку не поправят.
+   */
+  UUID assignedStaffId;
+
   @OneToMany(mappedBy = "patient", cascade = CascadeType.ALL, orphanRemoval = true)
   List<Contact> contacts = new ArrayList<>();
 
@@ -46,6 +52,9 @@ class Patient {
   List<Consent> consents = new ArrayList<>();
 
   static final String TELEGRAM = "TELEGRAM";
+  static final String PHONE = "PHONE";
+  static final String SECOND_PHONE = "SECOND_PHONE";
+  static final String EMAIL = "EMAIL";
 
   protected Patient() {}
 
@@ -57,30 +66,47 @@ class Patient {
   }
 
   /**
-   * Применяет новые ФИО, дату рождения и телефон. Возвращает имена изменённых полей — их, без
-   * значений, пишем в аудит.
+   * Применяет карточку целиком: ФИО, дату рождения, телефон, e-mail, второй телефон и постоянного
+   * администратора. Пустой необязательный контакт удаляется, а не хранится пустой строкой.
+   * Возвращает имена изменённых полей — их, без значений, пишем в аудит.
    */
-  List<String> update(String newFullName, LocalDate newBirthDate, String newPhone) {
+  List<String> update(PatientDetails details) {
     var changed = new ArrayList<String>();
-    var name = newFullName.trim();
+    var name = details.fullName().trim();
     if (!name.equals(fullName)) {
       fullName = name;
       changed.add("fullName");
     }
-    if (!newBirthDate.equals(birthDate)) {
-      birthDate = newBirthDate;
+    if (!details.birthDate().equals(birthDate)) {
+      birthDate = details.birthDate();
       changed.add("birthDate");
     }
-    var phone = newPhone.trim();
-    var current = contacts.stream().filter(c -> "PHONE".equals(c.type)).findFirst();
-    if (current.isEmpty()) {
-      contacts.add(new Contact(this, "PHONE", phone));
-      changed.add("phone");
-    } else if (!phone.equals(current.get().value)) {
-      current.get().value = phone;
-      changed.add("phone");
+    if (setContact(PHONE, details.phone())) changed.add("phone");
+    if (setContact(EMAIL, details.email())) changed.add("email");
+    if (setContact(SECOND_PHONE, details.secondPhone())) changed.add("secondPhone");
+    if (!java.util.Objects.equals(details.assignedStaffId(), assignedStaffId)) {
+      assignedStaffId = details.assignedStaffId();
+      changed.add("assignedStaff");
     }
     return changed;
+  }
+
+  /** Один контакт этого типа: новое значение, удаление пустым или «без изменений». */
+  private boolean setContact(String type, String newValue) {
+    var value = blankToNull(newValue);
+    var current = contacts.stream().filter(c -> type.equals(c.type)).findFirst();
+    if (value == null) {
+      if (current.isEmpty()) return false;
+      contacts.remove(current.get());
+      return true;
+    }
+    if (current.isEmpty()) {
+      contacts.add(new Contact(this, type, value));
+      return true;
+    }
+    if (value.equals(current.get().value)) return false;
+    current.get().value = value;
+    return true;
   }
 
   /** Новая действующая версия согласия. Прежние версии не удаляются. */
@@ -144,8 +170,20 @@ class Patient {
   }
 
   String phone() {
+    return contact(PHONE);
+  }
+
+  String secondPhone() {
+    return contact(SECOND_PHONE);
+  }
+
+  String email() {
+    return contact(EMAIL);
+  }
+
+  private String contact(String type) {
     return contacts.stream()
-        .filter(c -> "PHONE".equals(c.type))
+        .filter(c -> type.equals(c.type))
         .map(c -> c.value)
         .findFirst()
         .orElse(null);

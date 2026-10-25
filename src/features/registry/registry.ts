@@ -40,11 +40,16 @@ export function phoneKey(phone: string) {
   return digits.length === 11 && digits.startsWith('8') ? `7${digits.slice(1)}` : digits
 }
 
-/** Другие карточки с тем же телефоном. Для демо-режима и формы нового пациента. */
-export function phoneSharedWith(phone: string, patients: PatientItem[], selfId?: string) {
-  const key = phoneKey(phone)
-  if (!key) return []
-  return patients.filter((other) => other.id !== selfId && phoneKey(other.phone) === key).map((other) => ({ id: other.id, fullName: other.name }))
+/**
+ * Другие карточки, где совпадает основной или второй телефон — с любым из телефонов phone.
+ * Для демо-режима и формы пациента; на сервере то же считает PhoneIndex.
+ */
+export function phoneSharedWith(phone: string | Array<string | null | undefined>, patients: PatientItem[], selfId?: string) {
+  const keys = new Set((Array.isArray(phone) ? phone : [phone]).map((value) => phoneKey(value ?? '')).filter(Boolean))
+  if (keys.size === 0) return []
+  return patients
+    .filter((other) => other.id !== selfId && [other.phone, other.secondPhone].some((value) => keys.has(phoneKey(value ?? ''))))
+    .map((other) => ({ id: other.id, fullName: other.name }))
 }
 
 export function periodLabel(from: string, to: string) {

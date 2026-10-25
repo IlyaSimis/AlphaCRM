@@ -4,6 +4,7 @@ import { Alert, Box, Button, CircularProgress, MenuItem, TextField, Typography }
 import { loadSignedDocument, loadSignedDocuments } from '../../api/clinical'
 import type { Practitioner, SignedDocumentItem } from '../../api/types'
 import type { Role } from '../../shared/roles'
+import { SignedPdfList } from '../files/SignedPdfList'
 import { SignedDocumentDialog } from './SignedDocumentDialog'
 import { documentKind, preview, signedMoment } from './signedDocuments'
 
@@ -80,6 +81,7 @@ export function SignedDocuments({ role, apiOnline, practitioners }: SignedDocume
           ))}
         </Box>
       )}
+      <SignedPdfList role={role} apiOnline={apiOnline} />
       {open && <SignedDocumentDialog document={open} all={items} onOpen={(id) => void openDocument(id)} onClose={() => setOpen(null)} />}
     </>
   )

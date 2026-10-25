@@ -1,7 +1,7 @@
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-import { PETROV_ID } from '../../api/client'
+import { LEBEDEVA_ID, PETROV_ID } from '../../api/client'
 import type { StaffItem } from '../../api/types'
 import { anna, enterDemo, goOffline, jsonResponse, renderApp, signIn, testAccounts, withAuth } from '../../test/helpers'
 
@@ -66,6 +66,7 @@ describe('staff', () => {
     await user.type(screen.getByLabelText('Временный пароль'), 'temporary-1')
     await user.click(screen.getByRole('combobox', { name: 'Роль' }))
     await user.click(screen.getByRole('option', { name: 'Врач' }))
+    await user.click(screen.getByRole('button', { name: 'Уже есть в справочнике' }))
     await user.click(screen.getByRole('combobox', { name: 'Карточка врача' }))
     await user.click(screen.getByRole('option', { name: /Александр Петров/ }))
     await user.click(screen.getByRole('button', { name: 'Создать' }))
@@ -103,5 +104,65 @@ describe('staff', () => {
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Касса' })).toBeInTheDocument()
     await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/auth/password'))).toBe(true))
+  })
+
+  it('a new doctor card with room and shift goes in the same request; an empty schedule only warns', async () => {
+    let posted: Record<string, unknown> | null = null
+    let practitionerReads = 0
+    const fetchMock = withAuth((address, init) => {
+      const method = init?.method ?? 'GET'
+      if (address.endsWith('/staff') && method === 'POST') {
+        posted = JSON.parse(String(init?.body))
+        return jsonResponse({ id: '00000000-0000-0000-0000-0000000a0777', fullName: 'Врач Новый', username: 'new.doctor', role: 'DOCTOR', practitionerId: '00000000-0000-0000-0000-0000000a0777', active: true, mustChangePassword: true }, 201)
+      }
+      if (address.endsWith('/staff')) return jsonResponse([testAccounts().admin, testAccounts()['t.petrov']])
+      if (address.endsWith('/practitioners')) {
+        practitionerReads += 1
+        return jsonResponse([
+          { id: PETROV_ID, fullName: 'Александр Петров', specialty: 'Психиатр', room: '101', workingHours: [] },
+          { id: LEBEDEVA_ID, fullName: 'Ольга Лебедева', specialty: 'Психотерапевт', room: null, workingHours: [] },
+        ])
+      }
+      if (address.includes('/patients')) return jsonResponse([anna])
+      if (address.includes('/appointments')) return jsonResponse([])
+      return jsonResponse({}, 404)
+    }, 'admin')
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByText('API подключён')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Сотрудники' }))
+    // Кабинет виден в списке врачей; пустой кабинет — без подписи.
+    expect(await screen.findByText('t.petrov · Врач · Психиатр · кабинет 101')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Новый сотрудник' }))
+    await user.click(screen.getByRole('combobox', { name: 'Роль' }))
+    await user.click(screen.getByRole('option', { name: 'Врач' }))
+    // Уже привязанный Петров не предлагается; Лебедева свободна.
+    await user.click(screen.getByRole('button', { name: 'Уже есть в справочнике' }))
+    await user.click(screen.getByRole('combobox', { name: 'Карточка врача' }))
+    expect(screen.queryByRole('option', { name: /Александр Петров/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /Ольга Лебедева/ })).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    await user.click(screen.getByRole('button', { name: 'Новая карточка' }))
+
+    expect(screen.getByText(/Смен нет: карточка создастся/)).toBeInTheDocument()
+    await user.type(screen.getByLabelText('ФИО'), 'Врач Новый')
+    await user.type(screen.getByLabelText('Специальность'), 'Психотерапевт')
+    await user.type(screen.getByLabelText('Кабинет'), '204')
+    await user.click(screen.getByRole('checkbox', { name: 'Среда' }))
+    expect(screen.queryByText(/Смен нет: карточка создастся/)).not.toBeInTheDocument()
+    await user.type(screen.getByLabelText('Логин'), 'new.doctor')
+    await user.type(screen.getByLabelText('Временный пароль'), 'temporary-1')
+    const before = practitionerReads
+    await user.click(screen.getByRole('button', { name: 'Создать' }))
+
+    expect(await screen.findByText(/Он показан один раз/)).toBeInTheDocument()
+    expect(posted).toEqual({
+      fullName: 'Врач Новый', username: 'new.doctor', password: 'temporary-1', role: 'DOCTOR', practitionerId: null,
+      newPractitioner: { specialty: 'Психотерапевт', room: '204', shifts: [{ dayOfWeek: 3, startsAt: '09:00', endsAt: '18:00' }] },
+    })
+    // После создания справочник врачей перечитывается — новая карточка сразу видна в расписании.
+    await waitFor(() => expect(practitionerReads).toBeGreaterThan(before))
+    expect(fetchMock.mock.calls.filter(([url, init]) => String(url).endsWith('/practitioners') && init?.method === 'POST')).toHaveLength(0)
   })
 })

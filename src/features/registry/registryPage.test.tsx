@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-import { anna, enterDemo, goOffline, jsonResponse, renderApp, withAuth } from '../../test/helpers'
+import { anna, enterDemo, goOffline, jsonResponse, openSchedule, renderApp, withAuth } from '../../test/helpers'
 
 const PETROV = '00000000-0000-0000-0000-000000000201'
 const REPEAT = '00000000-0000-0000-0000-000000000602'
@@ -89,6 +89,7 @@ describe('registry', () => {
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user, 'ADMINISTRATOR')
+    await openSchedule(user)
     expect(screen.queryByRole('button', { name: /Лист ожидания на слот/ })).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Отменить запись 10:10 Дмитрий Волков' }))
     await user.click(await screen.findByRole('button', { name: 'Лист ожидания на слот 2026-10-20 10:10' }))
@@ -119,6 +120,7 @@ describe('registry', () => {
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
+    await openSchedule(user)
     await user.click(await screen.findByRole('button', { name: 'Лист ожидания на слот 2026-10-20 12:00' }))
     await user.click(screen.getByRole('button', { name: 'Записать Анна Михайлова на 12:00' }))
     await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/waitlist/801/book'))).toBe(true))

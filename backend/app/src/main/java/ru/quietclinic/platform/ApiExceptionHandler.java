@@ -5,6 +5,7 @@ import java.util.Map;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 @RestControllerAdvice
 class ApiExceptionHandler {
@@ -12,6 +13,14 @@ class ApiExceptionHandler {
   org.springframework.http.ResponseEntity<ApiError> domain(DomainException ex) {
     return org.springframework.http.ResponseEntity.status(ex.status)
         .body(new ApiError(Instant.now(), ex.status.value(), ex.code, ex.getMessage(), Map.of()));
+  }
+
+  /** Файл больше лимита multipart: тот же ответ, что и проверка размера в сервисе. */
+  @ExceptionHandler(MaxUploadSizeExceededException.class)
+  org.springframework.http.ResponseEntity<ApiError> tooLarge(MaxUploadSizeExceededException ex) {
+    return org.springframework.http.ResponseEntity.status(413)
+        .body(
+            new ApiError(Instant.now(), 413, "FILE_TOO_LARGE", "The file is too large", Map.of()));
   }
 
   @ExceptionHandler(MethodArgumentNotValidException.class)

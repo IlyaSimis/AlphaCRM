@@ -21,5 +21,8 @@ interface OutboxRepository extends JpaRepository<OutboxMessage, UUID> {
 
   List<OutboxMessage> findTop100ByClinicIdOrderByCreatedAtDesc(UUID clinicId);
 
+  List<OutboxMessage> findTop100ByClinicIdAndStatusOrderByCreatedAtDesc(
+      UUID clinicId, String status);
+
   List<OutboxMessage> findByAggregateIdOrderByCreatedAt(UUID aggregateId);
 }

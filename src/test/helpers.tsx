@@ -119,6 +119,11 @@ export async function enterDemo(user: User, role: StaffRole = 'DOCTOR') {
   await user.click(await screen.findByRole('button', { name: `Песочница: ${roleLabels[role]}` }))
 }
 
+/** Администратор, кассир и менеджер начинают со страницы «Сегодня»: перейти в расписание. */
+export async function openSchedule(user: User) {
+  await user.click(await screen.findByRole('button', { name: 'Расписание' }))
+}
+
 /** Вход через форму, как это делает сотрудник. */
 export async function signIn(user: User, username: string, password = username === 'admin' ? ADMIN_PASSWORD : STAFF_PASSWORD) {
   const field = await screen.findByLabelText('Логин')

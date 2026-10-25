@@ -1,4 +1,4 @@
-import { ArticleRounded, BadgeRounded, CalendarMonthRounded, ContactPhoneRounded, HealthAndSafetyRounded, HistoryRounded, InsightsRounded, MedicalServicesRounded, OutboxRounded, PaymentsRounded, PeopleAltRounded, ShieldOutlined, TuneRounded } from '@mui/icons-material'
+import { ArticleRounded, BadgeRounded, CalendarMonthRounded, ContactPhoneRounded, HealthAndSafetyRounded, HistoryRounded, InsightsRounded, MedicalServicesRounded, OutboxRounded, PaymentsRounded, PeopleAltRounded, ShieldOutlined, TodayRounded, TuneRounded } from '@mui/icons-material'
 import { Avatar, Box, Stack, Typography } from '@mui/material'
 import type { ReactNode } from 'react'
 import type { StaffItem } from '../api/types'
@@ -7,6 +7,7 @@ import { profileOf } from '../shared/roles'
 import { navigationFor, pageTitles, type Page } from './pages'
 
 const icons: Partial<Record<Page, ReactNode>> = {
+  today: <TodayRounded />,
   schedule: <CalendarMonthRounded />,
   patients: <PeopleAltRounded />,
   cashier: <PaymentsRounded />,

@@ -35,6 +35,31 @@ export type PatientItem = {
   phoneSharedWith?: Array<{ id: string; fullName: string }>
   /** Есть контакт Telegram (chat id). Сам chat id сервер на экран не отдаёт. */
   telegramConnected?: boolean
+  email?: string | null
+  /** Второй телефон — отдельный контакт, основной телефон — phone. */
+  secondPhone?: string | null
+  /** Постоянный администратор; active: false — учётная запись отключена, связь осталась. */
+  assignedStaff?: AssignedStaff | null
+}
+
+export type AssignedStaff = { id: string; fullName: string; active: boolean }
+
+/** PDF пациента. Байтов здесь нет: файл скачивается отдельным запросом. */
+export type PatientFileItem = {
+  id: string
+  patientId: string
+  patientName?: string | null
+  appointmentId?: string | null
+  originalName: string
+  sizeBytes: number
+  state: 'DRAFT' | 'SIGNED_LOCKED'
+  contentHash?: string | null
+  uploadedBy: string
+  uploadedByName?: string | null
+  uploadedAt: string
+  signedBy?: string | null
+  signedByName?: string | null
+  signedAt?: string | null
 }
 
 /** Поля регистратуры. telegramChatId: пусто — не менять; removeTelegram — отключить Telegram. */
@@ -126,6 +151,8 @@ export type Practitioner = {
   id: string
   fullName: string
   specialty: string
+  /** Кабинет — подпись на экране; нет — подписи нет. */
+  room?: string | null
   workingHours: Array<{ dayOfWeek: number; startsAt: string; endsAt: string }>
 }
 

@@ -1,7 +1,8 @@
 import { failure, apiFetch } from './client'
-import type { ConsentItem, PatientItem, RegistryInput } from './types'
+import type { AssignedStaff, ConsentItem, PatientItem, RegistryInput } from './types'
 
-export type PatientInput = { fullName: string; birthDate: string; phone: string }
+/** Карточка пациента целиком. Пустые email и secondPhone, assignedStaffId: null — поле убирается. */
+export type PatientInput = { fullName: string; birthDate: string; phone: string; email: string; secondPhone: string; assignedStaffId: string | null }
 
 /** Имена пациентов по id: API расписания возвращает только patientId. */
 const names: Record<string, string> = {
@@ -34,7 +35,7 @@ export async function createPatient(input: PatientInput): Promise<PatientItem> {
     method: 'POST',
     body: JSON.stringify({ ...input, consentVersion: 'v1.2', consentBasis: 'SIGNED_FORM' }),
   })
-  if (!response.ok) throw new Error('patient create failed')
+  if (!response.ok) throw await failure(response, 'Не удалось сохранить пациента')
   const patient = toPatient(await response.json())
   rememberPatient(patient.id, patient.name)
   return patient
@@ -66,6 +67,9 @@ export function toPatient(row: Record<string, unknown>): PatientItem {
     registryNote: (row.registryNote as string | null | undefined) ?? null,
     phoneSharedWith: (row.phoneSharedWith as PatientItem['phoneSharedWith']) ?? [],
     telegramConnected: row.telegramConnected === true,
+    email: (row.email as string | null | undefined) ?? null,
+    secondPhone: (row.secondPhone as string | null | undefined) ?? null,
+    assignedStaff: (row.assignedStaff as AssignedStaff | null | undefined) ?? null,
   }
 }
 
@@ -99,8 +103,19 @@ export async function revokeConsent(patientId: string, consentId: string): Promi
 }
 
 /** Пациент, созданный без сервера (демо-режим или сервер недоступен). */
-export function localPatient(id: string, input: PatientInput, consents: ConsentItem[] = [newConsent('v1.2', 'SIGNED_FORM')]): PatientItem {
-  return { id, name: input.fullName, birth: formatBirth(input.birthDate), birthDate: input.birthDate, phone: input.phone, consent: consentStatus(consents), consents }
+export function localPatient(id: string, input: PatientInput, consents: ConsentItem[] = [newConsent('v1.2', 'SIGNED_FORM')], assignedStaff: AssignedStaff | null = null): PatientItem {
+  return {
+    id, name: input.fullName, birth: formatBirth(input.birthDate), birthDate: input.birthDate, phone: input.phone, consent: consentStatus(consents), consents,
+    email: input.email.trim() || null, secondPhone: input.secondPhone.trim() || null, assignedStaff,
+  }
+}
+
+/** Простая проверка e-mail, как на сервере: что-то до @, домен с точкой, без пробелов. */
+export function emailProblem(value: string) {
+  const email = value.trim()
+  if (!email) return null
+  if (email.length > 255) return 'E-mail — не длиннее 255 символов'
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) ? null : 'Проверьте e-mail: например, name@example.ru'
 }
 
 export function newConsent(version: string, basis: string): ConsentItem {

@@ -76,6 +76,7 @@ flowchart TB
 
     scheduling -->|"CareRelationshipService"| clinical
     scheduling -->|"реализует порт VisitAppointments"| clinical
+    scheduling -->|"реализует порт PractitionerCards"| staff
     scheduling -->|"ChargeService"| billing
     scheduling -->|"OutboxService: запись создана, отменена"| communications
     billing -->|"OutboxService: оплата; реализует FiscalPort"| communications
@@ -88,17 +89,18 @@ flowchart TB
 |---|---|---|
 | `platform` | `DomainException` и `ApiExceptionHandler` (единый формат ошибок), `PlatformConfig` (`actorId()`, `clinicId()`, `requireRole`, фабрики ошибок), `EncryptionService`/`AesGcmEncryptionService`, `KmsPort`/`DevKmsAdapter`, `CorrelationIdFilter`, `ProductionReadinessCheck`, интерфейс `ClinicMember` | — |
 | `audit` | `AuditService.record(...)`, `GET /audit` | platform |
-| `staff` | клиники, учётные записи, вход/выход/смена пароля, `SecurityConfig`, CSRF, `ActiveStaffFilter`, `ClinicBootstrap` (первый администратор) | platform, audit |
-| `patients` | карточка, контакты, согласия, поля регистратуры, поиск дублей телефона | platform, audit |
-| `scheduling` | врачи и графики, справочник услуг (`ServiceCatalog`), записи и статусы, аналитика | platform, audit, clinical, billing, communications |
+| `staff` | клиники, учётные записи, вход/выход/смена пароля, `SecurityConfig`, CSRF, `ActiveStaffFilter`, `ClinicBootstrap` (первый администратор); порт `PractitionerCards` — новая карточка врача вместе с учётной записью | platform, audit |
+| `patients` | карточка, контакты (телефон, второй телефон, e-mail, Telegram), постоянный администратор, согласия, поля регистратуры, поиск дублей телефона | platform, audit |
+| `scheduling` | врачи (карточка, кабинет) и графики, справочник услуг (`ServiceCatalog`), записи и статусы, аналитика | platform, audit, clinical, billing, communications, staff |
 | `registry` | задачи регистратуры (свободный текст, пациент по желанию), лист ожидания | platform, audit |
-| `clinical` | приём (`Encounter`), заметка, документы и подпись, дополнения, архив подписанных, связь с лечением | platform, audit |
+| `clinical` | приём (`Encounter`), заметка, документы и подпись, дополнения, архив подписанных, связь с лечением, PDF пациента (`PatientFile`: шифрованное хранение, подпись, выгрузка) | platform, audit |
 | `billing` | счёт на завершённый приём, оплата с ключом идемпотентности, `PaymentGateway` (mock, `MOCK_NO_PROVIDER`), `CashboxFiscalAdapter` — реализация `FiscalPort` | platform, audit, communications |
 | `communications` | `OutboxService` (постановка по событию), `OutboxDispatcher` (доставка, повторы, переносы), `NotificationPort` → вебхук клиники, Telegram или mock, порт кассы `FiscalPort`, экран `GET /outbox` | platform, audit |
 
 Правила, на которых держатся границы:
 
 - **Клинический контур не зависит от расписания.** Данные записи и перевод её в `IN_PROGRESS` он получает через свой порт `clinical.VisitAppointments`; реализация — `scheduling.ClinicalAppointmentsAdapter`. `clinical` и `billing` не импортируют `scheduling`.
+- **«Сотрудники» не зависят от расписания.** Новую карточку врача `staff` создаёт через свой порт `staff.PractitionerCards` внутри транзакции создания сотрудника; реализация — `scheduling.StaffPractitionerCardsAdapter`.
 - **`staff` и `registry` не импортируют другие предметные модули.** Существование пациента, врача, сотрудника или услуги они проверяют запросом к таблице через `JdbcTemplate` (`select count(*) … where id = ? and clinic_id = ?`).
 - **Наружу — только через outbox.** Расписание сообщает о создании и отмене записи, касса — об оплате; что и куда отправить, решает `communications`. Запись, пациента, врача и клинику доставщик читает запросами к таблицам (`NoticeSource`) — без зависимости от их кода и без доступа к заметкам и документам. Регистратура и клинический контур наружу ничего не отправляют.
 

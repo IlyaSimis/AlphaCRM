@@ -8,17 +8,18 @@ type SettingsPageProps = {
   practitioners: Practitioner[]
   services: ServiceItem[]
   onSaveHours: (practitioner: Practitioner, shifts: Practitioner['workingHours']) => Promise<string | null>
+  onSaveCard: (practitioner: Practitioner, input: { specialty: string; room: string }) => Promise<string | null>
   onSavePrice: (service: ServiceItem, priceMinor: number) => Promise<string | null>
   onCreateService: (input: { name: string; durationMinutes: number; priceMinor: number }) => Promise<string | null>
   onToggleService: (service: ServiceItem) => Promise<string | null>
 }
 
 /** Только администратор: недельные смены врачей и справочник услуг. */
-export function SettingsPage({ practitioners, services, onSaveHours, onSavePrice, onCreateService, onToggleService }: SettingsPageProps) {
+export function SettingsPage({ practitioners, services, onSaveHours, onSaveCard, onSavePrice, onCreateService, onToggleService }: SettingsPageProps) {
   return (
     <>
       <Box className="section-intro">
-        <Box><Typography variant="h4" sx={{ fontWeight: 750 }}>График и цены</Typography><Typography sx={{ color: 'text.secondary' }}>Смены врачей по дням недели и справочник услуг.</Typography></Box>
+        <Box><Typography variant="h4" sx={{ fontWeight: 750 }}>График и цены</Typography><Typography sx={{ color: 'text.secondary' }}>Специальность, кабинет и смены врачей по дням недели; справочник услуг. Новый врач заводится в «Сотрудниках».</Typography></Box>
       </Box>
       <Box className="panel" sx={{ mb: 2 }}>
         <Typography className="panel-label">УСЛУГИ И ЦЕНЫ</Typography>
@@ -28,7 +29,7 @@ export function SettingsPage({ practitioners, services, onSaveHours, onSavePrice
         <ServiceForm services={services} onCreate={onCreateService} />
       </Box>
       <Box className="settings-grid">
-        {practitioners.map((practitioner) => <WorkingHoursForm key={practitioner.id} practitioner={practitioner} onSave={(shifts) => onSaveHours(practitioner, shifts)} />)}
+        {practitioners.map((practitioner) => <WorkingHoursForm key={practitioner.id} practitioner={practitioner} onSave={(shifts) => onSaveHours(practitioner, shifts)} onSaveCard={(input) => onSaveCard(practitioner, input)} />)}
       </Box>
     </>
   )

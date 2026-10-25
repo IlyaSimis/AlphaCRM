@@ -24,6 +24,10 @@ describe('registry', () => {
     const patients = [{ id: 'a', name: 'Анна', phone: '+7 916 245-18-72' }, { id: 'b', name: 'Борис', phone: '89162451872' }, { id: 'c', name: 'Вера', phone: '+7 903 000-00-00' }] as PatientItem[]
     expect(phoneSharedWith('+7 916 245-18-72', patients, 'a')).toEqual([{ id: 'b', fullName: 'Борис' }])
     expect(phoneSharedWith('—', patients)).toEqual([])
+    // Второй телефон сравнивается с обоими телефонами других карточек.
+    const withSecond = [...patients, { id: 'd', name: 'Галина', phone: '+7 900 000-00-00', secondPhone: '8 916 245 18 72' }] as PatientItem[]
+    expect(phoneSharedWith(['+7 999 000-00-00', '+7 916 245-18-72'], withSecond, 'a').map((item) => item.fullName)).toEqual(['Борис', 'Галина'])
+    expect(phoneSharedWith(['', null], withSecond)).toEqual([])
   })
 
   it('labels the patient referral source and waiting period', () => {

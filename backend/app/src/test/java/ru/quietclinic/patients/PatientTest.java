@@ -13,12 +13,17 @@ class PatientTest {
     return patient;
   }
 
+  private static PatientDetails details(String fullName, LocalDate birthDate, String phone) {
+    return new PatientDetails(fullName, birthDate, phone, null, null, null);
+  }
+
   @Test
   void reportsOnlyChangedFieldsAndTrimsInput() {
     var patient = patientWithPhone("+79160000000");
 
     var changed =
-        patient.update("  Anna Mikhailova-Orlova ", LocalDate.parse("1991-05-14"), "+79160000000");
+        patient.update(
+            details("  Anna Mikhailova-Orlova ", LocalDate.parse("1991-05-14"), "+79160000000"));
 
     assertThat(changed).containsExactly("fullName");
     assertThat(patient.fullName).isEqualTo("Anna Mikhailova-Orlova");
@@ -28,7 +33,8 @@ class PatientTest {
   void updatesExistingPhoneInPlace() {
     var patient = patientWithPhone("+79160000000");
 
-    var changed = patient.update("Anna Mikhailova", LocalDate.parse("1991-05-15"), "+79990000000");
+    var changed =
+        patient.update(details("Anna Mikhailova", LocalDate.parse("1991-05-15"), "+79990000000"));
 
     assertThat(changed).containsExactly("birthDate", "phone");
     assertThat(patient.contacts).hasSize(1);
@@ -39,7 +45,8 @@ class PatientTest {
   void addsPhoneWhenPatientHadNone() {
     var patient = new Patient("Dmitry Volkov", LocalDate.parse("1985-11-02"));
 
-    var changed = patient.update("Dmitry Volkov", LocalDate.parse("1985-11-02"), "+79030000000");
+    var changed =
+        patient.update(details("Dmitry Volkov", LocalDate.parse("1985-11-02"), "+79030000000"));
 
     assertThat(changed).containsExactly("phone");
     assertThat(patient.contacts).extracting(c -> c.type).containsExactly("PHONE");
@@ -49,8 +56,45 @@ class PatientTest {
   void noChangesGivesEmptyList() {
     var patient = patientWithPhone("+79160000000");
 
-    assertThat(patient.update("Anna Mikhailova", LocalDate.parse("1991-05-14"), "+79160000000"))
+    assertThat(
+            patient.update(
+                details("Anna Mikhailova", LocalDate.parse("1991-05-14"), "+79160000000")))
         .isEmpty();
+  }
+
+  @Test
+  void emailAndSecondPhoneAreSeparateContactsAndBlankRemovesThem() {
+    var patient = patientWithPhone("+79160000000");
+    var staff = java.util.UUID.randomUUID();
+
+    var changed =
+        patient.update(
+            new PatientDetails(
+                "Anna Mikhailova",
+                LocalDate.parse("1991-05-14"),
+                "+79160000000",
+                " anna@example.org ",
+                "+7 903 000-00-01",
+                staff));
+
+    assertThat(changed).containsExactly("email", "secondPhone", "assignedStaff");
+    assertThat(patient.email()).isEqualTo("anna@example.org");
+    assertThat(patient.secondPhone()).isEqualTo("+7 903 000-00-01");
+    // Второй телефон — отдельный контакт: основной телефон не меняется.
+    assertThat(patient.phone()).isEqualTo("+79160000000");
+    assertThat(patient.contacts)
+        .extracting(c -> c.type)
+        .containsExactlyInAnyOrder("PHONE", "EMAIL", "SECOND_PHONE");
+
+    var cleared =
+        patient.update(
+            new PatientDetails(
+                "Anna Mikhailova", LocalDate.parse("1991-05-14"), "+79160000000", " ", "", null));
+
+    assertThat(cleared).containsExactly("email", "secondPhone", "assignedStaff");
+    assertThat(patient.contacts).extracting(c -> c.type).containsExactly("PHONE");
+    assertThat(patient.contacts).extracting(c -> c.value).doesNotContain("");
+    assertThat(patient.assignedStaffId).isNull();
   }
 
   @Test

@@ -26,18 +26,21 @@ class StaffService {
   private final AuthService auth;
   private final JdbcTemplate jdbc;
   private final AuditService audit;
+  private final PractitionerCards practitionerCards;
 
   StaffService(
       StaffRepository staff,
       PasswordEncoder encoder,
       AuthService auth,
       JdbcTemplate jdbc,
-      AuditService audit) {
+      AuditService audit,
+      PractitionerCards practitionerCards) {
     this.staff = staff;
     this.encoder = encoder;
     this.auth = auth;
     this.jdbc = jdbc;
     this.audit = audit;
+    this.practitionerCards = practitionerCards;
   }
 
   @Transactional(readOnly = true)
@@ -58,8 +61,19 @@ class StaffService {
       throw conflict("USERNAME_TAKEN", "Username is already taken");
     }
     UUID id = UUID.randomUUID();
+    UUID practitionerId = null;
     if (StaffRoles.DOCTOR.equals(role)) {
-      var practitionerId = request.practitionerId();
+      var card = request.newPractitioner();
+      if (card != null && request.practitionerId() != null) {
+        throw conflict(
+            "PRACTITIONER_AMBIGUOUS", "Choose an existing practitioner or a new card, not both");
+      }
+      // Новая карточка создаётся в этой же транзакции: если ниже что-то не так, её не останется.
+      practitionerId =
+          card != null
+              ? practitionerCards.create(
+                  request.fullName().trim(), card.specialty().trim(), card.room(), card.shifts())
+              : request.practitionerId();
       if (practitionerId == null) {
         throw conflict("PRACTITIONER_REQUIRED", "A doctor account needs a practitioner");
       }
@@ -72,7 +86,7 @@ class StaffService {
       }
       // Как у существующих врачей: id учётной записи совпадает с id врача, если он свободен.
       if (!staff.existsById(practitionerId)) id = practitionerId;
-    } else if (request.practitionerId() != null) {
+    } else if (request.practitionerId() != null || request.newPractitioner() != null) {
       throw conflict("PRACTITIONER_NOT_ALLOWED", "Only a doctor account can have a practitioner");
     }
     var user =
@@ -84,7 +98,7 @@ class StaffService {
                 username,
                 encoder.encode(request.password()),
                 role,
-                StaffRoles.DOCTOR.equals(role) ? request.practitionerId() : null,
+                practitionerId,
                 true));
     audit.record(actorId(), "STAFF_CREATED", "STAFF", user.id, "ALLOWED", "role:" + role);
     return auth.view(user);

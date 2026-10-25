@@ -202,7 +202,8 @@ class OutboxDispatcher {
   private DeliveryResult send(Prepared prepared) {
     try {
       if (prepared.patientMessage() == null) {
-        return fiscal.sendReceipt(prepared.message().aggregateId, prepared.message().idempotencyKey)
+        return fiscal
+            .sendReceipt(prepared.message().aggregateId, prepared.message().idempotencyKey)
             .asDelivery();
       }
       return notifications.deliver(prepared.patientMessage());

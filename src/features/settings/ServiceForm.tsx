@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Box, Button, TextField } from '@mui/material'
+import { Box, Button, TextField, Typography } from '@mui/material'
 import type { ServiceItem } from '../../api/types'
 import { parseServiceDraft, type ServiceDraft } from './serviceDraft'
 
@@ -31,11 +31,12 @@ export function ServiceForm({ services, onCreate }: ServiceFormProps) {
   }
 
   return (
-    <Box className="shift-row" sx={{ flexWrap: 'wrap' }}>
-      <TextField size="small" label="Название услуги" value={draft.name} onChange={(event) => set({ name: event.target.value })} sx={{ minWidth: 220, flex: 1 }} />
-      <TextField size="small" label="Длительность, мин" value={draft.minutes} onChange={(event) => set({ minutes: event.target.value })} sx={{ width: 160 }} slotProps={{ htmlInput: { inputMode: 'numeric' } }} />
-      <TextField size="small" label="Цена новой услуги, ₽" value={draft.price} onChange={(event) => set({ price: event.target.value })} error={Boolean(error)} helperText={error || ' '} sx={{ width: 200 }} />
+    <Box className="service-form">
+      <TextField size="small" label="Название услуги" value={draft.name} onChange={(event) => set({ name: event.target.value })} />
+      <TextField size="small" label="Длительность, мин" value={draft.minutes} onChange={(event) => set({ minutes: event.target.value })} slotProps={{ htmlInput: { inputMode: 'numeric' } }} />
+      <TextField size="small" label="Цена новой услуги, ₽" value={draft.price} onChange={(event) => set({ price: event.target.value })} error={Boolean(error)} />
       <Button variant="contained" disabled={busy} onClick={() => void create()}>Добавить услугу</Button>
+      {error && <Typography className="service-error" role="alert" sx={{ color: 'error.main', fontSize: 13 }}>{error}</Typography>}
     </Box>
   )
 }

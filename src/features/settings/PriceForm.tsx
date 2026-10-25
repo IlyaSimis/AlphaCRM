@@ -27,11 +27,13 @@ export function PriceForm({ service, onSave, onToggle }: PriceFormProps) {
   const toggle = async () => setError((await onToggle()) ?? '')
 
   return (
-    <Box className="shift-row" sx={{ opacity: service.active ? 1 : 0.75 }}>
+    <Box className="service-row" sx={{ opacity: service.active ? 1 : 0.75 }}>
       <Box sx={{ minWidth: 200 }}><Typography sx={{ fontWeight: 650 }}>{service.name}</Typography><Typography sx={{ fontSize: 13, color: 'text.secondary' }}>{service.durationMinutes} мин · сейчас {formatMoney(service.priceMinor, service.currency)}</Typography>{!service.active && <Chip size="small" variant="outlined" label="Выключена: не предлагается в новой записи" sx={{ mt: 0.5 }} />}</Box>
-      <TextField size="small" label="Цена, ₽" value={value} error={Boolean(error)} helperText={error || ' '} onChange={(event) => setValue(event.target.value)} slotProps={{ htmlInput: { 'aria-label': `Цена ${service.name}, рублей` } }} />
+      <TextField size="small" label="Цена, ₽" value={value} error={Boolean(error)} onChange={(event) => setValue(event.target.value)} slotProps={{ htmlInput: { 'aria-label': `Цена ${service.name}, рублей` } }} />
       <Button variant="outlined" disabled={minor === service.priceMinor} onClick={() => void save()} aria-label={`Сохранить цену ${service.name}`}>Сохранить</Button>
       <Button color={service.active ? 'warning' : 'primary'} onClick={() => void toggle()} aria-label={`${service.active ? 'Выключить' : 'Включить'} услугу ${service.name}`}>{service.active ? 'Выключить' : 'Включить'}</Button>
+      {/* Ошибка — отдельной строкой под полями, чтобы кнопки не прыгали. */}
+      {error && <Typography className="service-error" role="alert" sx={{ color: 'error.main', fontSize: 13 }}>{error}</Typography>}
     </Box>
   )
 }

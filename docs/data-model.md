@@ -45,7 +45,11 @@ erDiagram
     practitioner ||--o| staff_user : "practitioner_id (только DOCTOR)"
     practitioner ||--o{ practitioner_schedule : "смены по дням недели"
 
-    patient ||--o{ patient_contact : "телефоны"
+    patient ||--o{ patient_contact : "телефоны, e-mail, Telegram"
+    staff_user |o--o{ patient : "assigned_staff_id (постоянный администратор)"
+    patient ||--o{ patient_file : "PDF"
+    appointment |o--o{ patient_file : "appointment_id (необязателен)"
+    staff_user ||--o{ patient_file : "uploaded_by, signed_by"
     patient ||--o{ patient_consent : "версии согласия"
 
     patient ||--o{ appointment : "patient_id"
@@ -132,6 +136,7 @@ erDiagram
 | `birth_date` | DATE | NN | |
 | `referral_source` | VARCHAR(40) | CHECK | откуда пришёл: `RECOMMENDATION`, `WEBSITE`, `INSURANCE`, `DOCTOR_REFERRAL`, `OTHER` или `NULL` |
 | `registry_note` | VARCHAR(1000) | | заметка регистратуры; в клинический контур и врачу не попадает |
+| `assigned_staff_id` | UUID | FK → `staff_user` | постоянный администратор. Новым назначается только активный `ADMINISTRATOR` своей клиники (приложение); отключённый остаётся привязанным, пока карточку не поправят |
 | `created_at` | TIMESTAMPTZ | NN | |
 
 #### `patient_contact`
@@ -140,8 +145,8 @@ erDiagram
 |---|---|---|---|
 | `id` | UUID | PK | |
 | `patient_id` | UUID | FK → `patient`, NN | |
-| `type` | VARCHAR(40) | NN | сейчас `PHONE` |
-| `contact_value` | VARCHAR(255) | NN | как ввели; сравнение дублей идёт по цифрам (`PhoneIndex`: `8…` = `+7…`), отдельной нормализованной колонки нет |
+| `type` | VARCHAR(40) | NN | `PHONE` (основной), `SECOND_PHONE`, `EMAIL`, `TELEGRAM`; каждого типа — не больше одного на пациента (приложение) |
+| `contact_value` | VARCHAR(255) | NN | как ввели, без пробелов по краям; пустое значение не хранится — контакт удаляется. Дубли телефонов ищутся по цифрам среди `PHONE` и `SECOND_PHONE` (`PhoneIndex`: `8…` = `+7…`), отдельной нормализованной колонки нет |
 
 #### `patient_consent` — версии согласия
 
@@ -166,6 +171,9 @@ erDiagram
 | `clinic_id` | UUID | FK → `clinic`, NN | |
 | `full_name` | VARCHAR(255) | NN | |
 | `specialty` | VARCHAR(120) | NN | |
+| `room` | VARCHAR(80) | | кабинет — подпись на экране, не ресурс: не уникален; пустая строка хранится как `NULL` |
+
+Карточку заводит администратор: в «Сотрудниках» вместе с учётной записью врача (одна транзакция — при ошибке учётной записи карточки не остаётся) или отдельно `POST /practitioners`.
 
 #### `practitioner_schedule` — недельный график
 
@@ -302,6 +310,26 @@ erDiagram
 
 Индекс `medical_document_signed_idx (state, signed_by, signed_at)` — архив подписанных документов. Архив читает текст из `snapshot_encrypted`, а не из текущей заметки.
 
+#### `patient_file` — PDF пациента
+
+| Колонка | Тип | | Смысл |
+|---|---|---|---|
+| `id` | UUID | PK | |
+| `clinic_id` | UUID | FK → `clinic`, NN | |
+| `patient_id` | UUID | FK → `patient`, NN | |
+| `appointment_id` | UUID | FK → `appointment` | необязательная привязка к записи этого пациента |
+| `original_name` | VARCHAR(255) | NN | имя файла без пути |
+| `size_bytes` | BIGINT | NN, CHECK | 1 байт – 10 МБ |
+| `ciphertext` | BYTEA | NN | **шифр** файла: длина версии ключа, версия ключа, nonce, шифртекст AES-GCM с тегом. Открытых байтов нет |
+| `state` | VARCHAR(40) | NN, CHECK | `DRAFT` → `SIGNED_LOCKED` |
+| `content_hash` | VARCHAR(64) | | SHA-256 открытых байтов, считается при подписи |
+| `uploaded_by` | UUID | FK → `staff_user`, NN | |
+| `uploaded_at` | TIMESTAMPTZ | NN | |
+| `signed_by` | UUID | FK → `staff_user` | |
+| `signed_at` | TIMESTAMPTZ | | |
+
+CHECK `patient_file_signed_complete`: у `SIGNED_LOCKED` заполнены хеш, подписант и время. Индексы `patient_file_patient_idx (clinic_id, patient_id, uploaded_at)` — блок карточки, `patient_file_signed_idx (clinic_id, state, signed_by)` — архив. Список файлов читается без столбца `ciphertext`. Удаления нет: замена — новый файл.
+
 ### billing — касса
 
 #### `charge` — счёт
@@ -380,6 +408,8 @@ erDiagram
 | У врача нет пересекающихся активных записей | приложение (`AppointmentService.checkSlot`) + PostgreSQL `appointment_no_overlap`: `EXCLUDE USING gist (practitioner_id WITH =, tstzrange(starts_at, ends_at, '[)') WITH &&) WHERE status IN ('BOOKED','CONFIRMED','ARRIVED','IN_PROGRESS','COMPLETED')`. Неявка и отмена слот освобождают |
 | Запись внутри смены врача | приложение (`WorkingHoursPolicy`) |
 | Подписанный документ не меняется | доменный класс `MedicalDocument` + PostgreSQL trigger `medical_document_immutable`: для `SIGNED_LOCKED` нельзя менять `snapshot_encrypted`, `content_hash`, `signed_by`, `signed_at` |
+| Подписанный PDF не меняется и не удаляется | сущность `PatientFile` отказывает при любом изменении подписанной строки + PostgreSQL trigger `patient_file_immutable`: для `SIGNED_LOCKED` нельзя менять состояние, байты, имя, размер, хеш, подписанта, время подписи и пациента; `DELETE` запрещён всегда |
+| Постоянный администратор — активный администратор своей клиники | приложение (`PatientService`) + FK на `staff_user` |
 | Один счёт на приём | уникальный индекс `charge_appointment_unique` |
 | Одна оплата на ключ идемпотентности | `payment_record.idempotency_key UNIQUE` |
 | Карточка врача — только у роли «Врач» и у одной учётной записи | CHECK `staff_user_practitioner_only_for_doctor` + `practitioner_id UNIQUE` |
@@ -388,21 +418,24 @@ erDiagram
 
 ## Шифрование
 
-Клинический текст (четыре поля заметки и снимок документа) хранится только в зашифрованном виде.
+Клинический текст (четыре поля заметки и снимок документа) и PDF пациента хранятся только в зашифрованном виде.
 
 - Алгоритм — AES-256-GCM, случайный 96-битный nonce на каждое значение, 128-битный тег (`AesGcmEncryptionService`).
 - Формат значения в колонке: `<версия ключа>.<base64url(nonce ‖ шифртекст)>`, например `dev-v1.AbC…`. Версия ключа позволит позже перешифровать данные новым ключом.
+- PDF (`patient_file.ciphertext`, BYTEA) — тот же ключ и та же схема nonce, но в байтах: `длина версии ключа (1 байт) ‖ версия ключа (UTF-8) ‖ nonce ‖ шифртекст с тегом`.
 - Ключ даёт порт `KmsPort`. Сейчас это `DevKmsAdapter`: SHA-256 от `CLINIC_DEV_KMS_KEY` (в Docker — `CLINIC_KMS_KEY` из `.env`). Для промышленной эксплуатации порт заменяется адаптером настоящего KMS без изменения таблиц.
 - **Потеря или смена ключа делает клинические тексты нечитаемыми.** Ключ хранится вместе с резервной копией базы, но отдельно от неё.
-- Не шифруются: ФИО, телефоны, даты рождения, расписание, суммы, заметка регистратуры, названия задач. Их защищают доступ по ролям, ограничение клиникой и то, что база слушает только localhost.
+- Не шифруются: ФИО, телефоны, e-mail, даты рождения, имя и размер PDF, расписание, суммы, заметка регистратуры, названия задач. Их защищают доступ по ролям, ограничение клиникой и то, что база слушает только localhost.
 
 ## Журнал аудита: что пишется и что нет
 
 Журнал отвечает на вопросы «кто, когда, что сделал или пытался сделать, над каким объектом». Он не хранит содержимое.
 
-Пишется: действие, объект, результат (`ALLOWED`/`DENIED`), короткий код основания. Примеры кодов: `search`, `card`, `fullName,phone` (имена изменённых полей), `BOOKED->CONFIRMED`, `2026-10-20T09:00Z>2026-10-22T10:30Z`, `days:1,4`, `role:CASHIER`, `with-patient` / `without-patient` (задача с пациентом или без), `self`.
+Пишется: действие, объект, результат (`ALLOWED`/`DENIED`), короткий код основания. Примеры кодов: `search`, `card`, `fullName,phone` и `email,secondPhone,assignedStaff` (имена изменённых полей), `fields:fullName,specialty,room,shifts` (карточка врача), `BOOKED->CONFIRMED`, `2026-10-20T09:00Z>2026-10-22T10:30Z`, `days:1,4`, `role:CASHIER`, `with-patient` / `without-patient` (задача с пациентом или без), `self`.
 
-Не пишется никогда: клинический текст, текст документа, значения полей пациента, телефоны, ФИО, текст задачи регистратуры, заметка регистратуры, пароли и хеши. Русскую подпись к коду выбирает интерфейс (`src/features/audit/auditLabels.ts`).
+`PDF_UPLOADED`, `PDF_SIGNED`, `PDF_READ` — объект `PATIENT_FILE` с id файла, без основания.
+
+Не пишется никогда: клинический текст, текст документа, имя и содержимое PDF, e-mail, значения полей пациента, телефоны, ФИО, текст задачи регистратуры, заметка регистратуры, пароли и хеши. Русскую подпись к коду выбирает интерфейс (`src/features/audit/auditLabels.ts`).
 
 ## Начальные данные
 
@@ -436,10 +469,14 @@ erDiagram
 | | 022 | основание связи с лечением — машинный код `appointment-booking` |
 | `008-outbox-delivery.sql` | 023 | доставка outbox: шаблон, клиника, ключ идемпотентности, время записи, попытки, канал, причина; старые строки получают шаблон и ключ `legacy:<id>` |
 | | 024 | индекс контактов по пациенту и типу (контакт `TELEGRAM`) |
+| `009-desk-and-files.sql` | 025 | `practitioner.room` — кабинет врача |
+| | 026 | `patient.assigned_staff_id` — постоянный администратор; e-mail и второй телефон — контакты `EMAIL`, `SECOND_PHONE` без новых колонок |
+| | 027 | `patient_file` — зашифрованные PDF пациента |
+| | 028 (PostgreSQL) | trigger `patient_file_immutable` |
 
 Как добавить изменение:
 
-1. Новый changeset в конце последнего файла или новый файл `008-….sql`, подключённый в `db.changelog-master.yaml`.
+1. Новый changeset в конце последнего файла или новый файл `010-….sql`, подключённый в `db.changelog-master.yaml`.
 2. Идентификаторы таблиц, колонок, индексов и ограничений — на английском, `snake_case`. Русский допустим только в значениях данных и в комментариях `--`.
 3. Если колонка становится `NOT NULL`, сначала добавьте её nullable, заполните `UPDATE`, затем `SET NOT NULL` — так миграция пройдёт на базе с данными.
 4. Разницу PostgreSQL/H2 оформляйте отдельными changeset-ами с `dbms:postgresql` / `dbms:h2`.
@@ -452,10 +489,11 @@ erDiagram
 |---|---|---|
 | Запрет пересечений записей | exclusion constraint + приложение | только приложение |
 | Неизменяемость подписанного документа | trigger + доменный класс | только доменный класс |
+| Неизменяемость подписанного PDF, запрет удаления | trigger `patient_file_immutable` + сущность | только сущность |
 | Уникальность названия услуги | внутри клиники | во всей базе (безымянное ограничение из 007 переносимо не удаляется) |
 | Связи с лечением для старых записей | changeset 011 | changeset 010 |
 
-Поэтому проверка пересечений на настоящей базе вынесена в `PostgresAppointmentIntegrationTest` (Testcontainers).
+Поэтому проверка пересечений на настоящей базе вынесена в `PostgresAppointmentIntegrationTest`, а неизменяемость подписанного PDF — в `PostgresPatientFileIntegrationTest` (Testcontainers).
 
 ## Резервные копии и перенос
 

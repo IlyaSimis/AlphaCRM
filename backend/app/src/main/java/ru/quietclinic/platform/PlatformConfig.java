@@ -50,6 +50,10 @@ public final class PlatformConfig {
     return DomainException.tooManyRequests(code, message);
   }
 
+  public static RuntimeException payloadTooLarge(String code, String message) {
+    return DomainException.payloadTooLarge(code, message);
+  }
+
   public static RuntimeException notFound(String code, String message) {
     return DomainException.notFound(code, message);
   }

@@ -1,7 +1,7 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { TEST_CSRF, anna, chooseRole, enterDemo, goOffline, jsonResponse, renderApp, signIn, withAuth } from '../../test/helpers'
+import { TEST_CSRF, anna, chooseRole, enterDemo, goOffline, jsonResponse, openSchedule, renderApp, signIn, withAuth } from '../../test/helpers'
 
 describe('schedule', () => {
   it('books an appointment from the schedule', async () => {
@@ -98,6 +98,7 @@ describe('schedule', () => {
     const user = userEvent.setup()
     const first = renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
+    await openSchedule(user)
     await user.click(screen.getByRole('button', { name: /новая запись/i }))
     fireEvent.change(screen.getByLabelText('Дата'), { target: { value: '2026-10-22' } })
     fireEvent.change(screen.getByLabelText('Время'), { target: { value: '15:05' } })
@@ -108,10 +109,12 @@ describe('schedule', () => {
     first.unmount()
 
     renderApp()
+    await openSchedule(user)
     expect(await screen.findByText('15:05')).toBeInTheDocument()
     expect(screen.getByLabelText('День расписания')).toHaveValue('2026-10-22')
     expect(screen.getByRole('button', { name: 'Отменить запись 15:05 Анна Михайлова' })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Сегодня' }))
+    // «Сегодня» есть и в меню, и в расписании — нажимаем кнопку расписания.
+    await user.click(within(document.querySelector('.content') as HTMLElement).getByRole('button', { name: 'Сегодня' }))
     const now = new Date()
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     expect(screen.getByLabelText('День расписания')).toHaveValue(today)
@@ -125,6 +128,7 @@ describe('schedule', () => {
     await enterDemo(user)
     expect(screen.queryByRole('button', { name: /отменить запись/i })).not.toBeInTheDocument()
     await chooseRole(user, 'ADMINISTRATOR')
+    await openSchedule(user)
     await user.click(screen.getByRole('button', { name: 'Отменить запись 10:10 Дмитрий Волков' }))
     expect(await screen.findByText('Демо-режим: отмена видна только до обновления страницы')).toBeInTheDocument()
     expect(screen.getByText('Отменена')).toBeInTheDocument()
@@ -139,6 +143,7 @@ describe('schedule', () => {
     await enterDemo(user)
     expect(screen.queryByRole('button', { name: 'Изменить статус 11:00 Мария Соколова' })).not.toBeInTheDocument()
     await chooseRole(user, 'ADMINISTRATOR')
+    await openSchedule(user)
     await user.click(screen.getByRole('button', { name: 'Изменить статус 11:00 Мария Соколова' }))
     await user.click(screen.getByRole('menuitem', { name: 'Отметить неявку' }))
     expect(await screen.findByText('Неявка')).toBeInTheDocument()
@@ -247,6 +252,7 @@ describe('schedule', () => {
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
+    await openSchedule(user)
     // «Сейчас» в тестах — 20.10.2026 06:00 UTC: 05:00 того же дня уже прошло.
     await user.click(screen.getByRole('button', { name: /новая запись/i }))
     fireEvent.change(screen.getByLabelText('Дата'), { target: { value: '2026-10-13' } })
@@ -266,6 +272,7 @@ describe('schedule', () => {
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
+    await openSchedule(user)
     await user.click(await screen.findByRole('button', { name: 'Перенести запись 10:10 Анна Михайлова' }))
     fireEvent.change(screen.getByLabelText('Новое время'), { target: { value: '11:00' } })
     await user.click(screen.getByRole('button', { name: 'Перенести' }))
@@ -278,6 +285,7 @@ describe('schedule', () => {
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user, 'ADMINISTRATOR')
+    await openSchedule(user)
     await user.click(screen.getByRole('button', { name: 'Перенести запись 11:00 Мария Соколова' }))
     fireEvent.change(screen.getByLabelText('Новое время'), { target: { value: '16:00' } })
     await user.click(screen.getByRole('button', { name: 'Перенести' }))

@@ -282,4 +282,174 @@ class PatientsControllerTest {
     mvc.perform(get("/api/v1/appointments").param("date", "2026-10-20").with(other))
         .andExpect(jsonPath("$").isEmpty());
   }
+
+  private String createPatient(String json) throws Exception {
+    var body =
+        mvc.perform(
+                post("/api/v1/patients")
+                    .with(staff.admin())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(json))
+            .andExpect(status().isCreated())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    return JsonPath.read(body, "$.id");
+  }
+
+  @Test
+  void emailSecondPhoneAndPermanentAdministratorAreStoredSeparately() throws Exception {
+    var adminId = staff.userId(StaffSessions.ADMIN);
+    var id =
+        createPatient(
+            """
+            {"fullName":"Contacts Test","birthDate":"1990-03-03","phone":"+70000000301",
+             "email":" contacts@example.org ","secondPhone":"8 (916) 245-18-72",
+             "assignedStaffId":"%s","consentVersion":"v1.2","consentBasis":"SIGNED_FORM"}
+            """
+                .formatted(adminId));
+    var card = "/api/v1/patients/" + id;
+    // Второй телефон совпадает с основным у Анны Михайловой: предупреждение видно с обеих сторон.
+    mvc.perform(get(card).with(staff.doctor(StaffSessions.PETROV)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.email").value("contacts@example.org"))
+        .andExpect(jsonPath("$.secondPhone").value("8 (916) 245-18-72"))
+        .andExpect(jsonPath("$.assignedStaff.id").value(adminId))
+        .andExpect(jsonPath("$.assignedStaff.active").value(true))
+        .andExpect(
+            jsonPath("$.phoneSharedWith[*].id")
+                .value(hasItem("00000000-0000-0000-0000-000000000101")));
+    mvc.perform(get("/api/v1/patients/00000000-0000-0000-0000-000000000101").with(staff.admin()))
+        .andExpect(jsonPath("$.phoneSharedWith[*].id").value(hasItem(id)));
+    org.assertj.core.api.Assertions.assertThat(
+            jdbc.queryForList(
+                "select type from patient_contact where patient_id = ?",
+                String.class,
+                java.util.UUID.fromString(id)))
+        .containsExactlyInAnyOrder("PHONE", "EMAIL", "SECOND_PHONE");
+
+    // Пустые необязательные поля убирают контакт, а не хранят пустую строку; в аудите — имена
+    // полей.
+    mvc.perform(
+            put(card)
+                .with(staff.admin())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"fullName":"Contacts Test","birthDate":"1990-03-03","phone":"+70000000301",
+                     "email":"","secondPhone":"  ","assignedStaffId":null}
+                    """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.email").doesNotExist())
+        .andExpect(jsonPath("$.secondPhone").doesNotExist())
+        .andExpect(jsonPath("$.assignedStaff").doesNotExist())
+        .andExpect(jsonPath("$.phoneSharedWith").isEmpty());
+    org.assertj.core.api.Assertions.assertThat(
+            jdbc.queryForList(
+                "select contact_value from patient_contact where patient_id = ?",
+                String.class,
+                java.util.UUID.fromString(id)))
+        .containsExactly("+70000000301");
+    org.assertj.core.api.Assertions.assertThat(
+            jdbc.queryForObject(
+                "select reason from audit_event where action = 'PATIENT_UPDATED'"
+                    + " and object_id = ? order by occurred_at desc limit 1",
+                String.class,
+                java.util.UUID.fromString(id)))
+        .isEqualTo("email,secondPhone,assignedStaff")
+        .doesNotContain("@")
+        .doesNotContain("916");
+  }
+
+  @Test
+  void permanentAdministratorMustBeAnActiveAdministratorOfTheClinic() throws Exception {
+    var body =
+        """
+        {"fullName":"Assignee Test","birthDate":"1990-04-04","phone":"+70000000302",
+         "assignedStaffId":"%s"}
+        """;
+    var id =
+        createPatient(
+            """
+            {"fullName":"Assignee Test","birthDate":"1990-04-04","phone":"+70000000302",
+             "consentVersion":"v1.2","consentBasis":"SIGNED_FORM"}
+            """);
+    var card = "/api/v1/patients/" + id;
+    var cashierId = staff.userId("t.cashier");
+    mvc.perform(
+            put(card)
+                .with(staff.admin())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body.formatted(cashierId)))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("INVALID_ASSIGNED_STAFF"));
+    SecondClinic.ensure(jdbc);
+    var foreignAdmin =
+        jdbc.queryForObject(
+            "select id from staff_user where username = ?",
+            java.util.UUID.class,
+            SecondClinic.ADMIN_USERNAME);
+    mvc.perform(
+            put(card)
+                .with(staff.admin())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body.formatted(foreignAdmin)))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("STAFF_NOT_FOUND"));
+    mvc.perform(
+            put(card)
+                .with(staff.admin())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"fullName":"Assignee Test","birthDate":"1990-04-04","phone":"+70000000302",
+                     "email":"not-an-email"}
+                    """))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.fields.email").exists());
+
+    // Отключённый администратор остаётся привязанным, но заново его выбрать нельзя.
+    staff.create("spare.admin", "Spare Administrator", "ADMINISTRATOR", "", "spare-admin-1");
+    var spare =
+        jdbc.queryForObject(
+                "select id from staff_user where username = 'spare.admin'", java.util.UUID.class)
+            .toString();
+    mvc.perform(
+            put(card)
+                .with(staff.admin())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body.formatted(spare)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.assignedStaff.fullName").value("Spare Administrator"));
+    mvc.perform(post("/api/v1/staff/" + spare + "/deactivate").with(staff.admin()))
+        .andExpect(status().isOk());
+    mvc.perform(get(card).with(staff.admin()))
+        .andExpect(jsonPath("$.assignedStaff.id").value(spare))
+        .andExpect(jsonPath("$.assignedStaff.active").value(false));
+    mvc.perform(
+            put(card)
+                .with(staff.admin())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body.formatted(spare)))
+        .andExpect(status().isOk());
+    var other =
+        createPatient(
+            """
+            {"fullName":"Assignee Other","birthDate":"1990-05-05","phone":"+70000000303",
+             "assignedStaffId":"%s","consentVersion":"v1.2","consentBasis":"SIGNED_FORM"}
+            """
+                .formatted(staff.userId(StaffSessions.ADMIN)));
+    mvc.perform(
+            put("/api/v1/patients/" + other)
+                .with(staff.admin())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"fullName":"Assignee Other","birthDate":"1990-05-05","phone":"+70000000303",
+                     "assignedStaffId":"%s"}
+                    """
+                        .formatted(spare)))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("INVALID_ASSIGNED_STAFF"));
+  }
 }

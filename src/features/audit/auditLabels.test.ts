@@ -21,6 +21,9 @@ describe('audit log reason column', () => {
     expect(reasonLabel('phone')).toBe('изменены: телефон')
     expect(reasonLabel('fullName,phone')).toBe('изменены: ФИО, телефон')
     expect(reasonLabel('fullName,birthDate,phone')).toBe('изменены: ФИО, дата рождения, телефон')
+    expect(reasonLabel('email,secondPhone,assignedStaff')).toBe('изменены: e-mail, второй телефон, постоянный администратор')
+    expect(reasonLabel('fields:fullName,specialty,room,shifts')).toBe('поля: ФИО, специальность, кабинет, график')
+    expect(reasonLabel('fields:specialty,room')).toBe('поля: специальность, кабинет')
   })
 
   it('shows status transitions with the same labels as the schedule', () => {

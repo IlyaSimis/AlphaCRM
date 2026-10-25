@@ -1,8 +1,8 @@
 package ru.quietclinic.communications;
 
 /**
- * Итог отправки чека в кассу: outcome — SENT, NOT_CONFIGURED, RETRY или REJECTED; reason —
- * машинный код.
+ * Итог отправки чека в кассу: outcome — SENT, NOT_CONFIGURED, RETRY или REJECTED; reason — машинный
+ * код.
  */
 public record FiscalResult(String outcome, String reason) {
   public static final String CHANNEL = "CASHBOX";

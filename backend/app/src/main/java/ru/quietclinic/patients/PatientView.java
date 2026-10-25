@@ -13,9 +13,13 @@ record PatientView(
     String referralSource,
     String registryNote,
     boolean telegramConnected,
-    List<PatientRef> phoneSharedWith) {
+    List<PatientRef> phoneSharedWith,
+    String email,
+    String secondPhone,
+    AssignedStaffView assignedStaff) {
 
-  static PatientView of(Patient patient, List<PatientRef> phoneSharedWith) {
+  static PatientView of(
+      Patient patient, List<PatientRef> phoneSharedWith, AssignedStaffView assignedStaff) {
     return new PatientView(
         patient.id,
         patient.fullName,
@@ -31,6 +35,9 @@ record PatientView(
         patient.referralSource,
         patient.registryNote,
         patient.telegramConnected(),
-        phoneSharedWith);
+        phoneSharedWith,
+        patient.email(),
+        patient.secondPhone(),
+        assignedStaff);
   }
 }
