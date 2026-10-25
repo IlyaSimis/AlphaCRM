@@ -51,11 +51,11 @@ export function Cashier({ role, apiOnline, practitioners, localAppointments, loc
   const sums = totals(rows)
   const doctorName = (id: string) => practitioners.find((doctor) => doctor.id === id)?.fullName ?? 'Врач'
 
-  const act = async (key: string, action: () => Promise<void>, message: string) => {
+  const act = async (key: string, action: () => Promise<void>, message: string | (() => string)) => {
     setBusy(key)
     try {
       await action()
-      notify(message)
+      notify(typeof message === 'function' ? message() : message)
       setRevision((value) => value + 1)
     } catch (reason) {
       setError((reason as Error).message)
@@ -85,7 +85,12 @@ export function Cashier({ role, apiOnline, practitioners, localAppointments, loc
       notify('Демо-режим: оплата видна до обновления страницы')
       return
     }
-    void act(chargeId, async () => { await payCharge(chargeId, `pay-${chargeId}`) }, 'Оплата принята')
+    // Платёжный шлюз не подключён (MOCK_NO_PROVIDER): оплата только отмечена — не выдаём её за настоящий платёж.
+    let message = 'Оплата принята'
+    void act(chargeId, async () => {
+      const view = await payCharge(chargeId, `pay-${chargeId}`)
+      if (view?.paymentStatus === 'MOCK_NO_PROVIDER') message = 'Оплата отмечена в кассе. Платёжный шлюз не подключён: деньги через систему не проводились, чек ждёт подключения кассы'
+    }, () => message)
   }
 
   return (

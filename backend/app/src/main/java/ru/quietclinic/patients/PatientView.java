@@ -12,6 +12,7 @@ record PatientView(
     List<ConsentView> consents,
     String referralSource,
     String registryNote,
+    boolean telegramConnected,
     List<PatientRef> phoneSharedWith) {
 
   static PatientView of(Patient patient, List<PatientRef> phoneSharedWith) {
@@ -19,12 +20,17 @@ record PatientView(
         patient.id,
         patient.fullName,
         patient.birthDate,
-        patient.contacts.stream().map(c -> new ContactView(c.type, c.value)).toList(),
+        // Chat id Telegram на экран не отдаётся: только признак, что контакт есть.
+        patient.contacts.stream()
+            .filter(c -> !Patient.TELEGRAM.equals(c.type))
+            .map(c -> new ContactView(c.type, c.value))
+            .toList(),
         patient.consents.stream()
             .map(c -> new ConsentView(c.id, c.version, c.basis, c.grantedAt, c.revokedAt))
             .toList(),
         patient.referralSource,
         patient.registryNote,
+        patient.telegramConnected(),
         phoneSharedWith);
   }
 }

@@ -7,7 +7,7 @@ describe('pages by role', () => {
   })
 
   it('the administrator sees everything, including hours, prices and staff', () => {
-    expect(navigationFor('ADMINISTRATOR')).toEqual(['schedule', 'patients', 'registry', 'cashier', 'analytics', 'audit', 'settings', 'staff'])
+    expect(navigationFor('ADMINISTRATOR')).toEqual(['schedule', 'patients', 'registry', 'cashier', 'analytics', 'audit', 'settings', 'staff', 'outbox'])
   })
 
   it('doctor and manager see neither cashier nor settings', () => {

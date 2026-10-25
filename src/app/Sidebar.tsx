@@ -1,4 +1,4 @@
-import { ArticleRounded, BadgeRounded, CalendarMonthRounded, ContactPhoneRounded, HealthAndSafetyRounded, HistoryRounded, InsightsRounded, MedicalServicesRounded, PaymentsRounded, PeopleAltRounded, ShieldOutlined, TuneRounded } from '@mui/icons-material'
+import { ArticleRounded, BadgeRounded, CalendarMonthRounded, ContactPhoneRounded, HealthAndSafetyRounded, HistoryRounded, InsightsRounded, MedicalServicesRounded, OutboxRounded, PaymentsRounded, PeopleAltRounded, ShieldOutlined, TuneRounded } from '@mui/icons-material'
 import { Avatar, Box, Stack, Typography } from '@mui/material'
 import type { ReactNode } from 'react'
 import type { StaffItem } from '../api/types'
@@ -16,6 +16,7 @@ const icons: Partial<Record<Page, ReactNode>> = {
   settings: <TuneRounded />,
   staff: <BadgeRounded />,
   documents: <ArticleRounded />,
+  outbox: <OutboxRounded />,
 }
 
 function NavItem({ active, icon, label, onClick }: { active: boolean; icon: ReactNode; label: string; onClick: () => void }) {

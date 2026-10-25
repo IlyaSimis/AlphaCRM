@@ -42,6 +42,13 @@ services:
       CLINIC_ADMIN_NAME: ${CLINIC_ADMIN_NAME:-Администратор}
       CLINIC_ADMIN_PASSWORD: ${CLINIC_ADMIN_PASSWORD:?Задайте CLINIC_ADMIN_PASSWORD в .env (scripts/init-env.sh)}
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      # Внешние выводы: секреты только из .env. Пусто — канал выключен, сообщения ждут в outbox.
+      CLINIC_OUTBOUND_WEBHOOK_URL: ${CLINIC_OUTBOUND_WEBHOOK_URL:-}
+      CLINIC_OUTBOUND_WEBHOOK_SECRET: ${CLINIC_OUTBOUND_WEBHOOK_SECRET:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      CLINIC_CASHBOX_URL: ${CLINIC_CASHBOX_URL:-}
+      CLINIC_CASHBOX_SECRET: ${CLINIC_CASHBOX_SECRET:-}
+      CLINIC_TIME_ZONE: ${CLINIC_TIME_ZONE:-UTC}
     depends_on:
       postgres:
         condition: service_healthy

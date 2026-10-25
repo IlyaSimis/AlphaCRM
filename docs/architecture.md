@@ -70,15 +70,16 @@ flowchart TB
     registry["registry<br/>задачи, лист ожидания"]
     patients["patients<br/>пациенты, контакты, согласия"]
     staff["staff<br/>клиники, вход, сотрудники, безопасность"]
-    communications["communications<br/>outbox, NotificationPort"]
+    communications["communications<br/>outbox и доставщик, NotificationPort, FiscalPort"]
     audit["audit<br/>журнал"]
     platform["platform<br/>ошибки, шифрование, KMS, clinicId()"]
 
     scheduling -->|"CareRelationshipService"| clinical
     scheduling -->|"реализует порт VisitAppointments"| clinical
     scheduling -->|"ChargeService"| billing
-    scheduling -->|"OutboxService"| communications
-    billing --> communications
+    scheduling -->|"OutboxService: запись создана, отменена"| communications
+    billing -->|"OutboxService: оплата; реализует FiscalPort"| communications
+    communications --> audit
     scheduling & clinical & billing & registry & patients & staff --> audit
     scheduling & clinical & billing & registry & patients & staff & audit --> platform
 ```
@@ -92,14 +93,14 @@ flowchart TB
 | `scheduling` | врачи и графики, справочник услуг (`ServiceCatalog`), записи и статусы, аналитика | platform, audit, clinical, billing, communications |
 | `registry` | задачи регистратуры (свободный текст, пациент по желанию), лист ожидания | platform, audit |
 | `clinical` | приём (`Encounter`), заметка, документы и подпись, дополнения, архив подписанных, связь с лечением | platform, audit |
-| `billing` | счёт на завершённый приём, оплата с ключом идемпотентности, `PaymentGateway` (mock) | platform, audit, communications |
-| `communications` | `OutboxService.enqueue`, `NotificationPort` (mock) | — |
+| `billing` | счёт на завершённый приём, оплата с ключом идемпотентности, `PaymentGateway` (mock, `MOCK_NO_PROVIDER`), `CashboxFiscalAdapter` — реализация `FiscalPort` | platform, audit, communications |
+| `communications` | `OutboxService` (постановка по событию), `OutboxDispatcher` (доставка, повторы, переносы), `NotificationPort` → вебхук клиники, Telegram или mock, порт кассы `FiscalPort`, экран `GET /outbox` | platform, audit |
 
 Правила, на которых держатся границы:
 
 - **Клинический контур не зависит от расписания.** Данные записи и перевод её в `IN_PROGRESS` он получает через свой порт `clinical.VisitAppointments`; реализация — `scheduling.ClinicalAppointmentsAdapter`. `clinical` и `billing` не импортируют `scheduling`.
 - **`staff` и `registry` не импортируют другие предметные модули.** Существование пациента, врача, сотрудника или услуги они проверяют запросом к таблице через `JdbcTemplate` (`select count(*) … where id = ? and clinic_id = ?`).
-- **Outbox трогает только расписание** (подтверждение записи). Регистратура, касса и клинический контур пациенту ничего не отправляют.
+- **Наружу — только через outbox.** Расписание сообщает о создании и отмене записи, касса — об оплате; что и куда отправить, решает `communications`. Запись, пациента, врача и клинику доставщик читает запросами к таблицам (`NoticeSource`) — без зависимости от их кода и без доступа к заметкам и документам. Регистратура и клинический контур наружу ничего не отправляют.
 
 ### Слои внутри модуля
 

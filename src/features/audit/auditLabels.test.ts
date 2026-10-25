@@ -52,6 +52,13 @@ describe('audit log reason column', () => {
     expect(reasonLabel('list')).toBe('из списка')
   })
 
+  it('labels outbox deliveries without text or address', () => {
+    expect(actionLabels.NOTIFICATION_DELIVERED).toBe('Сообщение пациенту доставлено')
+    expect(reasonLabel('appointment-reminder:telegram')).toBe('Напоминание за сутки · Telegram')
+    expect(reasonLabel('receipt:cashbox')).toBe('Чек · Онлайн-касса')
+    expect(reasonLabel('telegram')).toBe('изменены: Telegram')
+  })
+
   it('shows an unknown code as is', () => {
     expect(reasonLabel('something-new')).toBe('something-new')
     expect(reasonLabel('phone,email')).toBe('phone,email')

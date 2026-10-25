@@ -180,6 +180,47 @@ class PatientsControllerTest {
   }
 
   @Test
+  void administratorConnectsTelegramChatIdThatIsNeverShown() throws Exception {
+    var id = createPatient("Telegram Test", "+79990000071");
+    var registry = "/api/v1/patients/" + id + "/registry";
+    mvc.perform(
+            put(registry)
+                .with(staff.admin())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"telegramChatId\":\"not-a-chat\"}"))
+        .andExpect(status().isBadRequest());
+    mvc.perform(
+            put(registry)
+                .with(staff.admin())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"telegramChatId\":\" 987654321 \"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.telegramConnected").value(true))
+        .andExpect(content().string(not(containsString("987654321"))));
+    var stored =
+        jdbc.queryForObject(
+            "select contact_value from patient_contact where patient_id = ? and type = 'TELEGRAM'",
+            String.class,
+            java.util.UUID.fromString(id));
+    org.assertj.core.api.Assertions.assertThat(stored).isEqualTo("987654321");
+    mvc.perform(get("/api/v1/patients/" + id).with(staff.doctor(StaffSessions.PETROV)))
+        .andExpect(content().string(not(containsString("987654321"))));
+
+    mvc.perform(
+            put(registry)
+                .with(staff.admin())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"removeTelegram\":true}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.telegramConnected").value(false));
+    mvc.perform(get("/api/v1/audit").with(staff.role("MANAGER")))
+        .andExpect(
+            jsonPath("$[?(@.action == 'PATIENT_REGISTRY_UPDATED')].reason")
+                .value(hasItem("telegram")))
+        .andExpect(content().string(not(containsString("987654321"))));
+  }
+
+  @Test
   void warnsWhenPhoneBelongsToAnotherCard() throws Exception {
     var first = createPatient("Phone First", "+7 912 555-44-33");
     var second = createPatient("Phone Second", "89125554433");

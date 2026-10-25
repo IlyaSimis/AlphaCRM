@@ -83,8 +83,8 @@ public class BillingController {
     payment.createdAt = Instant.now();
     payments.save(payment);
     charge.status = "PAID";
-    outbox.enqueue(
-        "FISCALIZATION", "PAYMENT", payment.id, "{\"operation\":\"receipt\",\"safe\":true}");
+    // Чек уходит доставщиком outbox через порт кассы; пока касса не подключена — QUEUED.
+    outbox.fiscalReceipt(payment.id, charge.appointmentId);
     audit.record(actorId(), "PAYMENT_CONFIRMED", "PAYMENT", payment.id, "ALLOWED", "billing");
     return view(charge, payment);
   }

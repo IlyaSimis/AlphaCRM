@@ -33,7 +33,12 @@ export type PatientItem = {
   registryNote?: string | null
   /** Другие карточки с тем же телефоном. */
   phoneSharedWith?: Array<{ id: string; fullName: string }>
+  /** Есть контакт Telegram (chat id). Сам chat id сервер на экран не отдаёт. */
+  telegramConnected?: boolean
 }
+
+/** Поля регистратуры. telegramChatId: пусто — не менять; removeTelegram — отключить Telegram. */
+export type RegistryInput = { referralSource: string | null; registryNote: string | null; telegramChatId?: string | null; removeTelegram?: boolean }
 
 /** Состояние согласия пациента; надпись на экране — consentLabels. */
 export type ConsentState = 'ACTIVE' | 'NEEDS_UPDATE'
@@ -136,4 +141,25 @@ export type AuditItem = {
   result: string
   reason: string | null
   correlationId: string | null
+}
+
+/**
+ * Внешний вывод из outbox: шаблон, запись или платёж, канал, статус и время. Текста сообщения и
+ * контакта в ответе нет.
+ */
+export type OutboxItem = {
+  id: string
+  topic: 'NOTIFICATION' | 'FISCALIZATION' | string
+  template: string
+  aggregateType: 'APPOINTMENT' | 'PAYMENT' | string
+  aggregateId: string
+  appointmentStartsAt: string | null
+  channel: string | null
+  status: 'PENDING' | 'SENDING' | 'SENT' | 'FAILED' | 'CANCELLED' | 'SKIPPED' | string
+  reason: string | null
+  attempts: number
+  createdAt: string
+  lastAttemptAt: string | null
+  nextAttemptAt: string | null
+  sentAt: string | null
 }

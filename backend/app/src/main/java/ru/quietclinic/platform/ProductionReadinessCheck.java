@@ -17,7 +17,11 @@ class ProductionReadinessCheck {
 
   ProductionReadinessCheck(
       @Value("${clinic.dev-kms-key:}") String kmsKey,
-      @Value("${clinic.admin-password:}") String adminPassword) {
+      @Value("${clinic.admin-password:}") String adminPassword,
+      @Value("${clinic.outbound.webhook-url:}") String webhookUrl,
+      @Value("${clinic.outbound.webhook-secret:}") String webhookSecret,
+      @Value("${clinic.cashbox.url:}") String cashboxUrl,
+      @Value("${clinic.cashbox.secret:}") String cashboxSecret) {
     if (kmsKey.isBlank()
         || kmsKey.length() < MIN_KEY_LENGTH
         || kmsKey.contains("change-me")
@@ -29,6 +33,24 @@ class ProductionReadinessCheck {
     }
     var problem = adminPasswordProblem(adminPassword);
     if (problem != null) throw new IllegalStateException(problem);
+    problem = signingSecretProblem("CLINIC_OUTBOUND_WEBHOOK", webhookUrl, webhookSecret);
+    if (problem != null) throw new IllegalStateException(problem);
+    problem = signingSecretProblem("CLINIC_CASHBOX", cashboxUrl, cashboxSecret);
+    if (problem != null) throw new IllegalStateException(problem);
+  }
+
+  /** Адрес наружу задан — нужен и секрет подписи HMAC, не короче 32 символов. */
+  static String signingSecretProblem(String prefix, String url, String secret) {
+    if (url == null || url.isBlank()) return null;
+    if (secret == null || secret.length() < MIN_KEY_LENGTH) {
+      return prefix
+          + "_URL is set: "
+          + prefix
+          + "_SECRET must be at least "
+          + MIN_KEY_LENGTH
+          + " characters long";
+    }
+    return null;
   }
 
   /** null — пароль годится для prod; иначе — почему приложение не стартует. Пароль не выводится. */

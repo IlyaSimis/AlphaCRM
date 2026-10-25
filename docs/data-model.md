@@ -2,7 +2,7 @@
 
 Документ описывает, где и как AlphaCRM хранит данные: таблицы, связи, ограничения, что шифруется, что попадает в журнал аудита и как схема меняется. Общая схема проекта — в [architecture.md](architecture.md).
 
-Источник истины — миграции Liquibase в `backend/app/src/main/resources/db/changelog/` (`db.changelog-master.yaml` → `001-core.sql` … `007-services-tasks.sql`). JPA работает с `ddl-auto: validate`: Hibernate только сверяет сущности со схемой и ничего не создаёт сам. Если таблица в этом документе расходится с миграциями, правы миграции.
+Источник истины — миграции Liquibase в `backend/app/src/main/resources/db/changelog/` (`db.changelog-master.yaml` → `001-core.sql` … `008-outbox-delivery.sql`). JPA работает с `ddl-auto: validate`: Hibernate только сверяет сущности со схемой и ничего не создаёт сам. Если таблица в этом документе расходится с миграциями, правы миграции.
 
 ## Содержание
 
@@ -324,7 +324,7 @@ erDiagram
 | `charge_id` | UUID | FK → `charge`, NN | |
 | `provider_ref` | VARCHAR(255) | NN | ссылка платёжного адаптера (сейчас — безопасный mock) |
 | `payment_status` | VARCHAR(40) | NN | ответ адаптера |
-| `fiscal_status` | VARCHAR(40) | NN | `QUEUED` — фискализация не выполняется, только помечается |
+| `fiscal_status` | VARCHAR(40) | NN | `QUEUED` — чек ждёт онлайн-кассу; `SENT_TO_CASHBOX` — передан в кассу (`CLINIC_CASHBOX_URL`). Сама CRM чек не печатает |
 | `created_at` | TIMESTAMPTZ | NN | |
 
 ### communications — outbox
@@ -334,14 +334,28 @@ erDiagram
 | Колонка | Тип | | Смысл |
 |---|---|---|---|
 | `id` | UUID | PK | |
-| `topic` | VARCHAR(80) | NN | например `NOTIFICATION` |
-| `aggregate_type` | VARCHAR(80) | NN | например `APPOINTMENT` |
-| `aggregate_id` | UUID | NN | логическая ссылка |
-| `payload` | VARCHAR(4000) | NN | нейтральный JSON без персональных и клинических данных (`{"template":"appointment-confirmed","neutral":true}`) |
-| `status` | VARCHAR(40) | NN | |
+| `topic` | VARCHAR(80) | NN | `NOTIFICATION` (пациенту) или `FISCALIZATION` (чек) |
+| `aggregate_type` | VARCHAR(80) | NN | `APPOINTMENT` или `PAYMENT` |
+| `aggregate_id` | UUID | NN | логическая ссылка на запись или платёж |
+| `clinic_id` | UUID | FK → `clinic`, NN | для экрана «Внешние выводы» своей клиники |
+| `template` | VARCHAR(60) | NN | `appointment-confirmed`, `appointment-reminder`, `appointment-cancelled`, `receipt` (`unknown` — строки до миграции 023 без шаблона) |
+| `idempotency_key` | VARCHAR(160) | NN, U | `шаблон:id записи:время записи` или `receipt:id платежа`. Один ключ — одно сообщение получателю; уходит с каждой попыткой |
+| `appointment_starts_at` | TIMESTAMPTZ | | время записи, о котором сообщение; после переноса старое не отправляется |
+| `payload` | VARCHAR(4000) | NN | только шаблон, id и время записи: `{"template":"appointment-reminder","appointmentId":"…","startsAt":"…"}` |
+| `status` | VARCHAR(40) | NN, CHECK | `PENDING`, `SENDING`, `SENT`, `FAILED`, `CANCELLED`, `SKIPPED` |
+| `next_attempt_at` | TIMESTAMPTZ | | не раньше: напоминание — за 24 часа до приёма, повтор — после паузы; `NULL` — больше не пробовать |
+| `last_attempt_at`, `sent_at` | TIMESTAMPTZ | | последняя попытка и доставка |
+| `attempts` | INTEGER | NN | неудачные попытки (до 5) |
+| `channel` | VARCHAR(40) | | `WEBHOOK`, `TELEGRAM`, `CASHBOX`, `MOCK` |
+| `last_error` | VARCHAR(80) | | машинный код причины: `CHANNEL_NOT_CONFIGURED`, `NO_TELEGRAM_CONTACT`, `NO_CONSENT`, `RESCHEDULED`, `APPOINTMENT_CANCELLED`, `NO_SHOW`, `EXPIRED`, `HTTP_503`, `NETWORK_ERROR`, `FISCAL_NOT_CONFIGURED`… |
+| `version` | BIGINT | NN | оптимистичная блокировка: два доставщика не возьмут одну строку |
 | `created_at` | TIMESTAMPTZ | NN | |
 
-Пишется в той же транзакции, что и изменение записи. Реальной отправки нет: `NotificationPort` закрыт mock-адаптером.
+Индексы: `outbox_message_due_idx (status, next_attempt_at)` — очередь доставщика; `outbox_message_clinic_idx (clinic_id, created_at)` — экран; `outbox_message_aggregate_idx (aggregate_id)`.
+
+Строка пишется в той же транзакции, что и событие (запись, отмена, оплата). **Текста сообщения, ФИО, телефона, chat id, жалоб, диагноза, заметки и снимка документа в строке нет** — текст собирается из записи в момент доставки и в базу не сохраняется. Как работает доставка и что уходит наружу — README, раздел «Внешние выводы».
+
+Контакт Telegram пациента — строка `patient_contact` с `type = 'TELEGRAM'` и chat id в `contact_value`; один на пациента, вводит администратор. API отдаёт только признак `telegramConnected`.
 
 ### audit — журнал
 
@@ -420,6 +434,8 @@ erDiagram
 | | 020 (PostgreSQL) | уникальность названия услуги внутри клиники вместо глобальной |
 | | 021 | задача регистратуры: `title` вместо `kind`, `clinic_id`, необязательный `patient_id`; старые виды стали названиями |
 | | 022 | основание связи с лечением — машинный код `appointment-booking` |
+| `008-outbox-delivery.sql` | 023 | доставка outbox: шаблон, клиника, ключ идемпотентности, время записи, попытки, канал, причина; старые строки получают шаблон и ключ `legacy:<id>` |
+| | 024 | индекс контактов по пациенту и типу (контакт `TELEGRAM`) |
 
 Как добавить изменение:
 

@@ -8,6 +8,7 @@ import { AuditLog } from '../features/audit/AuditLog'
 import { PasswordDialog } from '../features/auth/PasswordDialog'
 import { Cashier } from '../features/cashier/Cashier'
 import { SignedDocuments } from '../features/documents/SignedDocuments'
+import { OutboxPage } from '../features/outbox/OutboxPage'
 import { PatientCard } from '../features/patients/PatientCard'
 import { PatientDialog } from '../features/patients/PatientDialog'
 import { PatientsList } from '../features/patients/PatientsList'
@@ -158,7 +159,7 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
 
   const eyebrow = page === 'visit'
     ? 'КЛИНИЧЕСКИЙ КОНТУР · ДОСТУП ПО СВЯЗИ С ЛЕЧЕНИЕМ'
-    : page === 'documents' ? 'КЛИНИЧЕСКИЙ АРХИВ · ТОЛЬКО ЧТЕНИЕ' : page === 'analytics' || page === 'audit' || page === 'cashier' || page === 'settings' || page === 'staff'
+    : page === 'documents' ? 'КЛИНИЧЕСКИЙ АРХИВ · ТОЛЬКО ЧТЕНИЕ' : page === 'analytics' || page === 'audit' || page === 'cashier' || page === 'settings' || page === 'staff' || page === 'outbox'
       ? 'УПРАВЛЕНИЕ КЛИНИКОЙ'
       : page === 'registry' ? 'АДМИНИСТРАТИВНЫЙ КОНТУР' : formatDay(scheduleDate).toLocaleUpperCase('ru-RU')
 
@@ -180,6 +181,7 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
           {page === 'audit' && <AuditLog apiOnline={clinic.apiOnline} />}
           {page === 'cashier' && <Cashier role={role} apiOnline={clinic.apiOnline} practitioners={practitioners} localAppointments={scheduleItems} localCharges={clinic.localCharges} onLocalCharge={clinic.addLocalCharge} onLocalPay={clinic.payLocalCharge} notify={clinic.notify} />}
           {page === 'settings' && <SettingsPage practitioners={practitioners} services={clinic.services} onSaveHours={clinic.saveHours} onSavePrice={clinic.savePrice} onCreateService={clinic.addService} onToggleService={clinic.toggleService} />}
+          {page === 'outbox' && <OutboxPage apiOnline={clinic.apiOnline} />}
           {page === 'staff' && <StaffPage self={staff} live={live} practitioners={practitioners} notify={clinic.notify} />}
           {page === 'visit' && visit && <Visit key={visitKey} target={visit} doctorName={doctorName} apiOnline={clinic.apiOnline} notify={clinic.notify} appointmentStatus={visitAppointment?.statusCode} onStarted={() => { if (visitAppointment) void clinic.visitStarted(visitAppointment) }} onComplete={() => { if (visitAppointment) void clinic.changeStatus(visitAppointment, 'COMPLETED', role) }} onBack={() => navigate('schedule')} />}
         </Box>

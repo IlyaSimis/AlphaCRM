@@ -1,5 +1,5 @@
 import { failure, apiFetch } from './client'
-import type { ConsentItem, PatientItem } from './types'
+import type { ConsentItem, PatientItem, RegistryInput } from './types'
 
 export type PatientInput = { fullName: string; birthDate: string; phone: string }
 
@@ -65,11 +65,12 @@ export function toPatient(row: Record<string, unknown>): PatientItem {
     referralSource: (row.referralSource as string | null | undefined) ?? null,
     registryNote: (row.registryNote as string | null | undefined) ?? null,
     phoneSharedWith: (row.phoneSharedWith as PatientItem['phoneSharedWith']) ?? [],
+    telegramConnected: row.telegramConnected === true,
   }
 }
 
-/** Источник и заметка регистратуры. Пустое значение очищает поле. */
-export async function updateRegistry(patientId: string, input: { referralSource: string | null; registryNote: string | null }): Promise<PatientItem> {
+/** Источник, заметка регистратуры и Telegram. Пустой источник или заметка очищают поле. */
+export async function updateRegistry(patientId: string, input: RegistryInput): Promise<PatientItem> {
   const response = await apiFetch(`/patients/${patientId}/registry`, { method: 'PUT', body: JSON.stringify(input) })
   if (!response.ok) throw await failure(response, 'Не удалось сохранить данные регистратуры')
   return toPatient(await response.json())

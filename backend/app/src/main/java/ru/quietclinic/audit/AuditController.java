@@ -59,6 +59,13 @@ public class AuditController {
           actors.put(row.getObject("actor_id", UUID.class), row.getString("full_name"));
         },
         clinicId());
+    // Доставщик outbox пишет события от имени клиники: автор — сама клиника.
+    jdbc.query(
+        "select id, name from clinic where id = ?",
+        (ResultSet row) -> {
+          actors.put(row.getObject("id", UUID.class), row.getString("name"));
+        },
+        clinicId());
     return actors;
   }
 }

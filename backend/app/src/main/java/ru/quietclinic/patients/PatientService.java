@@ -6,6 +6,7 @@ import static ru.quietclinic.platform.PlatformConfig.conflict;
 import static ru.quietclinic.platform.PlatformConfig.notFound;
 import static ru.quietclinic.platform.PlatformConfig.requireRole;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -119,7 +120,12 @@ class PatientService {
       throw conflict("INVALID_REFERRAL_SOURCE", "Unknown referral source");
     }
     var patient = find(id);
-    var changed = patient.updateRegistry(source, request.registryNote());
+    var changed =
+        new ArrayList<>(patient.updateRegistry(source, request.registryNote()));
+    if (patient.updateTelegram(
+        request.telegramChatId(), Boolean.TRUE.equals(request.removeTelegram()))) {
+      changed.add("telegram");
+    }
     patients.saveAndFlush(patient);
     audit.record(
         actorId(),

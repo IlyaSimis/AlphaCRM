@@ -129,11 +129,9 @@ class AppointmentService {
       careRelationships.ensureCareRelationship(appointment.practitionerId, appointment.patientId);
       audit.record(
           actorId(), "APPOINTMENT_CREATED", "APPOINTMENT", appointment.id, "ALLOWED", "booking");
-      outbox.enqueue(
-          "NOTIFICATION",
-          "APPOINTMENT",
-          appointment.id,
-          "{\"template\":\"appointment-confirmed\",\"neutral\":true}");
+      // Подтверждение и, если запись на будущий день, напоминание за сутки. Текст и адрес
+      // собирает доставщик outbox из записи.
+      outbox.appointmentBooked(appointment.id, appointment.startsAt);
       return AppointmentView.of(appointment);
     } catch (DataIntegrityViolationException ex) {
       // Гонка двух записей на один слот: её ловит exclusion constraint PostgreSQL.
@@ -141,7 +139,10 @@ class AppointmentService {
     }
   }
 
-  /** Перенос без смены статуса. Уведомление пациенту не отправляется. */
+  /**
+   * Перенос без смены статуса. В outbox перенос ничего не кладёт: доставщик сам отменит
+   * неотправленное подтверждение на старое время и поставит новое.
+   */
   @Transactional
   AppointmentView reschedule(UUID id, RescheduleRequest request) {
     requireRole("ADMINISTRATOR");
@@ -184,11 +185,7 @@ class AppointmentService {
     appointment.status = "CANCELLED";
     audit.record(
         actorId(), "APPOINTMENT_CANCELLED", "APPOINTMENT", appointment.id, "ALLOWED", "cancel");
-    outbox.enqueue(
-        "NOTIFICATION",
-        "APPOINTMENT",
-        appointment.id,
-        "{\"template\":\"appointment-cancelled\",\"neutral\":true}");
+    outbox.appointmentCancelled(appointment.id, appointment.startsAt);
     return AppointmentView.of(appointment);
   }
 

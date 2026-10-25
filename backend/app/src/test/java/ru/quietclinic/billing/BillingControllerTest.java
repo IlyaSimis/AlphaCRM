@@ -99,7 +99,10 @@ class BillingControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[?(@.chargeId == '" + chargeId + "')].status").value("PAID"))
         .andExpect(
-            jsonPath("$[?(@.chargeId == '" + chargeId + "')].paymentStatus").value("CONFIRMED"));
+            jsonPath("$[?(@.chargeId == '" + chargeId + "')].paymentStatus")
+                .value("MOCK_NO_PROVIDER"))
+        // Касса не подключена: чек стоит в очереди и не выдаётся за отправленный.
+        .andExpect(jsonPath("$[?(@.chargeId == '" + chargeId + "')].fiscalStatus").value("QUEUED"));
   }
 
   @Test

@@ -73,6 +73,37 @@ describe('patient card: registry', () => {
     await user.click(screen.getByRole('button', { name: 'Сохранить' }))
     await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => String(url).endsWith('/registry') && init?.method === 'PUT')).toBe(true))
     const call = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith('/registry') && init?.method === 'PUT')
-    expect(JSON.parse(String(call?.[1]?.body))).toEqual({ referralSource: null, registryNote: 'Только для регистратуры' })
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({ referralSource: null, registryNote: 'Только для регистратуры', telegramChatId: null, removeTelegram: false })
+  })
+
+  it('the administrator connects Telegram by chat id; the chat id is never shown', async () => {
+    let connected = false
+    const fetchMock = withAuth((address, init) => {
+      if (address.endsWith(`/patients/${anna.id}/registry`) && init?.method === 'PUT') {
+        connected = Boolean(JSON.parse(String(init.body)).telegramChatId)
+        return jsonResponse({ ...anna, telegramConnected: connected })
+      }
+      if (address.includes('/registry/tasks')) return jsonResponse([])
+      if (address.includes('/patients')) return jsonResponse([{ ...anna, telegramConnected: connected }])
+      if (address.includes('/appointments')) return jsonResponse([])
+      return jsonResponse({}, 404)
+    }, 'admin')
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByText('API подключён')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Пациенты' }))
+    await user.click(screen.getByText('Анна Михайлова'))
+    expect(screen.getByText('не подключён')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Изменить' }))
+    await user.type(screen.getByLabelText('Telegram chat id'), '+7 916')
+    expect(screen.getByText(/только цифры/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Сохранить' })).toBeDisabled()
+    await user.clear(screen.getByLabelText('Telegram chat id'))
+    await user.type(screen.getByLabelText('Telegram chat id'), '987654321')
+    await user.click(screen.getByRole('button', { name: 'Сохранить' }))
+    expect(await screen.findByText('подключён')).toBeInTheDocument()
+    expect(screen.queryByText('987654321')).not.toBeInTheDocument()
+    const call = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith('/registry') && init?.method === 'PUT')
+    expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ telegramChatId: '987654321', removeTelegram: false })
   })
 })

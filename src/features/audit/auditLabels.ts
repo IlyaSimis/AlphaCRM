@@ -1,4 +1,5 @@
 import { statusLabel } from '../../api/schedule'
+import { channelLabels, templateLabels } from '../outbox/outboxLabels'
 
 export const actionLabels: Record<string, string> = {
   PATIENT_ADMIN_READ: 'Просмотр карточки пациента',
@@ -37,11 +38,13 @@ export const actionLabels: Record<string, string> = {
   STAFF_PASSWORD_RESET: 'Новый пароль сотрудника',
   STAFF_PASSWORD_CHANGED: 'Смена своего пароля',
   SIGNED_DOCUMENT_READ: 'Просмотр подписанного документа',
+  NOTIFICATION_DELIVERED: 'Сообщение пациенту доставлено',
+  FISCAL_RECEIPT_SENT: 'Чек передан в кассу',
 }
 
 export const objectLabels: Record<string, string> = {
   PATIENT: 'Пациент', APPOINTMENT: 'Запись', ENCOUNTER: 'Приём', DOCUMENT: 'Документ', CHARGE: 'Счёт', PAYMENT: 'Платёж', CONSENT: 'Согласие',
-  TASK: 'Задача', WAITLIST: 'Лист ожидания', PRACTITIONER: 'Врач', SERVICE: 'Услуга', STAFF: 'Сотрудник',
+  TASK: 'Задача', WAITLIST: 'Лист ожидания', PRACTITIONER: 'Врач', SERVICE: 'Услуга', STAFF: 'Сотрудник', OUTBOX: 'Внешний вывод',
 }
 
 /** Коды, которые только повторяют колонку «Действие». */
@@ -69,7 +72,7 @@ const roleNames: Record<string, string> = { ADMINISTRATOR: 'администра
 
 const dayNames = ['', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс']
 
-const fieldNames: Record<string, string> = { phone: 'телефон', fullName: 'ФИО', birthDate: 'дата рождения', referralSource: 'источник', registryNote: 'заметка регистратуры' }
+const fieldNames: Record<string, string> = { phone: 'телефон', fullName: 'ФИО', birthDate: 'дата рождения', referralSource: 'источник', registryNote: 'заметка регистратуры', telegram: 'Telegram' }
 
 const statusCodes = new Set(['BOOKED', 'CONFIRMED', 'ARRIVED', 'IN_PROGRESS', 'COMPLETED', 'NO_SHOW', 'CANCELLED'])
 
@@ -101,6 +104,10 @@ export function reasonLabel(code: string | null | undefined): string {
 
   const attempt = /^to ([A-Z_]+)$/.exec(code)
   if (attempt && statusCodes.has(attempt[1])) return `попытка перевести в ${statusLabel(attempt[1])}`
+
+  // Доставка из outbox: «шаблон:канал», без текста и адреса.
+  const delivered = /^([a-z-]+):(webhook|telegram|cashbox)$/.exec(code)
+  if (delivered && templateLabels[delivered[1]]) return `${templateLabels[delivered[1]]} · ${channelLabels[delivered[2].toUpperCase()]}`
 
   const moved = reschedulePattern.exec(code)
   if (moved) {

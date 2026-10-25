@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AddRounded, EditRounded } from '@mui/icons-material'
 import { Alert, Box, Button, Divider, Typography } from '@mui/material'
-import type { PatientItem, TaskItem } from '../../api/types'
+import type { PatientItem, RegistryInput, TaskItem } from '../../api/types'
 import { localToday } from '../../shared/dates'
 import { Info } from '../../shared/ui'
 import { referralLabel } from '../registry/registry'
@@ -18,7 +18,7 @@ type RegistryPanelProps = {
   selfId: string
   registry: Registry
   onOpenPatient: (id: string) => void
-  onSave: (input: { referralSource: string | null; registryNote: string | null }) => Promise<string | null>
+  onSave: (input: RegistryInput) => Promise<string | null>
 }
 
 /** Административная часть карточки: источник, заметка, задачи. В клинический контур не попадает. */
@@ -56,13 +56,14 @@ export function RegistryPanel({ patient, sharedWith, admin, selfId, registry, on
       </Box>
       <Info label="Откуда пришёл" value={referralLabel(patient.referralSource)} />
       <Info label="Заметка регистратуры" value={patient.registryNote || '—'} />
+      <Info label="Telegram" value={patient.telegramConnected ? 'подключён' : 'не подключён'} />
       <Box className="panel-title-row" sx={{ mt: 2 }}>
         <Typography sx={{ fontWeight: 700 }}>Задачи регистратуры</Typography>
         {admin && <Button size="small" startIcon={<AddRounded />} onClick={() => { setTaskError(''); setTaskDialog(true) }}>Задача</Button>}
       </Box>
       {tasksError && <Alert severity="warning" sx={{ mt: 1 }}>{tasksError}</Alert>}
       <TaskList tasks={tasks} today={today} emptyText="Задач нет" staffName={registry.staffName} canClose={registry.canClose} onToggle={(task) => void registry.toggleTask(task)} />
-      {editing && <RegistryDialog initial={{ referralSource: patient.referralSource ?? null, registryNote: patient.registryNote ?? null }} error={editError} onClose={() => setEditing(false)} onSave={async (input) => {
+      {editing && <RegistryDialog initial={{ referralSource: patient.referralSource ?? null, registryNote: patient.registryNote ?? null, telegramConnected: Boolean(patient.telegramConnected) }} error={editError} onClose={() => setEditing(false)} onSave={async (input) => {
         const error = await onSave(input)
         if (error) setEditError(error)
         else setEditing(false)

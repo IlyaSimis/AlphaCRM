@@ -13,3 +13,5 @@ databaseChangeLog:
       file: db/changelog/006-clinics.sql
   - include:
       file: db/changelog/007-services-tasks.sql
+  - include:
+      file: db/changelog/008-outbox-delivery.sql

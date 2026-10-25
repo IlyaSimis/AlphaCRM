@@ -31,7 +31,7 @@ import {
   statusLabel,
   withStatus,
 } from '../api/schedule'
-import type { AppointmentStatus, ChargeItem, PatientItem, Practitioner, ScheduleItem, ServiceItem } from '../api/types'
+import type { AppointmentStatus, ChargeItem, PatientItem, Practitioner, RegistryInput, ScheduleItem, ServiceItem } from '../api/types'
 import { localCharge } from '../features/cashier/cashier'
 import { localBooking, validateBooking, type BookingDraft } from '../features/schedule/booking'
 import type { RescheduleDraft } from '../features/schedule/RescheduleDialog'
@@ -432,7 +432,7 @@ export function useClinicData(doctorId: string, live: boolean) {
   }
 
   /** Источник пациента и заметка регистратуры. Возвращает текст ошибки или null. */
-  const updateRegistry = async (patient: PatientItem, input: { referralSource: string | null; registryNote: string | null }): Promise<string | null> => {
+  const updateRegistry = async (patient: PatientItem, input: RegistryInput): Promise<string | null> => {
     if (apiOnline && isUuid(patient.id)) {
       try {
         replacePatient(await updateRegistryApi(patient.id, input))
@@ -442,7 +442,8 @@ export function useClinicData(doctorId: string, live: boolean) {
         return (error as Error).message
       }
     }
-    replacePatient({ ...patient, referralSource: input.referralSource, registryNote: input.registryNote })
+    const telegramConnected = input.removeTelegram ? false : Boolean(input.telegramChatId?.trim()) || patient.telegramConnected
+    replacePatient({ ...patient, referralSource: input.referralSource, registryNote: input.registryNote, telegramConnected })
     notify('Демо-режим: изменения видны только до обновления страницы')
     return null
   }

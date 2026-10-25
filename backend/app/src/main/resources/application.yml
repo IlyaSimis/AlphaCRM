@@ -55,3 +55,20 @@ clinic:
   cors:
     # Явные origin фронтенда для локальной разработки; cookie сессии разрешены, «*» — нет.
     allowed-origins: ${CLINIC_CORS_ORIGINS:http://localhost:43127,http://127.0.0.1:43127}
+  # Часовой пояс дат и времени в сообщениях пациенту. Расписание хранится в UTC и так же
+  # показывается на экране, поэтому по умолчанию — UTC.
+  time-zone: ${CLINIC_TIME_ZONE:UTC}
+  outbox:
+    # Доставщик outbox: забирает PENDING и повторяет неудачные попытки с паузой.
+    enabled: ${CLINIC_OUTBOX_ENABLED:true}
+    poll-interval: ${CLINIC_OUTBOX_POLL_INTERVAL:PT30S}
+  outbound:
+    # Секреты — только из окружения. Пусто — канал не настроен, сообщения остаются PENDING.
+    webhook-url: ${CLINIC_OUTBOUND_WEBHOOK_URL:}
+    webhook-secret: ${CLINIC_OUTBOUND_WEBHOOK_SECRET:}
+    telegram-bot-token: ${TELEGRAM_BOT_TOKEN:}
+    telegram-api-url: ${TELEGRAM_API_URL:https://api.telegram.org}
+  cashbox:
+    # Онлайн-касса для чеков. Пусто — чек остаётся QUEUED.
+    url: ${CLINIC_CASHBOX_URL:}
+    secret: ${CLINIC_CASHBOX_SECRET:}

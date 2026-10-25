@@ -21,14 +21,14 @@ class ProductionReadinessCheckTest {
         "local-only-demo-key-change-before-sharing"
       })
   void rejectsMissingShortOrDefaultKeys(String key) {
-    assertThatThrownBy(() -> new ProductionReadinessCheck(key, ADMIN_PASSWORD))
+    assertThatThrownBy(() -> new ProductionReadinessCheck(key, ADMIN_PASSWORD, "", "", "", ""))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("CLINIC_DEV_KMS_KEY");
   }
 
   @Test
   void acceptsRandomKeyAndStrongAdminPassword() {
-    assertThatCode(() -> new ProductionReadinessCheck(KEY, ADMIN_PASSWORD))
+    assertThatCode(() -> new ProductionReadinessCheck(KEY, ADMIN_PASSWORD, "", "", "", ""))
         .doesNotThrowAnyException();
   }
 
@@ -36,7 +36,7 @@ class ProductionReadinessCheckTest {
   @ParameterizedTest
   @ValueSource(strings = {"", "   ", "admin", "ADMIN", "short-pass1"})
   void rejectsMissingShortOrDefaultAdminPassword(String password) {
-    assertThatThrownBy(() -> new ProductionReadinessCheck(KEY, password))
+    assertThatThrownBy(() -> new ProductionReadinessCheck(KEY, password, "", "", "", ""))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("CLINIC_ADMIN_PASSWORD");
   }
@@ -48,5 +48,18 @@ class ProductionReadinessCheckTest {
     assertThat(ProductionReadinessCheck.adminPasswordProblem("admin")).contains("admin");
     assertThat(ProductionReadinessCheck.adminPasswordProblem("a".repeat(11))).contains("12");
     assertThat(ProductionReadinessCheck.adminPasswordProblem("a".repeat(12))).isNull();
+  }
+
+  @Test
+  void outboundUrlNeedsLongSigningSecret() {
+    assertThat(ProductionReadinessCheck.signingSecretProblem("CLINIC_CASHBOX", "", "")).isNull();
+    assertThat(
+            ProductionReadinessCheck.signingSecretProblem(
+                "CLINIC_OUTBOUND_WEBHOOK", "https://bot.example/hook", "short"))
+        .contains("CLINIC_OUTBOUND_WEBHOOK_SECRET");
+    assertThat(
+            ProductionReadinessCheck.signingSecretProblem(
+                "CLINIC_OUTBOUND_WEBHOOK", "https://bot.example/hook", "s".repeat(32)))
+        .isNull();
   }
 }

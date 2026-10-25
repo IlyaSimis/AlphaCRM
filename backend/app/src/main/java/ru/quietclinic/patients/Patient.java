@@ -45,6 +45,8 @@ class Patient {
   @OneToMany(mappedBy = "patient", cascade = CascadeType.ALL, orphanRemoval = true)
   List<Consent> consents = new ArrayList<>();
 
+  static final String TELEGRAM = "TELEGRAM";
+
   protected Patient() {}
 
   Patient(String fullName, LocalDate birthDate) {
@@ -117,6 +119,28 @@ class Patient {
       changed.add("registryNote");
     }
     return changed;
+  }
+
+  /**
+   * Chat id Telegram пациента — контакт TELEGRAM, один на пациента. Пациент получает его, только
+   * начав диалог с ботом клиники. {@code remove} — отключить; пустое значение — не менять.
+   */
+  boolean updateTelegram(String chatId, boolean remove) {
+    var current = contacts.stream().filter(c -> TELEGRAM.equals(c.type)).findFirst();
+    if (remove) {
+      if (current.isEmpty()) return false;
+      contacts.remove(current.get());
+      return true;
+    }
+    var value = blankToNull(chatId);
+    if (value == null || current.map(c -> c.value.equals(value)).orElse(false)) return false;
+    if (current.isPresent()) current.get().value = value;
+    else contacts.add(new Contact(this, TELEGRAM, value));
+    return true;
+  }
+
+  boolean telegramConnected() {
+    return contacts.stream().anyMatch(c -> TELEGRAM.equals(c.type));
   }
 
   String phone() {
