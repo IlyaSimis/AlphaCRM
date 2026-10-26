@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { LEBEDEVA_ID, PETROV_ID } from '../../api/client'
 import type { StaffItem } from '../../api/types'
-import { anna, enterDemo, goOffline, jsonResponse, renderApp, signIn, testAccounts, withAuth } from '../../test/helpers'
+import { anna, enterDemo, goOffline, jsonResponse, menu, renderApp, signIn, testAccounts, withAuth } from '../../test/helpers'
 
 describe('staff', () => {
   it('the sandbox has no people, only per-role accounts; you cannot deactivate yourself', async () => {
@@ -102,7 +102,7 @@ describe('staff', () => {
     await user.type(screen.getByLabelText('Повторите пароль'), 'my-own-pass-1')
     await user.click(screen.getByRole('button', { name: 'Сменить пароль' }))
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Касса' })).toBeInTheDocument()
+    expect(menu().getByRole('button', { name: 'Касса' })).toBeInTheDocument()
     await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/auth/password'))).toBe(true))
   })
 

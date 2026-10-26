@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { PETROV_ID } from '../../api/client'
@@ -39,7 +39,7 @@ describe('«Сегодня»', () => {
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Сегодня', level: 4 })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '20 октября 2026, вторник', level: 4 })).toBeInTheDocument()
 
     const upcoming = screen.getByRole('region', { name: 'Записи на сегодня и завтра' })
     expect(await within(upcoming).findByText('завтра 09:00')).toBeInTheDocument()
@@ -97,5 +97,101 @@ describe('«Сегодня»', () => {
     expect(within(menu).queryByRole('button', { name: 'Сегодня' })).not.toBeInTheDocument()
     expect(screen.queryByRole('region', { name: 'Просроченные задачи' })).not.toBeInTheDocument()
     expect(screen.getByLabelText('День расписания')).toBeInTheDocument()
+  })
+})
+
+const sidebar = () => document.querySelector('.desktop-sidebar') as HTMLElement
+const content = () => document.querySelector('.content') as HTMLElement
+
+describe('«Сегодня» — домашняя страница', () => {
+  it('the menu has a separate «Старт» block; the AlphaCRM button returns home', async () => {
+    goOffline()
+    const user = userEvent.setup()
+    renderApp()
+    await enterDemo(user, 'ADMINISTRATOR')
+    const start = within(sidebar()).getByRole('navigation', { name: 'Старт' })
+    const workplace = within(sidebar()).getByRole('navigation', { name: 'Рабочее место' })
+    expect(within(start).getAllByRole('button').map((button) => button.textContent)).toEqual(['Сегодня'])
+    expect(within(workplace).queryByRole('button', { name: 'Сегодня' })).not.toBeInTheDocument()
+    expect(within(workplace).getAllByRole('button').map((button) => button.textContent)).toEqual(['Расписание', 'Пациенты', 'Регистратура', 'Касса', 'Аналитика', 'Журнал аудита', 'График и цены', 'Сотрудники', 'Внешние выводы'])
+    expect(within(sidebar()).getByText('РАБОЧЕЕ МЕСТО')).toBeInTheDocument()
+    expect(within(sidebar()).queryByText('РАБОЧЕЕ ПРОСТРАНСТВО')).not.toBeInTheDocument()
+    expect(within(start).getByRole('button', { name: 'Сегодня' })).toHaveClass('active')
+
+    // Карточка пациента подсвечивает пункт «Пациенты».
+    await user.click(within(workplace).getByRole('button', { name: 'Пациенты' }))
+    await user.click(screen.getByText('Анна Михайлова'))
+    expect(within(workplace).getByRole('button', { name: 'Пациенты' })).toHaveClass('active')
+    expect(within(start).getByRole('button', { name: 'Сегодня' })).not.toHaveClass('active')
+
+    await user.click(within(sidebar()).getByRole('button', { name: 'На главную' }))
+    expect(screen.getByRole('heading', { name: '20 октября 2026, вторник', level: 4 })).toBeInTheDocument()
+    // Повторное нажатие на уже открытой «Сегодня» ничего не ломает.
+    await user.click(within(sidebar()).getByRole('button', { name: 'На главную' }))
+    expect(screen.getByRole('heading', { name: '20 октября 2026, вторник', level: 4 })).toBeInTheDocument()
+    expect(within(content()).getByText('Администратор песочницы')).toBeInTheDocument()
+  })
+
+  it('the doctor has no «Старт» block; the AlphaCRM button returns to the schedule and keeps open visits', async () => {
+    goOffline()
+    const user = userEvent.setup()
+    renderApp()
+    await enterDemo(user, 'DOCTOR')
+    expect(within(sidebar()).queryByRole('navigation', { name: 'Старт' })).not.toBeInTheDocument()
+    expect(within(sidebar()).queryByRole('button', { name: 'Сегодня' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Начать приём 09:00 Анна Михайлова' }))
+    expect(screen.getByLabelText('Диагноз')).toBeInTheDocument()
+    await user.click(within(sidebar()).getByRole('button', { name: 'На главную' }))
+    expect(screen.getByLabelText('День расписания')).toBeInTheDocument()
+    expect(within(sidebar()).getByRole('navigation', { name: 'Рабочее место' })).toHaveTextContent('Приём: Анна Михайлова · 09:00')
+    await user.click(within(sidebar()).getByRole('button', { name: 'На главную' }))
+    expect(screen.getByLabelText('День расписания')).toBeInTheDocument()
+  })
+
+  it('quick actions by role: administrator — three, cashier — only the cashier, manager — none', async () => {
+    goOffline()
+    const user = userEvent.setup()
+    renderApp()
+    const names = ['Новая запись', 'Новый пациент', 'Касса']
+    const actions = () => within(content()).queryByRole('group', { name: 'Быстрые действия' })
+    const visible = () => names.filter((name) => actions() && within(actions() as HTMLElement).queryByRole('button', { name }))
+    await enterDemo(user, 'ADMINISTRATOR')
+    expect(visible()).toEqual(names)
+    await user.click(screen.getByRole('button', { name: 'Выйти' }))
+    await enterDemo(user, 'CASHIER')
+    expect(visible()).toEqual(['Касса'])
+    await user.click(within(actions() as HTMLElement).getByRole('button', { name: 'Касса' }))
+    expect(screen.getAllByText('Счёт не выставлен').length).toBeGreaterThan(0)
+    await user.click(screen.getByRole('button', { name: 'Выйти' }))
+    await enterDemo(user, 'MANAGER')
+    expect(visible()).toEqual([])
+    expect(actions()).not.toBeInTheDocument()
+  })
+
+  it('«Новая запись» and «Новый пациент» open the same dialogs as the schedule and the patient list', async () => {
+    goOffline()
+    const user = userEvent.setup()
+    renderApp()
+    await enterDemo(user, 'ADMINISTRATOR')
+    const actions = within(content()).getByRole('group', { name: 'Быстрые действия' })
+    await user.click(within(actions).getByRole('button', { name: 'Новая запись' }))
+    const booking = screen.getByRole('dialog')
+    expect(booking).toHaveTextContent('Новая запись')
+    expect(within(booking).getByLabelText('Дата')).toHaveValue('2026-10-20')
+    expect(within(booking).getByRole('button', { name: /создать запись/i })).toBeInTheDocument()
+    await user.click(within(booking).getByRole('button', { name: 'Отмена' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+
+    await user.click(within(actions).getByRole('button', { name: 'Новый пациент' }))
+    const patient = screen.getByRole('dialog')
+    expect(within(patient).getByText('Новый пациент')).toBeInTheDocument()
+    expect(within(patient).getByLabelText('ФИО')).toHaveValue('')
+    await user.type(within(patient).getByLabelText('ФИО'), 'Ирина Белова')
+    fireEvent.change(within(patient).getByLabelText('Дата рождения'), { target: { value: '1994-03-12' } })
+    await user.type(within(patient).getByLabelText('Телефон'), '+7 903 111-22-33')
+    await user.click(within(patient).getByRole('button', { name: /сохранить пациента/i }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await user.click(within(sidebar()).getByRole('button', { name: 'Пациенты' }))
+    expect(screen.getByText('Ирина Белова')).toBeInTheDocument()
   })
 })

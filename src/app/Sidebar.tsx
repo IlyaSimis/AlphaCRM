@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import type { StaffItem } from '../api/types'
 import type { VisitTarget } from '../features/visit/visit'
 import { profileOf } from '../shared/roles'
-import { navigationFor, pageTitles, type Page } from './pages'
+import { hasTodayPage, navigationFor, pageTitles, startPage, type Page } from './pages'
 
 const icons: Partial<Record<Page, ReactNode>> = {
   today: <TodayRounded />,
@@ -39,19 +39,30 @@ type SidebarProps = {
 export function Sidebar({ className, page, staff, live, visits, activeVisit, onNavigate, onVisit }: SidebarProps) {
   const profile = profileOf(staff)
   const role = staff.role
+  // «Сегодня» — в своём блоке «Старт»; остальное меню — в прежнем порядке.
+  const workplace = navigationFor(role).filter((item) => item !== 'today')
   return (
     <Box className={className}>
-      <Box className="brand">
-        <Box className="brand-mark"><HealthAndSafetyRounded /></Box>
-        <Box><Typography className="brand-name">AlphaCRM</Typography><Typography className="brand-caption">медицинская система</Typography></Box>
+      {/* Название — кнопка «домой»: тот же переход, что после входа. Открытые приёмы не закрывает. */}
+      <button type="button" className="brand brand-button" aria-label="На главную" onClick={() => onNavigate(startPage(role))}>
+        <Box component="span" className="brand-mark"><HealthAndSafetyRounded /></Box>
+        <Box component="span"><Typography component="span" className="brand-name">AlphaCRM</Typography><Typography component="span" className="brand-caption">медицинская система</Typography></Box>
+      </button>
+      {hasTodayPage(role) && <Box component="nav" aria-label="Старт" className="nav-section">
+        <Typography className="nav-label">СТАРТ</Typography>
+        <Stack spacing={0.7}>
+          <NavItem active={page === 'today'} icon={icons.today} label={pageTitles.today} onClick={() => onNavigate('today')} />
+        </Stack>
+      </Box>}
+      <Box component="nav" aria-label="Рабочее место" className="nav-section">
+        <Typography className="nav-label">РАБОЧЕЕ МЕСТО</Typography>
+        <Stack spacing={0.7}>
+          {workplace.map((item) => <NavItem key={item} active={page === item || (item === 'patients' && page === 'patient')} icon={icons[item]} label={pageTitles[item]} onClick={() => onNavigate(item)} />)}
+          {role === 'DOCTOR' && visits.map((visit) => (
+            <NavItem key={visit.appointmentId ?? visit.encounter?.encounterId ?? visit.patientId} active={activeVisit === visit} icon={<MedicalServicesRounded />} label={`Приём: ${visit.patientName}${visit.time ? ` · ${visit.time}` : ''}`} onClick={() => onVisit(visit)} />
+          ))}
+        </Stack>
       </Box>
-      <Typography className="nav-label">РАБОЧЕЕ ПРОСТРАНСТВО</Typography>
-      <Stack spacing={0.7}>
-        {navigationFor(role).map((item) => <NavItem key={item} active={page === item || (item === 'patients' && page === 'patient')} icon={icons[item]} label={pageTitles[item]} onClick={() => onNavigate(item)} />)}
-        {role === 'DOCTOR' && visits.map((visit) => (
-          <NavItem key={visit.appointmentId ?? visit.encounter?.encounterId ?? visit.patientId} active={activeVisit === visit} icon={<MedicalServicesRounded />} label={`Приём: ${visit.patientName}${visit.time ? ` · ${visit.time}` : ''}`} onClick={() => onVisit(visit)} />
-        ))}
-      </Stack>
       <Box className="privacy-note">
         <ShieldOutlined />
         <Box><Typography sx={{ fontWeight: 700, fontSize: 13 }}>Данные разделены</Typography><Typography sx={{ fontSize: 12 }}>Доступ к клинической карте — только при участии в лечении</Typography></Box>

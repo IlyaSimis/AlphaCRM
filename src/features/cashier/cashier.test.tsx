@@ -1,7 +1,7 @@
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-import { TEST_CSRF, anna, chooseRole, enterDemo, goOffline, jsonResponse, renderApp, withAuth } from '../../test/helpers'
+import { anna, chooseRole, enterDemo, goOffline, jsonResponse, menu, renderApp, TEST_CSRF, withAuth } from '../../test/helpers'
 
 describe('cashier', () => {
   it('visible to cashier and administrator, not to doctor and manager', async () => {
@@ -9,14 +9,14 @@ describe('cashier', () => {
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user)
-    expect(screen.queryByRole('button', { name: 'Касса' })).not.toBeInTheDocument()
+    expect(menu().queryByRole('button', { name: 'Касса' })).not.toBeInTheDocument()
     await chooseRole(user, 'MANAGER')
-    expect(screen.queryByRole('button', { name: 'Касса' })).not.toBeInTheDocument()
+    expect(menu().queryByRole('button', { name: 'Касса' })).not.toBeInTheDocument()
     await chooseRole(user, 'CASHIER')
-    expect(screen.getByRole('button', { name: 'Касса' })).toBeInTheDocument()
+    expect(menu().getByRole('button', { name: 'Касса' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Аналитика' })).not.toBeInTheDocument()
     await chooseRole(user, 'ADMINISTRATOR')
-    expect(screen.getByRole('button', { name: 'Касса' })).toBeInTheDocument()
+    expect(menu().getByRole('button', { name: 'Касса' })).toBeInTheDocument()
   })
 
   it('the administrator issues a charge, the cashier takes the payment', async () => {
@@ -24,14 +24,14 @@ describe('cashier', () => {
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user, 'ADMINISTRATOR')
-    await user.click(screen.getByRole('button', { name: 'Касса' }))
+    await user.click(menu().getByRole('button', { name: 'Касса' }))
     expect(screen.getAllByText('Счёт не выставлен').length).toBeGreaterThan(0)
     expect(screen.queryByText(/Диагноз/)).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Выставить счёт Мария Соколова 09:00' }))
     expect(await screen.findByText('Ожидает оплаты')).toBeInTheDocument()
 
     await chooseRole(user, 'CASHIER')
-    await user.click(screen.getByRole('button', { name: 'Касса' }))
+    await user.click(menu().getByRole('button', { name: 'Касса' }))
     expect(screen.queryByRole('button', { name: /выставить счёт/i })).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Принять оплату Мария Соколова 09:00' }))
     expect(await screen.findByText('Оплачен')).toBeInTheDocument()
@@ -42,7 +42,7 @@ describe('cashier', () => {
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user, 'ADMINISTRATOR')
-    await user.click(screen.getByRole('button', { name: 'Касса' }))
+    await user.click(menu().getByRole('button', { name: 'Касса' }))
     await user.click(screen.getByRole('button', { name: /^Выставить все счета/ }))
     expect(await screen.findByText(/выставлено счетов/i)).toBeInTheDocument()
     expect(screen.queryByText('Счёт не выставлен')).not.toBeInTheDocument()
@@ -63,7 +63,7 @@ describe('cashier', () => {
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Касса' }))
+    await user.click(menu().getByRole('button', { name: 'Касса' }))
     expect(await screen.findByText('Ожидает оплаты')).toBeInTheDocument()
     expect(screen.getByText('Анна Михайлова')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Принять оплату Анна Михайлова 10:10' }))

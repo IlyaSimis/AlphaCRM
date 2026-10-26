@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
 import { LEBEDEVA_ID, PETROV_ID } from '../api/client'
@@ -6,6 +6,12 @@ import App from '../app/App'
 import { ClinicThemeProvider } from '../app/theme'
 import type { ServiceItem, StaffItem, StaffRole } from '../api/types'
 import { roleLabels } from '../shared/roles'
+
+/**
+ * Боковое меню (десктопное). На «Сегодня» есть кнопки с теми же названиями, что пункты меню
+ * («Касса»), поэтому переходы по меню ищутся здесь.
+ */
+export const menu = () => within(document.querySelector('.desktop-sidebar') as HTMLElement)
 
 export const renderApp = () => render(<ClinicThemeProvider><App /></ClinicThemeProvider>)
 

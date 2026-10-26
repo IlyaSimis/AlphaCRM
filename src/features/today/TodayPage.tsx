@@ -1,20 +1,23 @@
 import { useEffect, useState } from 'react'
-import { Box, Typography } from '@mui/material'
+import { AddRounded, PaymentsRounded, PersonAddAlt1Rounded } from '@mui/icons-material'
+import { Box, Button, Stack, Typography } from '@mui/material'
 import { loadCharges } from '../../api/billing'
 import { loadOutbox } from '../../api/outbox'
 import { loadAppointments } from '../../api/schedule'
 import type { ChargeItem, OutboxItem, PatientItem, Practitioner, ScheduleItem, TaskItem } from '../../api/types'
 import { formatClinicMoment } from '../../shared/clinicTime'
-import { localToday, shiftDate, shortDate } from '../../shared/dates'
+import { formatDay, localToday, shiftDate, shortDate } from '../../shared/dates'
 import type { Role } from '../../shared/roles'
 import { buildCashierRows, stateLabels, type CashierRow } from '../cashier/cashier'
 import { channelLabels, reasonText, templateLabels } from '../outbox/outboxLabels'
 import { formatMoney } from '../schedule/booking'
-import { overdueTasks, rowAmount, todayBlocks, unpaidRows, upcomingAppointments, UNPAID_PERIOD_DAYS } from './today'
+import { overdueTasks, rowAmount, todayActions, todayBlocks, unpaidRows, upcomingAppointments, UNPAID_PERIOD_DAYS } from './today'
 import { TodayBlock } from './TodayBlock'
 
 type TodayPageProps = {
   role: Role
+  /** Кто вошёл — показывается рядом с датой. */
+  selfName: string
   apiOnline: boolean
   practitioners: Practitioner[]
   patients: PatientItem[]
@@ -27,6 +30,9 @@ type TodayPageProps = {
   staffName: (id: string) => string
   onPatient: (item: ScheduleItem) => void
   onOpen: (page: 'registry' | 'cashier' | 'outbox') => void
+  /** Те же сценарии, что на расписании и в списке пациентов, — не отдельные мастера. */
+  onNewAppointment: () => void
+  onNewPatient: () => void
 }
 
 type Loaded<T> = { items: T[] | null; error: string }
@@ -39,6 +45,7 @@ const pending = <T,>(): Loaded<T> => ({ items: null, error: '' })
 export function TodayPage(props: TodayPageProps) {
   const { role, apiOnline, practitioners, patients } = props
   const blocks = todayBlocks(role)
+  const actions = todayActions(role)
   const today = localToday()
   const tomorrow = shiftDate(today, 1)
   const [appointments, setAppointments] = useState<Loaded<ScheduleItem>>(pending)
@@ -78,8 +85,19 @@ export function TodayPage(props: TodayPageProps) {
 
   return (
     <>
-      <Box className="section-intro">
-        <Box><Typography variant="h4" sx={{ fontWeight: 750 }}>Сегодня</Typography><Typography sx={{ color: 'text.secondary' }}>Что требует внимания: ближайшие записи и незакрытые дела.</Typography></Box>
+      <Box className="section-intro today-intro">
+        <Box>
+          <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, flexWrap: 'wrap' }}>
+            <Typography variant="h4" sx={{ fontWeight: 750 }}>{formatDay(today)}</Typography>
+            <Typography sx={{ color: 'text.secondary', fontWeight: 650 }}>{props.selfName}</Typography>
+          </Box>
+          <Typography sx={{ color: 'text.secondary' }}>Что требует внимания: ближайшие записи и незакрытые дела.</Typography>
+          {(actions.booking || actions.patient || actions.cashier) && <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1.5, flexWrap: 'wrap' }} role="group" aria-label="Быстрые действия">
+            {actions.booking && <Button variant="contained" startIcon={<AddRounded />} onClick={props.onNewAppointment}>Новая запись</Button>}
+            {actions.patient && <Button variant="outlined" startIcon={<PersonAddAlt1Rounded />} onClick={props.onNewPatient}>Новый пациент</Button>}
+            {actions.cashier && <Button variant="outlined" startIcon={<PaymentsRounded />} onClick={() => props.onOpen('cashier')}>Касса</Button>}
+          </Stack>}
+        </Box>
       </Box>
       <Box className="today-grid">
         {blocks.appointments && <TodayBlock title="Записи на сегодня и завтра" empty="Записей на сегодня и завтра нет" count={upcoming.length} error={apiOnline ? appointments.error : ''} loading={apiOnline && appointments.items === null && !appointments.error}>
@@ -91,7 +109,7 @@ export function TodayPage(props: TodayPageProps) {
             </Box>
           ))}
         </TodayBlock>}
-        {blocks.tasks && <TodayBlock title="Просроченные задачи" empty="Просроченных задач нет" count={overdue.length} error={props.tasksError} more={{ label: 'Регистратура', onClick: () => props.onOpen('registry') }}>
+        {blocks.tasks && <TodayBlock title="Просроченные задачи" empty="Просроченных задач нет" count={overdue.length} error={props.tasksError} more={{ label: 'Все задачи', onClick: () => props.onOpen('registry') }}>
           {overdue.map((task) => (
             <Box component="button" type="button" className="today-row" key={task.id} onClick={() => props.onOpen('registry')} aria-label={`Просроченная задача: ${task.title}`}>
               <Typography sx={{ fontWeight: 700, minWidth: 92, color: 'error.main' }}>до {shortDate(task.dueDate)}</Typography>
@@ -99,7 +117,7 @@ export function TodayPage(props: TodayPageProps) {
             </Box>
           ))}
         </TodayBlock>}
-        {blocks.unpaid && <TodayBlock title="Завершены и не оплачены" empty="Неоплаченных приёмов нет" count={unpaid.length} error={apiOnline ? billing.error : ''} loading={apiOnline && billing.items === null && !billing.error} more={{ label: 'Касса', onClick: () => props.onOpen('cashier') }}>
+        {blocks.unpaid && <TodayBlock title="Завершены и не оплачены" empty="Неоплаченных приёмов нет" count={unpaid.length} error={apiOnline ? billing.error : ''} loading={apiOnline && billing.items === null && !billing.error} more={{ label: 'Все счета', onClick: () => props.onOpen('cashier') }}>
           {unpaid.map((row) => {
             const amount = rowAmount(row)
             return (
@@ -110,7 +128,7 @@ export function TodayPage(props: TodayPageProps) {
             )
           })}
         </TodayBlock>}
-        {blocks.failed && <TodayBlock title="Ошибки доставки" empty={apiOnline ? 'Ошибок доставки нет' : 'Демо-песочница ничего наружу не отправляет'} count={failures.length} error={apiOnline ? failed.error : ''} loading={apiOnline && failed.items === null && !failed.error} more={{ label: 'Внешние выводы', onClick: () => props.onOpen('outbox') }}>
+        {blocks.failed && <TodayBlock title="Ошибки доставки" empty={apiOnline ? 'Ошибок доставки нет' : 'Демо-песочница ничего наружу не отправляет'} count={failures.length} error={apiOnline ? failed.error : ''} loading={apiOnline && failed.items === null && !failed.error} more={{ label: 'Все выводы', onClick: () => props.onOpen('outbox') }}>
           {failures.map((item) => (
             <Box component="button" type="button" className="today-row" key={item.id} onClick={() => props.onOpen('outbox')} aria-label={`Ошибка доставки: ${templateLabels[item.template] ?? item.template}`}>
               <Typography sx={{ fontWeight: 700, minWidth: 92 }}>{formatClinicMoment(item.lastAttemptAt ?? item.createdAt)}</Typography>

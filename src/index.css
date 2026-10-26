@@ -73,6 +73,10 @@ button, input, textarea { font: inherit; }
 .sidebar-in-drawer, .MuiDrawer-paper .sidebar { position: relative; z-index: 1; width: 258px; height: 100%; min-height: 100vh; }
 .MuiDrawer-paper { width: 258px; }
 .brand { display: flex; align-items: center; gap: 12px; padding: 0 8px 30px; }
+.brand-button { padding: 4px 8px; margin: -4px 0 26px; appearance: none; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: 12px; }
+.brand-button .brand-name, .brand-button .brand-caption { display: block; }
+.brand-button:focus-visible { outline: 2px solid var(--active-text); outline-offset: 2px; }
+.nav-section + .nav-section { margin-top: 18px; }
 .brand-mark { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 13px; color: white; background: #176b5b; }
 .brand-name { font-weight: 800 !important; line-height: 1.1 !important; }
 .brand-caption { font-size: 11px !important; color: var(--muted); margin-top: 2px !important; }

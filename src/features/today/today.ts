@@ -18,6 +18,18 @@ export function todayBlocks(role: Role) {
 
 export type TodayBlocks = ReturnType<typeof todayBlocks>
 
+/**
+ * Быстрые действия в шапке «Сегодня» — только там, где роль может довести их до конца:
+ * запись и пациента создаёт администратор (врач на этот экран не попадает), касса — у кассы.
+ */
+export function todayActions(role: Role) {
+  return {
+    booking: canManageClinic(role),
+    patient: canManageClinic(role),
+    cashier: canSeeCashier(role),
+  }
+}
+
 /** Записи на сегодня и завтра без отмен и неявок, по времени. */
 export function upcomingAppointments(items: ScheduleItem[], today: string, tomorrow: string) {
   return items

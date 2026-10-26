@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-import { anna, enterDemo, goOffline, jsonResponse, renderApp, withAuth } from '../../test/helpers'
+import { anna, enterDemo, goOffline, jsonResponse, menu, renderApp, withAuth } from '../../test/helpers'
 
 describe('working hours and prices', () => {
   it('the administrator makes Wednesday a working day and the week stops showing it as a day off', async () => {
@@ -34,7 +34,7 @@ describe('working hours and prices', () => {
     expect(await screen.findByText(/сейчас 3\s?500,00/)).toBeInTheDocument()
 
     // Завершённый ранее повторный приём в кассе остаётся по старой цене 3 000 ₽.
-    await user.click(screen.getByRole('button', { name: 'Касса' }))
+    await user.click(menu().getByRole('button', { name: 'Касса' }))
     expect(screen.getAllByText(/3\s000,00/).length).toBeGreaterThan(0)
     expect(screen.queryByText(/3\s500,00/)).not.toBeInTheDocument()
   })
