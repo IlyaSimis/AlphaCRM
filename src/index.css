@@ -99,16 +99,20 @@ button, input, textarea { font: inherit; }
    высоту .main, сам рисунок прилипает к окну, поэтому при прокрутке фон не едет. */
 .landscape { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
 .landscape svg { position: sticky; top: 0; display: block; width: 100%; height: 100vh; }
-.landscape--morning { --ls-sky-top: #e6f1ed; --ls-sky-bottom: #f6f4ea; --ls-light: #f3d68f; --ls-far: #d3e6dd; --ls-near: #bcd8cb; --ls-crown: #8ab9a6; --ls-trunk: #9b8b73; }
-.landscape--day { --ls-sky-top: #d8ece5; --ls-sky-bottom: #f7efdb; --ls-light: #f1c76d; --ls-far: #c9e0d5; --ls-near: #afd0c0; --ls-crown: #7aae99; --ls-trunk: #8f7f66; }
-.landscape--evening { --ls-sky-top: #9cbcb2; --ls-sky-bottom: #d5e1da; --ls-light: #f4f2e6; --ls-far: #9fc0b3; --ls-near: #86ad9d; --ls-crown: #5d907e; --ls-trunk: #6f6250; }
-:root[data-theme="dark"] .landscape--morning, :root[data-theme="dark"] .landscape--day, :root[data-theme="dark"] .landscape--evening { --ls-far: #142824; --ls-near: #17302a; --ls-crown: #1f4a40; --ls-trunk: #3a332a; }
-:root[data-theme="dark"] .landscape--morning { --ls-sky-top: #0f1b19; --ls-sky-bottom: #182723; --ls-light: #6e6544; }
-:root[data-theme="dark"] .landscape--day { --ls-sky-top: #0f1d1a; --ls-sky-bottom: #1b2a25; --ls-light: #7a6a40; }
-:root[data-theme="dark"] .landscape--evening { --ls-sky-top: #0a1312; --ls-sky-bottom: #12201d; --ls-light: #a9b6b1; }
+/* Светлая тема — дневное небо и солнце, тёмная — ночное небо и луна. */
+.landscape { --ls-sky-top: #d8ece5; --ls-sky-bottom: #f7efdb; --ls-sun: #f1c76d; --ls-moon: #f4f2e6; --ls-far: #c9e0d5; --ls-near: #afd0c0; --ls-crown: #7aae99; --ls-trunk: #8f7f66; }
+:root[data-theme="dark"] .landscape { --ls-sky-top: #0a1312; --ls-sky-bottom: #12201d; --ls-sun: #7a6a40; --ls-moon: #b9c6c1; --ls-far: #142824; --ls-near: #17302a; --ls-crown: #1f4a40; --ls-trunk: #3a332a; }
 .ls-sky-top { stop-color: var(--ls-sky-top); }
 .ls-sky-bottom { stop-color: var(--ls-sky-bottom); }
-.ls-light { fill: var(--ls-light); }
+.ls-sun { fill: var(--ls-sun); }
+.ls-moon-disc { fill: var(--ls-moon); }
+.ls-sky-top, .ls-sky-bottom { transition: stop-color .9s ease; }
+.ls-far, .ls-near, .ls-crown, .ls-trunk, .ls-sun, .ls-moon-disc { transition: fill .9s ease; }
+/* Смена темы: одно светило уходит за холм, другое поднимается. */
+.ls-body { transition: transform 1.2s cubic-bezier(.45, 0, .25, 1), opacity 1.2s ease; }
+.ls-moon { transform: translateY(640px); opacity: 0; }
+:root[data-theme="dark"] .ls-moon { transform: translateY(0); opacity: 1; }
+:root[data-theme="dark"] .ls-sun { transform: translateY(640px); opacity: 0; }
 .ls-far { fill: var(--ls-far); }
 .ls-near { fill: var(--ls-near); }
 .ls-crown { fill: var(--ls-crown); }
@@ -131,6 +135,7 @@ button, input, textarea { font: inherit; }
 /* Без движения: сцена сразу на месте. */
 @media (prefers-reduced-motion: reduce) {
   .landscape .ls-sky, .landscape .ls-light, .landscape .ls-far, .landscape .ls-trees, .landscape .ls-near { animation: none; opacity: 1; transform: none; }
+  .landscape .ls-body, .landscape stop, .landscape path, .landscape rect, .landscape circle { transition: none; }
 }
 .topbar { height: 88px; padding: 16px 36px; border-bottom: 1px solid var(--border); background: var(--paper-translucent); display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 5; backdrop-filter: blur(8px); }
 .eyebrow { font-size: 10px !important; font-weight: 800 !important; letter-spacing: .08em !important; color: var(--muted); margin-bottom: 2px !important; }

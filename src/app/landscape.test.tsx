@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import css from '../index.css?raw'
@@ -20,14 +20,24 @@ describe('workspace background and greeting', () => {
     expect(scenes[0].closest('.sidebar')).toBeNull()
     expect(scenes[0]).toHaveAttribute('aria-hidden', 'true')
     expect(scenes[0].querySelectorAll('svg')).toHaveLength(1)
-    // «Сейчас» в тестах — 06:00 по часам клиники: утренняя сцена с солнцем.
-    expect(scenes[0]).toHaveClass('landscape--morning')
-    expect(scenes[0].querySelector('.ls-sun')).not.toBeNull()
+    // Оба светила в сцене: какое видно, решает тема (CSS), смена темы сцену не пересоздаёт.
+    expect(scenes[0].querySelectorAll('.ls-sun')).toHaveLength(1)
+    expect(scenes[0].querySelectorAll('.ls-moon')).toHaveLength(1)
+    await user.click(screen.getByRole('button', { name: 'Включить тёмную тему' }))
+    await waitFor(() => expect(document.documentElement).toHaveAttribute('data-theme', 'dark'))
+    expect(document.querySelector('.landscape')).toBe(scenes[0])
 
     // Смена вкладки не создаёт вторую сцену и не проигрывает выезд заново.
     await user.click(menu().getByRole('button', { name: 'Пациенты' }))
     expect(document.querySelectorAll('.landscape')).toHaveLength(1)
     expect(document.querySelector('.landscape')).toBe(scenes[0])
+  })
+
+  it('light theme shows the sun, dark theme the moon; switching moves them, not swaps instantly', () => {
+    expect(css).toMatch(/\.ls-moon \{ transform: translateY\(\d+px\); opacity: 0; \}/)
+    expect(css).toMatch(/:root\[data-theme="dark"\] \.ls-moon \{ transform: translateY\(0\); opacity: 1; \}/)
+    expect(css).toMatch(/:root\[data-theme="dark"\] \.ls-sun \{ transform: translateY\(\d+px\); opacity: 0; \}/)
+    expect(css).toMatch(/\.ls-body \{ transition: transform/)
   })
 
   it('the slide-in runs once and is switched off for reduced motion', () => {
@@ -38,6 +48,7 @@ describe('workspace background and greeting', () => {
     expect(reduced?.[1]).toMatch(/\.landscape/)
     expect(reduced?.[1]).toMatch(/animation:\s*none/)
     expect(reduced?.[1]).toMatch(/opacity:\s*1/)
+    expect(css).toMatch(/prefers-reduced-motion: reduce\)[^@]*\.ls-body[^}]*transition: none/)
   })
 
   it('the doctor is greeted above the schedule on any day; the administrator is not', async () => {

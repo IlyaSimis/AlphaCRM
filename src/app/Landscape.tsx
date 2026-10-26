@@ -1,17 +1,13 @@
-import type { DayPeriod } from '../shared/greeting'
-
 /**
- * Фон рабочего места: небо, два холма, светило и три дерева. Выплывает один раз при входе
- * (Workspace монтируется заново на каждого сотрудника) и дальше стоит неподвижно. Только для
- * красоты: скрыт от экранного диктора и не перехватывает нажатия. Цвета — в index.css, по части
- * дня и теме. Позиции фигур — координатами, без атрибута transform: его заменил бы CSS-выезд.
+ * Фон рабочего места: небо, два холма, солнце, луна и три дерева. Выплывает один раз при входе
+ * (Workspace монтируется заново на каждого сотрудника) и дальше стоит неподвижно. Светило зависит
+ * от темы: в светлой — солнце, в тёмной — луна; при смене темы одно заходит за холм, другое
+ * восходит (переходы — в index.css). Только для красоты: скрыт от экранного диктора и не
+ * перехватывает нажатия. Позиции фигур — координатами, без атрибута transform: его заменил бы CSS.
  */
-export function Landscape({ period }: { period: DayPeriod }) {
-  const evening = period === 'evening'
-  // Утром солнце у горизонта, днём выше, вечером вместо него луна.
-  const light = period === 'morning' ? { cx: 300, cy: 520, r: 56 } : period === 'day' ? { cx: 1060, cy: 270, r: 52 } : { cx: 1140, cy: 250, r: 40 }
+export function Landscape() {
   return (
-    <div className={`landscape landscape--${period}`} aria-hidden="true" data-testid="landscape">
+    <div className="landscape" aria-hidden="true" data-testid="landscape">
       <svg viewBox="0 0 1440 900" preserveAspectRatio="xMidYMax slice" focusable="false">
         <defs>
           <linearGradient id="landscape-sky" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="900">
@@ -20,8 +16,14 @@ export function Landscape({ period }: { period: DayPeriod }) {
           </linearGradient>
         </defs>
         <rect className="ls-sky" x="0" y="0" width="1440" height="900" fill="url(#landscape-sky)" />
-        <circle className={`ls-light ${evening ? 'ls-moon' : 'ls-sun'}`} cx={light.cx} cy={light.cy} r={light.r} />
-        {evening && <circle className="ls-sky ls-moon-shadow" cx={light.cx + 16} cy={light.cy - 10} r={light.r - 4} fill="url(#landscape-sky)" />}
+        {/* Внешняя группа — выезд при входе, внутренняя — восход и заход при смене темы. */}
+        <g className="ls-light">
+          <circle className="ls-body ls-sun" cx="1060" cy="260" r="52" />
+          <g className="ls-body ls-moon">
+            <circle className="ls-moon-disc" cx="1060" cy="250" r="42" />
+            <circle className="ls-moon-shadow" cx="1077" cy="239" r="38" fill="url(#landscape-sky)" />
+          </g>
+        </g>
         <path className="ls-far" d="M0 640 C 220 560 420 560 640 610 S 1060 690 1440 580 L 1440 900 L 0 900 Z" />
         <g className="ls-trees">
           <rect className="ls-trunk" x="1036" y="612" width="12" height="54" rx="3" />
