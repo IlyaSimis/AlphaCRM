@@ -35,6 +35,20 @@ interface AppointmentRepository extends JpaRepository<Appointment, UUID> {
       @Param("endsAt") Instant endsAt,
       @Param("excludedId") UUID excludedId);
 
+  /** Занятое время врача в окне: те же статусы, что считает проверка пересечения. */
+  @Query(
+      """
+      select a from Appointment a
+      where a.practitionerId = :practitionerId
+        and a.status in ('BOOKED','CONFIRMED','ARRIVED','IN_PROGRESS','COMPLETED')
+        and a.startsAt < :to and a.endsAt > :from
+      order by a.startsAt
+      """)
+  List<Appointment> findBusy(
+      @Param("practitionerId") UUID practitionerId,
+      @Param("from") Instant from,
+      @Param("to") Instant to);
+
   List<Appointment> findByStartsAtGreaterThanEqualAndStartsAtLessThanOrderByStartsAt(
       Instant from, Instant to);
 

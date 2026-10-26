@@ -17,6 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class OutboxService {
   static final Duration REMINDER_LEAD = Duration.ofHours(24);
+  /** Причина SKIPPED у подтверждения записи, сделанной в боте: пациент уже видел ответ бота. */
+  static final String SHOWN_IN_BOT = "SHOWN_IN_BOT";
 
   private final OutboxRepository repository;
   private final JdbcTemplate jdbc;
@@ -35,6 +37,27 @@ public class OutboxService {
   @Transactional
   public void appointmentBooked(UUID appointmentId, Instant startsAt) {
     scheduleFor(appointmentId, startsAt, clinicOfAppointment(appointmentId), Instant.now());
+  }
+
+  /**
+   * Запись из Telegram-бота: подтверждение пациент уже увидел в ответе бота, поэтому строка
+   * подтверждения сразу закрывается как SKIPPED с причиной SHOWN_IN_BOT, а напоминание за сутки
+   * ставится как обычно. Строка подтверждения нужна доставщику: по ней он замечает перенос записи.
+   */
+  @Transactional
+  public void appointmentBookedOnline(UUID appointmentId, Instant startsAt) {
+    var now = Instant.now();
+    scheduleFor(appointmentId, startsAt, clinicOfAppointment(appointmentId), now);
+    repository
+        .findByIdempotencyKey(key(NoticeTemplates.CONFIRMED, appointmentId, startsAt))
+        .filter(message -> "PENDING".equals(message.status))
+        .ifPresent(
+            message -> {
+              message.status = "SKIPPED";
+              message.lastError = SHOWN_IN_BOT;
+              message.lastAttemptAt = now;
+              message.nextAttemptAt = null;
+            });
   }
 
   /** Сообщение об отмене. Неотправленные подтверждение и напоминание отменит доставщик. */

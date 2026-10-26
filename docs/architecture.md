@@ -81,6 +81,10 @@ flowchart TB
     scheduling -->|"OutboxService: запись создана, отменена"| communications
     billing -->|"OutboxService: оплата; реализует FiscalPort"| communications
     communications --> audit
+    bot["bot<br/>API Telegram-бота"]
+    bot -->|"OnlineBooking"| scheduling
+    bot -->|"TelegramPatients"| patients
+    bot -->|"OperatorRequests"| registry
     scheduling & clinical & billing & registry & patients & staff --> audit
     scheduling & clinical & billing & registry & patients & staff & audit --> platform
 ```
@@ -95,6 +99,7 @@ flowchart TB
 | `registry` | задачи регистратуры (свободный текст, пациент по желанию), лист ожидания | platform, audit |
 | `clinical` | приём (`Encounter`), заметка, документы и подпись, дополнения, архив подписанных, связь с лечением, PDF пациента (`PatientFile`: шифрованное хранение, подпись, выгрузка) | platform, audit |
 | `billing` | счёт на завершённый приём, оплата с ключом идемпотентности, `PaymentGateway` (mock, `MOCK_NO_PROVIDER`), `CashboxFiscalAdapter` — реализация `FiscalPort` | platform, audit, communications |
+| `bot` | API Telegram-бота `/api/v1/bot/**`: своя цепочка Spring Security со входом по токену `X-Bot-Token` и сервисной учётной записью с ролью `BOT` (автор в аудите — клиника); сам ничего не хранит | scheduling (`OnlineBooking`), patients (`TelegramPatients`), registry (`OperatorRequests`), platform |
 | `communications` | `OutboxService` (постановка по событию), `OutboxDispatcher` (доставка, повторы, переносы), `NotificationPort` → вебхук клиники, Telegram или mock, порт кассы `FiscalPort`, экран `GET /outbox` | platform, audit |
 
 Правила, на которых держатся границы:

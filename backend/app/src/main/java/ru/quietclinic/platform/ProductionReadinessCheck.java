@@ -21,7 +21,8 @@ class ProductionReadinessCheck {
       @Value("${clinic.outbound.webhook-url:}") String webhookUrl,
       @Value("${clinic.outbound.webhook-secret:}") String webhookSecret,
       @Value("${clinic.cashbox.url:}") String cashboxUrl,
-      @Value("${clinic.cashbox.secret:}") String cashboxSecret) {
+      @Value("${clinic.cashbox.secret:}") String cashboxSecret,
+      @Value("${clinic.bot.api-token:}") String botToken) {
     if (kmsKey.isBlank()
         || kmsKey.length() < MIN_KEY_LENGTH
         || kmsKey.contains("change-me")
@@ -37,6 +38,17 @@ class ProductionReadinessCheck {
     if (problem != null) throw new IllegalStateException(problem);
     problem = signingSecretProblem("CLINIC_CASHBOX", cashboxUrl, cashboxSecret);
     if (problem != null) throw new IllegalStateException(problem);
+    problem = botTokenProblem(botToken);
+    if (problem != null) throw new IllegalStateException(problem);
+  }
+
+  /** Токен API бота необязателен; если задан — случайная строка не короче 32 символов. */
+  static String botTokenProblem(String token) {
+    if (token == null || token.isBlank()) return null;
+    if (token.trim().length() < MIN_KEY_LENGTH) {
+      return "CLINIC_BOT_API_TOKEN must be at least " + MIN_KEY_LENGTH + " characters long";
+    }
+    return null;
   }
 
   /** Адрес наружу задан — нужен и секрет подписи HMAC, не короче 32 символов. */

@@ -13,6 +13,7 @@ describe('audit log reason column', () => {
   it('labels the view source and access refusal', () => {
     expect(reasonLabel('search')).toBe('из поиска')
     expect(reasonLabel('card')).toBe('из карточки')
+    expect(reasonLabel('telegram-bot')).toBe('через Telegram-бота')
     expect(reasonLabel('no-care-relationship')).toBe('нет активной связи с лечением')
   })
 

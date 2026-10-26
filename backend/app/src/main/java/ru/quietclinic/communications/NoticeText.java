@@ -34,6 +34,13 @@ class NoticeText {
     }
   }
 
+  /** Надпись для пациента, не шаблон сообщения: например, кнопка под напоминанием. */
+  String label(String key) {
+    var value = templates.getProperty(key);
+    if (value == null) throw new IllegalStateException("Unknown notice label " + key);
+    return value;
+  }
+
   PatientMessage render(String template, String idempotencyKey, AppointmentNotice notice) {
     var pattern = templates.getProperty(template);
     if (pattern == null) throw new IllegalStateException("Unknown notice template " + template);

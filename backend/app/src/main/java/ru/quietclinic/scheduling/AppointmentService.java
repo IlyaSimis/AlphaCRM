@@ -8,6 +8,7 @@ import static ru.quietclinic.platform.PlatformConfig.hasRole;
 import static ru.quietclinic.platform.PlatformConfig.notFound;
 import static ru.quietclinic.platform.PlatformConfig.requireRole;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -28,6 +29,8 @@ import ru.quietclinic.platform.ClinicTime;
 class AppointmentService {
   static final int MAX_RANGE_DAYS = 3 * 366;
   static final Set<String> RESCHEDULABLE = Set.of("BOOKED", "CONFIRMED");
+  /** Основание в аудите для действий пациента через Telegram-бота. */
+  static final String ONLINE = "telegram-bot";
 
   private final AppointmentRepository appointments;
   private final PractitionerScheduleRepository workingHours;
@@ -109,33 +112,122 @@ class AppointmentService {
   @Transactional
   AppointmentView create(CreateAppointmentRequest request) {
     requireRole("ADMINISTRATOR", "DOCTOR");
-    var service =
-        services
-            .findByClinicIdAndName(clinicId(), request.serviceName())
-            .orElseThrow(() -> conflict("UNKNOWN_SERVICE", "Service is not in the catalog"));
-    // Выключенная услуга не предлагается в новой записи; старые записи её снимок сохраняют.
-    if (!service.active) throw conflict("SERVICE_INACTIVE", "The service is switched off");
+    var service = activeService(request.serviceName());
     if (!clinic.hasPatient(request.patientId())) {
       throw notFound("PATIENT_NOT_FOUND", "Patient not found");
     }
-    checkSlot(request.practitionerId(), request.startsAt(), request.endsAt(), null);
+    return book(
+        request.patientId(),
+        request.practitionerId(),
+        request.startsAt(),
+        request.endsAt(),
+        service,
+        "booking",
+        false);
+  }
+
+  /**
+   * Запись, которую пациент сделал сам в Telegram-боте. Проверки слота те же, что у регистратуры;
+   * конец приёма — по длительности услуги. Права проверяет {@link OnlineBooking}.
+   */
+  @Transactional
+  AppointmentView createOnline(
+      UUID patientId, UUID practitionerId, Instant startsAt, String serviceName) {
+    var service = activeService(serviceName);
+    if (!clinic.hasPatient(patientId)) throw notFound("PATIENT_NOT_FOUND", "Patient not found");
+    var endsAt = startsAt.plus(Duration.ofMinutes(service.durationMinutes));
+    return book(patientId, practitionerId, startsAt, endsAt, service, ONLINE, true);
+  }
+
+  /** Пациент подтвердил запись кнопкой в Telegram. Уже подтверждённая остаётся как есть. */
+  @Transactional
+  AppointmentView confirmByPatient(UUID id) {
+    var appointment = find(id);
+    if ("CONFIRMED".equals(appointment.status)) return AppointmentView.of(appointment);
+    if (!"BOOKED".equals(appointment.status)) {
+      throw conflict(
+          "INVALID_STATUS_TRANSITION",
+          "Cannot confirm an appointment in status " + appointment.status);
+    }
+    appointment.status = "CONFIRMED";
+    appointments.saveAndFlush(appointment);
+    audit.record(
+        actorId(),
+        "APPOINTMENT_STATUS_CHANGED",
+        "APPOINTMENT",
+        appointment.id,
+        "ALLOWED",
+        "BOOKED->CONFIRMED");
+    return AppointmentView.of(appointment);
+  }
+
+  /**
+   * Пациент сам отменил запись в Telegram. Сообщение об отмене не ставится: пациент только что
+   * увидел ответ бота; неотправленное напоминание доставщик закроет сам по статусу записи.
+   */
+  @Transactional
+  AppointmentView cancelByPatient(UUID id) {
+    var appointment = find(id);
+    if ("CANCELLED".equals(appointment.status)) {
+      throw conflict("ALREADY_CANCELLED", "Appointment is already cancelled");
+    }
+    if (!RESCHEDULABLE.contains(appointment.status)) {
+      throw conflict(
+          "INVALID_STATUS_TRANSITION", "Only booked or confirmed appointments can be cancelled");
+    }
+    appointment.status = "CANCELLED";
+    appointments.saveAndFlush(appointment);
+    audit.record(
+        actorId(), "APPOINTMENT_CANCELLED", "APPOINTMENT", appointment.id, "ALLOWED", ONLINE);
+    return AppointmentView.of(appointment);
+  }
+
+  @Transactional(readOnly = true)
+  java.util.Optional<AppointmentView> findView(UUID id) {
+    return appointments.findById(id).filter(clinic::hasAppointment).map(AppointmentView::of);
+  }
+
+  private ClinicService activeService(String serviceName) {
+    var service =
+        services
+            .findByClinicIdAndName(clinicId(), serviceName)
+            .orElseThrow(() -> conflict("UNKNOWN_SERVICE", "Service is not in the catalog"));
+    // Выключенная услуга не предлагается в новой записи; старые записи её снимок сохраняют.
+    if (!service.active) throw conflict("SERVICE_INACTIVE", "The service is switched off");
+    return service;
+  }
+
+  /**
+   * Общая часть создания записи. {@code online} — запись из бота: подтверждение пациент уже видел в
+   * боте, поэтому в outbox ставится только напоминание за сутки.
+   */
+  private AppointmentView book(
+      UUID patientId,
+      UUID practitionerId,
+      Instant startsAt,
+      Instant endsAt,
+      ClinicService service,
+      String reason,
+      boolean online) {
+    checkSlot(practitionerId, startsAt, endsAt, null);
     try {
       var appointment =
           appointments.saveAndFlush(
               new Appointment(
-                  request.patientId(),
-                  request.practitionerId(),
-                  request.startsAt(),
-                  request.endsAt(),
+                  patientId,
+                  practitionerId,
+                  startsAt,
+                  endsAt,
                   service.name,
                   service.priceMinor,
                   service.currency));
       careRelationships.ensureCareRelationship(appointment.practitionerId, appointment.patientId);
       audit.record(
-          actorId(), "APPOINTMENT_CREATED", "APPOINTMENT", appointment.id, "ALLOWED", "booking");
+          actorId(), "APPOINTMENT_CREATED", "APPOINTMENT", appointment.id, "ALLOWED", reason);
       // Подтверждение и, если запись на будущий день, напоминание за сутки. Текст и адрес
       // собирает доставщик outbox из записи.
-      outbox.appointmentBooked(appointment.id, appointment.startsAt);
+      if (online) outbox.appointmentBookedOnline(appointment.id, appointment.startsAt);
+      else outbox.appointmentBooked(appointment.id, appointment.startsAt);
       return AppointmentView.of(appointment);
     } catch (DataIntegrityViolationException ex) {
       // Гонка двух записей на один слот: её ловит exclusion constraint PostgreSQL.

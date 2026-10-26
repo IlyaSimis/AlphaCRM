@@ -49,6 +49,12 @@ services:
       CLINIC_CASHBOX_URL: ${CLINIC_CASHBOX_URL:-}
       CLINIC_CASHBOX_SECRET: ${CLINIC_CASHBOX_SECRET:-}
       CLINIC_TIME_ZONE: ${CLINIC_TIME_ZONE:-UTC}
+      # API Telegram-бота (/api/v1/bot/**). Пусто — API выключено. Снаружи nginx этот путь не отдаёт.
+      CLINIC_BOT_API_TOKEN: ${CLINIC_BOT_API_TOKEN:-}
+      CLINIC_BOT_CLINIC_ID: ${CLINIC_BOT_CLINIC_ID:-}
+      CLINIC_BOT_SERVICE: ${CLINIC_BOT_SERVICE:-Первичный приём}
+      CLINIC_BOT_TASK_ASSIGNEE: ${CLINIC_BOT_TASK_ASSIGNEE:-}
+      TELEGRAM_REMINDER_BUTTONS: ${TELEGRAM_REMINDER_BUTTONS:-true}
     depends_on:
       postgres:
         condition: service_healthy
@@ -71,6 +77,34 @@ services:
         condition: service_healthy
     ports:
       - "${APP_BIND:-127.0.0.1}:${APP_PORT:-8080}:8080"
+
+  # Telegram-бот клиники (проект ClinicaBot). Включается профилем: COMPOSE_PROFILES=bot в .env.
+  # Ходит в backend напрямую по внутренней сети, наружу портов не открывает.
+  bot:
+    <<: *restart
+    profiles: ["bot"]
+    build:
+      context: ${BOT_SOURCE_DIR:-../ClinicaBot}
+    image: quiet-clinic-bot:${APP_VERSION:-local}
+    environment:
+      # Тот же бот, через который CRM шлёт пациентам подтверждения и напоминания.
+      BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      CLINIC_API_URL: http://backend:8081/api/v1/bot
+      CLINIC_API_TOKEN: ${CLINIC_BOT_API_TOKEN:-}
+      OPERATOR_CHAT_ID: ${BOT_OPERATOR_CHAT_ID:-}
+      ADMIN_IDS: ${BOT_ADMIN_IDS:-}
+      CLINIC_ADDRESS: ${CLINIC_ADDRESS:-}
+      CLINIC_PHONE: ${CLINIC_PHONE:-}
+      CLINIC_HOURS: ${CLINIC_HOURS:-}
+      CLINIC_PRIVACY_URL: ${CLINIC_PRIVACY_URL:-}
+      BOT_CONSENT_VERSION: ${BOT_CONSENT_VERSION:-telegram-bot-v1}
+    depends_on:
+      backend:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256m
 
 volumes:
   quiet-clinic-postgres:

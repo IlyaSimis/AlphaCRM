@@ -29,6 +29,7 @@ export const reasonLabels: Record<string, string> = {
   NO_TELEGRAM_CONTACT: 'у пациента нет Telegram',
   FISCAL_NOT_CONFIGURED: 'касса не подключена',
   NO_CONSENT: 'нет действующего согласия',
+  SHOWN_IN_BOT: 'подтверждение показано в боте',
   APPOINTMENT_CANCELLED: 'запись отменена',
   RESCHEDULED: 'запись перенесена',
   NO_SHOW: 'неявка',

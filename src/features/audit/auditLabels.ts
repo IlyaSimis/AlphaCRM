@@ -73,6 +73,8 @@ const fixed: Record<string, string> = {
   'with-patient': 'по пациенту',
   'without-patient': 'без пациента',
   self: 'сам сотрудник',
+  // Действие пациента в Telegram-боте: запись, отмена, новая карточка.
+  'telegram-bot': 'через Telegram-бота',
 }
 
 const roleNames: Record<string, string> = { ADMINISTRATOR: 'администратор', DOCTOR: 'врач', MANAGER: 'менеджер', CASHIER: 'кассир' }

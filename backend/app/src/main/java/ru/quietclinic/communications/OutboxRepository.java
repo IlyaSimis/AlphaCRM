@@ -3,11 +3,14 @@ package ru.quietclinic.communications;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 interface OutboxRepository extends JpaRepository<OutboxMessage, UUID> {
   boolean existsByIdempotencyKey(String idempotencyKey);
+
+  Optional<OutboxMessage> findByIdempotencyKey(String idempotencyKey);
 
   /** Очередные попытки: PENDING и FAILED, чьё время пришло, по порядку постановки. */
   List<OutboxMessage> findTop50ByStatusInAndNextAttemptAtLessThanEqualOrderByCreatedAt(

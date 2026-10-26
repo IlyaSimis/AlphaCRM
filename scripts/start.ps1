@@ -23,7 +23,8 @@ if (-not $hadEnv) {
   $lines = (Get-Content '.env.example' -Encoding UTF8) `
     -replace '^POSTGRES_PASSWORD=.*', "POSTGRES_PASSWORD=$(New-RandomHex 24)" `
     -replace '^CLINIC_KMS_KEY=.*', "CLINIC_KMS_KEY=$(New-RandomHex 32)" `
-    -replace '^CLINIC_ADMIN_PASSWORD=.*', "CLINIC_ADMIN_PASSWORD=$(New-RandomHex 10)"
+    -replace '^CLINIC_ADMIN_PASSWORD=.*', "CLINIC_ADMIN_PASSWORD=$(New-RandomHex 10)" `
+    -replace '^CLINIC_BOT_API_TOKEN=.*', "CLINIC_BOT_API_TOKEN=$(New-RandomHex 32)"
   # WriteAllLines пишет UTF-8 без BOM: docker compose читает такой файл корректно.
   [System.IO.File]::WriteAllLines((Join-Path (Get-Location) '.env'), $lines)
   Write-Host 'Создан .env со случайным паролем БД, ключом шифрования и паролем администратора.'
@@ -39,6 +40,14 @@ if ($hadEnv -and -not (Select-String -Path '.env' -Pattern '^CLINIC_ADMIN_PASSWO
   $lines += "CLINIC_ADMIN_PASSWORD=$admin"
   [System.IO.File]::WriteAllLines((Join-Path (Get-Location) '.env'), $lines)
   Write-Host "В .env добавлен пароль начального администратора (логин admin, после входа смените): $admin"
+}
+
+if ($hadEnv -and -not (Select-String -Path '.env' -Pattern '^CLINIC_BOT_API_TOKEN=.+' -Quiet)) {
+  # Токен API Telegram-бота: дописывается в .env от прошлой версии.
+  $lines = @(Get-Content '.env' -Encoding UTF8 | Where-Object { $_ -notmatch '^CLINIC_BOT_API_TOKEN=' })
+  $lines += "CLINIC_BOT_API_TOKEN=$(New-RandomHex 32)"
+  [System.IO.File]::WriteAllLines((Join-Path (Get-Location) '.env'), $lines)
+  Write-Host 'В .env добавлен токен API Telegram-бота (CLINIC_BOT_API_TOKEN).'
 }
 
 if (-not $hadEnv -and $volumeExists) {

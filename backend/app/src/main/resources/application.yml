@@ -74,7 +74,24 @@ clinic:
     webhook-secret: ${CLINIC_OUTBOUND_WEBHOOK_SECRET:}
     telegram-bot-token: ${TELEGRAM_BOT_TOKEN:}
     telegram-api-url: ${TELEGRAM_API_URL:https://api.telegram.org}
+    # Под напоминанием в Telegram — кнопки «Подтвердить» и «Отменить запись»; их обрабатывает бот клиники.
+    telegram-reminder-buttons: ${TELEGRAM_REMINDER_BUTTONS:true}
   cashbox:
     # Онлайн-касса для чеков. Пусто — чек остаётся QUEUED.
     url: ${CLINIC_CASHBOX_URL:}
     secret: ${CLINIC_CASHBOX_SECRET:}
+  bot:
+    # API Telegram-бота (/api/v1/bot/**): сервисный токен в заголовке X-Bot-Token. Пусто — API выключено.
+    api-token: ${CLINIC_BOT_API_TOKEN:}
+    # Клиника бота. Пусто — единственная клиника в базе; при нескольких клиниках задайте id.
+    clinic-id: ${CLINIC_BOT_CLINIC_ID:}
+    # Логин сотрудника, которому уходят обращения «связаться с оператором». Пусто — первый активный администратор.
+    task-assignee: ${CLINIC_BOT_TASK_ASSIGNEE:}
+  online-booking:
+    # Услуга из справочника, на которую пациент записывается в боте: её длительность задаёт окно.
+    service-name: ${CLINIC_BOT_SERVICE:Первичный приём}
+    # Шаг начала окон от начала смены, горизонт в днях и минимальный запас до приёма.
+    slot-step: ${CLINIC_BOT_SLOT_STEP:PT30M}
+    days: ${CLINIC_BOT_BOOKING_DAYS:14}
+    min-lead: ${CLINIC_BOT_MIN_LEAD:PT2H}
+    max-slots: ${CLINIC_BOT_MAX_SLOTS:60}
