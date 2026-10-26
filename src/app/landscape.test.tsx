@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import css from '../index.css?raw'
 import { enterDemo, goOffline, menu, renderApp } from '../test/helpers'
-import { FAR_HILL, GROUND_HEIGHT, Landscape, MOUNTAINS } from './Landscape'
+import { Landscape, MOUNTAINS } from './Landscape'
 
 const content = () => document.querySelector('.content') as HTMLElement
 
@@ -20,9 +20,7 @@ describe('workspace background and greeting', () => {
     expect(scenes[0].closest('.main')).not.toBeNull()
     expect(scenes[0].closest('.sidebar')).toBeNull()
     expect(scenes[0]).toHaveAttribute('aria-hidden', 'true')
-    // Один inline SVG (внутри — вложенные svg для растяжения земли и позиций фигур).
-    expect(scenes[0].querySelectorAll('svg.ls-scene')).toHaveLength(1)
-    expect(Array.from(scenes[0].querySelectorAll('svg')).filter((svg) => !svg.parentElement?.closest('svg'))).toHaveLength(1)
+    expect(scenes[0].querySelectorAll('svg')).toHaveLength(1)
     // Оба светила в сцене: какое видно, решает тема (CSS), смена темы сцену не пересоздаёт.
     expect(scenes[0].querySelectorAll('.ls-sun')).toHaveLength(1)
     expect(scenes[0].querySelectorAll('.ls-moon')).toHaveLength(1)
@@ -73,60 +71,21 @@ describe('workspace background and greeting', () => {
   })
 })
 
-/** Точки контура «x y» из d пути (команды M, L, C, S — берутся конечные и опорные точки). */
-function points(d: string) {
-  const numbers = d.match(/-?\d+(\.\d+)?/g)!.map(Number)
-  const result: Array<{ x: number; y: number }> = []
-  for (let i = 0; i + 1 < numbers.length; i += 2) result.push({ x: numbers[i], y: numbers[i + 1] })
-  return result
-}
-
 describe('landscape layout', () => {
-  it('top and middle are plain sky; land, peaks, crowns and the lights stay in the bottom band', () => {
-    // Полоса земли — 180 px у нижнего края окна; над ней только небо цвета фона страницы.
-    expect(GROUND_HEIGHT).toBe(180)
-    expect(css).toMatch(/\.landscape \.ls-scene \{[^}]*bottom: 0;[^}]*height: 180px;/)
-    expect(css).toMatch(/\.landscape \{ --ls-sky-top: var\(--bg\);/)
-    expect(css).toMatch(/:root\[data-theme="dark"\] \.landscape \{ --ls-sky-top: var\(--bg\);/)
-
-    const mountains = points(MOUNTAINS)
-    const hill = points(FAR_HILL)
-    // Верх viewBox полосы — небо: ни холм, ни вершины не поднимаются выше 30 из 180.
-    for (const point of [...mountains, ...hill]) {
-      expect(point.y).toBeGreaterThanOrEqual(30)
-      expect(point.y).toBeLessThanOrEqual(GROUND_HEIGHT)
-    }
-    // Ближняя полоса — изломы (только прямые отрезки), с несколькими пиками и седловиной.
+  it('the middle line is mountains; the trees stand on the front hill', () => {
+    // Горы — прямые изломы с несколькими пиками разной высоты.
     expect(MOUNTAINS).not.toMatch(/[CSQT]/i)
-    const ridge = mountains.filter((point) => point.y < GROUND_HEIGHT)
+    const numbers = MOUNTAINS.match(/\d+/g)!.map(Number)
+    const ridge: Array<{ x: number; y: number }> = []
+    for (let i = 0; i + 1 < numbers.length; i += 2) if (numbers[i + 1] < 900) ridge.push({ x: numbers[i], y: numbers[i + 1] })
     const peaks = ridge.filter((point, i) => i > 0 && i < ridge.length - 1 && point.y < ridge[i - 1].y && point.y < ridge[i + 1].y)
-    expect(peaks.length).toBeGreaterThanOrEqual(2)
+    expect(peaks.length).toBeGreaterThanOrEqual(3)
     expect(new Set(peaks.map((peak) => peak.y)).size).toBe(peaks.length)
-    // Пики выше дальнего холма.
-    expect(Math.min(...peaks.map((peak) => peak.y))).toBeLessThan(Math.min(...hill.map((point) => point.y)))
 
+    // Деревья нарисованы после ближнего холма — стоят на первой линии, а не за горами.
     const { container } = render(<Landscape />)
-    const scene = container.querySelector('svg.ls-scene') as SVGSVGElement
-    expect(scene).toHaveAttribute('height', String(GROUND_HEIGHT))
-    for (const circle of Array.from(scene.querySelectorAll('circle'))) {
-      const cy = Number(circle.getAttribute('cy'))
-      expect(cy).toBeGreaterThan(0)
-      expect(cy).toBeLessThan(GROUND_HEIGHT)
-    }
-    expect(scene.querySelectorAll('.ls-crown')).toHaveLength(3)
-    expect(scene.querySelector('.ls-sun')).not.toBeNull()
-    expect(scene.querySelector('.ls-moon')).not.toBeNull()
-
-    // Роща — между двумя пиками (в седловине), а не на вершине.
-    const peakShares = peaks.map((peak) => (peak.x / 1440) * 100)
-    const grove = Array.from(scene.querySelectorAll('.ls-trees svg')).map((tree) => parseFloat(tree.getAttribute('x') ?? ''))
-    expect(grove).toHaveLength(2)
-    for (const x of grove) {
-      expect(peakShares.some((share) => Math.abs(share - x) < 2)).toBe(false)
-      expect(peakShares.some((share) => share < x) && peakShares.some((share) => share > x)).toBe(true)
-    }
-    // Дальнее дерево — левее рощи.
-    const far = parseFloat(scene.querySelector('.ls-tree-far svg')?.getAttribute('x') ?? '')
-    expect(far).toBeLessThan(Math.min(...grove))
+    const order = Array.from(container.querySelectorAll('.ls-far, .ls-near, .ls-trees')).map((node) => node.getAttribute('class'))
+    expect(order).toEqual(['ls-far', 'ls-near', 'ls-trees'])
+    expect(container.querySelectorAll('.ls-trees .ls-crown')).toHaveLength(3)
   })
 })
