@@ -100,42 +100,49 @@ export function TodayPage(props: TodayPageProps) {
         </Box>
       </Box>
       <Box className="today-grid">
-        {blocks.appointments && <TodayBlock title="Записи на сегодня и завтра" empty="Записей на сегодня и завтра нет" count={upcoming.length} error={apiOnline ? appointments.error : ''} loading={apiOnline && appointments.items === null && !appointments.error}>
-          {upcoming.map((item) => (
-            <Box component="button" type="button" className="today-row" key={item.id ?? `${item.date}-${item.time}-${item.name}`} onClick={() => props.onPatient(item)} aria-label={`Открыть карточку: ${item.name}, ${shortDate(item.date)} ${item.time}`}>
-              <Typography sx={{ fontWeight: 700, minWidth: 92 }}>{item.date === today ? 'сегодня' : 'завтра'} {item.time}</Typography>
-              <Box sx={{ flex: 1, minWidth: 0 }}><Typography sx={{ fontWeight: 650 }}>{item.name}</Typography><Typography sx={{ fontSize: 13, color: 'text.secondary' }}>{doctorName(item.practitionerId)} · {item.type}</Typography></Box>
-              <Typography sx={{ fontSize: 13 }}>{item.status}</Typography>
-            </Box>
-          ))}
-        </TodayBlock>}
-        {blocks.tasks && <TodayBlock title="Просроченные задачи" empty="Просроченных задач нет" count={overdue.length} error={props.tasksError} more={{ label: 'Все задачи', onClick: () => props.onOpen('registry') }}>
-          {overdue.map((task) => (
-            <Box component="button" type="button" className="today-row" key={task.id} onClick={() => props.onOpen('registry')} aria-label={`Просроченная задача: ${task.title}`}>
-              <Typography sx={{ fontWeight: 700, minWidth: 92, color: 'error.main' }}>до {shortDate(task.dueDate)}</Typography>
-              <Box sx={{ flex: 1, minWidth: 0 }}><Typography sx={{ fontWeight: 650 }}>{task.title}{patientName(task.patientId) ? ` · ${patientName(task.patientId)}` : ''}</Typography><Typography sx={{ fontSize: 13, color: 'text.secondary' }}>{props.staffName(task.assigneeId)}</Typography></Box>
-            </Box>
-          ))}
-        </TodayBlock>}
-        {blocks.unpaid && <TodayBlock title="Завершены и не оплачены" empty="Неоплаченных приёмов нет" count={unpaid.length} error={apiOnline ? billing.error : ''} loading={apiOnline && billing.items === null && !billing.error} more={{ label: 'Все счета', onClick: () => props.onOpen('cashier') }}>
-          {unpaid.map((row) => {
-            const amount = rowAmount(row)
-            return (
-              <Box component="button" type="button" className="today-row" key={row.appointment.id} onClick={() => props.onOpen('cashier')} aria-label={`Неоплаченный приём: ${row.appointment.name}, ${shortDate(row.appointment.date)}`}>
-                <Typography sx={{ fontWeight: 700, minWidth: 92 }}>{amount == null ? '—' : formatMoney(amount, row.charge?.currency ?? row.appointment.currency ?? 'RUB')}</Typography>
-                <Box sx={{ flex: 1, minWidth: 0 }}><Typography sx={{ fontWeight: 650 }}>{row.appointment.name}</Typography><Typography sx={{ fontSize: 13, color: 'text.secondary' }}>{shortDate(row.appointment.date)} · {stateLabels[row.state]}</Typography></Box>
+        {/* Колонки складываются сверху вниз: короткие списки не ждут высокий список соседа. */}
+        {(blocks.appointments || blocks.failed) && <Box className="today-column">
+          {blocks.appointments && <TodayBlock title="Записи на сегодня и завтра" empty="Записей на сегодня и завтра нет" count={upcoming.length} error={apiOnline ? appointments.error : ''} loading={apiOnline && appointments.items === null && !appointments.error}>
+            {upcoming.map((item) => (
+              <Box component="button" type="button" className="today-row" key={item.id ?? `${item.date}-${item.time}-${item.name}`} onClick={() => props.onPatient(item)} aria-label={`Открыть карточку: ${item.name}, ${shortDate(item.date)} ${item.time}`}>
+                <Typography sx={{ fontWeight: 700, minWidth: 92 }}>{item.date === today ? 'сегодня' : 'завтра'} {item.time}</Typography>
+                <Box sx={{ flex: 1, minWidth: 0 }}><Typography sx={{ fontWeight: 650 }}>{item.name}</Typography><Typography sx={{ fontSize: 13, color: 'text.secondary' }}>{doctorName(item.practitionerId)} · {item.type}</Typography></Box>
+                <Typography sx={{ fontSize: 13 }}>{item.status}</Typography>
               </Box>
-            )
-          })}
-        </TodayBlock>}
-        {blocks.failed && <TodayBlock title="Ошибки доставки" empty={apiOnline ? 'Ошибок доставки нет' : 'Демо-песочница ничего наружу не отправляет'} count={failures.length} error={apiOnline ? failed.error : ''} loading={apiOnline && failed.items === null && !failed.error} more={{ label: 'Все выводы', onClick: () => props.onOpen('outbox') }}>
-          {failures.map((item) => (
-            <Box component="button" type="button" className="today-row" key={item.id} onClick={() => props.onOpen('outbox')} aria-label={`Ошибка доставки: ${templateLabels[item.template] ?? item.template}`}>
-              <Typography sx={{ fontWeight: 700, minWidth: 92 }}>{formatClinicMoment(item.lastAttemptAt ?? item.createdAt)}</Typography>
-              <Box sx={{ flex: 1, minWidth: 0 }}><Typography sx={{ fontWeight: 650 }}>{templateLabels[item.template] ?? item.template} · {item.channel ? channelLabels[item.channel] ?? item.channel : 'канал не выбран'}</Typography><Typography sx={{ fontSize: 13, color: 'text.secondary' }}>{reasonText(item.reason) || 'причина не указана'}</Typography></Box>
-            </Box>
-          ))}
-        </TodayBlock>}
+            ))}
+          </TodayBlock>}
+          {blocks.failed && <TodayBlock title="Ошибки доставки" empty={apiOnline ? 'Ошибок доставки нет' : 'Демо-песочница ничего наружу не отправляет'} count={failures.length} error={apiOnline ? failed.error : ''} loading={apiOnline && failed.items === null && !failed.error} more={{ label: 'Все выводы', onClick: () => props.onOpen('outbox') }}>
+            {failures.map((item) => (
+              <Box component="button" type="button" className="today-row" key={item.id} onClick={() => props.onOpen('outbox')} aria-label={`Ошибка доставки: ${templateLabels[item.template] ?? item.template}`}>
+                <Typography sx={{ fontWeight: 700, minWidth: 92 }}>{formatClinicMoment(item.lastAttemptAt ?? item.createdAt)}</Typography>
+                <Box sx={{ flex: 1, minWidth: 0 }}><Typography sx={{ fontWeight: 650 }}>{templateLabels[item.template] ?? item.template} · {item.channel ? channelLabels[item.channel] ?? item.channel : 'канал не выбран'}</Typography><Typography sx={{ fontSize: 13, color: 'text.secondary' }}>{reasonText(item.reason) || 'причина не указана'}</Typography></Box>
+              </Box>
+            ))}
+          </TodayBlock>}
+        </Box>}
+        {blocks.tasks && <Box className="today-column">
+          {blocks.tasks && <TodayBlock title="Просроченные задачи" empty="Просроченных задач нет" count={overdue.length} error={props.tasksError} more={{ label: 'Все задачи', onClick: () => props.onOpen('registry') }}>
+            {overdue.map((task) => (
+              <Box component="button" type="button" className="today-row" key={task.id} onClick={() => props.onOpen('registry')} aria-label={`Просроченная задача: ${task.title}`}>
+                <Typography sx={{ fontWeight: 700, minWidth: 92, color: 'error.main' }}>до {shortDate(task.dueDate)}</Typography>
+                <Box sx={{ flex: 1, minWidth: 0 }}><Typography sx={{ fontWeight: 650 }}>{task.title}{patientName(task.patientId) ? ` · ${patientName(task.patientId)}` : ''}</Typography><Typography sx={{ fontSize: 13, color: 'text.secondary' }}>{props.staffName(task.assigneeId)}</Typography></Box>
+              </Box>
+            ))}
+          </TodayBlock>}
+        </Box>}
+        {blocks.unpaid && <Box className="today-column">
+          {blocks.unpaid && <TodayBlock title="Завершены и не оплачены" empty="Неоплаченных приёмов нет" count={unpaid.length} error={apiOnline ? billing.error : ''} loading={apiOnline && billing.items === null && !billing.error} more={{ label: 'Все счета', onClick: () => props.onOpen('cashier') }}>
+            {unpaid.map((row) => {
+              const amount = rowAmount(row)
+              return (
+                <Box component="button" type="button" className="today-row" key={row.appointment.id} onClick={() => props.onOpen('cashier')} aria-label={`Неоплаченный приём: ${row.appointment.name}, ${shortDate(row.appointment.date)}`}>
+                  <Typography sx={{ fontWeight: 700, minWidth: 92 }}>{amount == null ? '—' : formatMoney(amount, row.charge?.currency ?? row.appointment.currency ?? 'RUB')}</Typography>
+                  <Box sx={{ flex: 1, minWidth: 0 }}><Typography sx={{ fontWeight: 650 }}>{row.appointment.name}</Typography><Typography sx={{ fontSize: 13, color: 'text.secondary' }}>{shortDate(row.appointment.date)} · {stateLabels[row.state]}</Typography></Box>
+                </Box>
+              )
+            })}
+          </TodayBlock>}
+        </Box>}
       </Box>
     </>
   )

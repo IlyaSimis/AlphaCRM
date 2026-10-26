@@ -76,4 +76,48 @@ class AuditControllerTest {
 
     mvc.perform(get("/api/v1/audit").with(staff.role("DOCTOR"))).andExpect(status().isForbidden());
   }
+
+  @Test
+  void pagesTwentyAtATimeNewestFirst() throws Exception {
+    for (var i = 0; i < 3; i++) {
+      mvc.perform(get("/api/v1/patients").with(staff.role("MANAGER"))).andExpect(status().isOk());
+    }
+    var first =
+        mvc.perform(get("/api/v1/audit/page").param("size", "2").with(staff.role("MANAGER")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.page").value(0))
+            .andExpect(jsonPath("$.size").value(2))
+            .andExpect(jsonPath("$.items.length()").value(2))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    long total = ((Number) JsonPath.read(first, "$.total")).longValue();
+    org.assertj.core.api.Assertions.assertThat(total).isGreaterThanOrEqualTo(3);
+    var newest = java.time.Instant.parse(JsonPath.<String>read(first, "$.items[0].occurredAt"));
+    var older = java.time.Instant.parse(JsonPath.<String>read(first, "$.items[1].occurredAt"));
+    org.assertj.core.api.Assertions.assertThat(newest).isAfterOrEqualTo(older);
+    var second =
+        mvc.perform(
+                get("/api/v1/audit/page")
+                    .param("size", "2")
+                    .param("page", "1")
+                    .with(staff.role("MANAGER")))
+            .andExpect(jsonPath("$.page").value(1))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    org.assertj.core.api.Assertions.assertThat(JsonPath.<String>read(second, "$.items[0].id"))
+        .isNotIn(JsonPath.<String>read(first, "$.items[0].id"), JsonPath.<String>read(first, "$.items[1].id"));
+    // По умолчанию — 20 на страницу, больше 100 не отдаётся.
+    mvc.perform(get("/api/v1/audit/page").with(staff.role("MANAGER")))
+        .andExpect(jsonPath("$.size").value(20));
+    mvc.perform(get("/api/v1/audit/page").param("size", "500").with(staff.role("MANAGER")))
+        .andExpect(jsonPath("$.size").value(100));
+    mvc.perform(
+            get("/api/v1/audit/page").param("result", "DENIED").with(staff.role("ADMINISTRATOR")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items[?(@.result != 'DENIED')]").isEmpty());
+    mvc.perform(get("/api/v1/audit/page").with(staff.role("CASHIER")))
+        .andExpect(status().isForbidden());
+  }
 }

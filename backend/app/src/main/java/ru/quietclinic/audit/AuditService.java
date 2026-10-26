@@ -3,6 +3,7 @@ package ru.quietclinic.audit;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,19 +27,41 @@ public class AuditService {
   public List<AuditView> recent(Collection<UUID> actorIds) {
     if (actorIds.isEmpty()) return List.of();
     return repository.findTop100ByActorIdInOrderByOccurredAtDesc(actorIds).stream()
-        .map(
-            e ->
-                new AuditView(
-                    e.id,
-                    e.occurredAt,
-                    e.actorId,
-                    e.action,
-                    e.objectType,
-                    e.objectId,
-                    e.result,
-                    e.reason,
-                    e.correlationId,
-                    null))
+        .map(AuditService::view)
         .toList();
+  }
+
+  /**
+   * Страница журнала: page с нуля, size событий, новые сверху. result — только ALLOWED или DENIED;
+   * пусто — все.
+   */
+  @Transactional(readOnly = true)
+  public AuditPage page(Collection<UUID> actorIds, String result, int page, int size) {
+    if (actorIds.isEmpty()) return new AuditPage(List.of(), page, size, 0);
+    var request = PageRequest.of(page, size);
+    var rows =
+        result == null || result.isBlank()
+            ? repository.findByActorIdInOrderByOccurredAtDescIdDesc(actorIds, request)
+            : repository.findByActorIdInAndResultOrderByOccurredAtDescIdDesc(
+                actorIds, result, request);
+    return new AuditPage(
+        rows.getContent().stream().map(AuditService::view).toList(),
+        page,
+        size,
+        rows.getTotalElements());
+  }
+
+  private static AuditView view(AuditEvent e) {
+    return new AuditView(
+        e.id,
+        e.occurredAt,
+        e.actorId,
+        e.action,
+        e.objectType,
+        e.objectId,
+        e.result,
+        e.reason,
+        e.correlationId,
+        null);
   }
 }

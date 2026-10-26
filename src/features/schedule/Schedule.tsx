@@ -75,7 +75,7 @@ export function Schedule(props: ScheduleProps) {
           <IconButton aria-label={view === 'week' ? 'Предыдущая неделя' : 'Предыдущий день'} onClick={() => onDate(shiftDate(date, -step))}>‹</IconButton>
           <Box>
             <Typography sx={{ fontWeight: 750 }}>{view === 'week' ? `Неделя ${shortDate(days[0])} – ${shortDate(days[6])}` : formatDay(date)}</Typography>
-            <TextField size="small" type="date" label="День расписания" value={date} onChange={(event) => { if (event.target.value) onDate(event.target.value) }} slotProps={{ inputLabel: { shrink: true } }} />
+            <TextField size="small" type="date" value={date} onChange={(event) => { if (event.target.value) onDate(event.target.value) }} slotProps={{ htmlInput: { 'aria-label': 'День расписания' } }} />
           </Box>
           <IconButton aria-label={view === 'week' ? 'Следующая неделя' : 'Следующий день'} onClick={() => onDate(shiftDate(date, step))}>›</IconButton>
           <ToggleButtonGroup size="small" exclusive value={view} onChange={(_event: unknown, next: ScheduleView | null) => { if (next) onView(next) }} aria-label="Вид расписания">

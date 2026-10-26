@@ -87,9 +87,7 @@ button, input, textarea { font: inherit; }
 .nav-item svg { width: 20px; }
 .nav-item:hover { background: var(--hover); }
 .nav-item.active { color: var(--active-text); background: var(--active-bg); }
-.privacy-note { margin-top: auto; border: 1px solid var(--privacy-border); background: var(--privacy-bg); color: var(--privacy-text); border-radius: 12px; padding: 13px; display: flex; gap: 10px; }
-.privacy-note svg { width: 18px; flex-shrink: 0; }
-.profile { display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--border); margin-top: 18px; padding: 18px 5px 0; }
+.profile { display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--border); margin-top: auto; padding: 18px 5px 0; }
 .main { flex: 1; min-width: 0; position: relative; isolation: isolate; }
 /* Шапка (sticky, z-index 5) и страница — над пейзажем. */
 .main > .content { position: relative; z-index: 1; }
@@ -183,7 +181,8 @@ button, input, textarea { font: inherit; }
 /* «Сегодня»: приветствие крупно рядом с датой, списки ниже шапки страницы. */
 .greeting.greeting--large { font-size: 26px !important; font-weight: 700 !important; line-height: 1.2 !important; }
 .section-intro.today-intro { margin-bottom: 56px; }
-.today-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; align-items: start; }
+.today-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; align-items: start; }
+.today-column { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .today-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 4px; border: 0; border-bottom: 1px solid var(--border-soft); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .today-row:last-child { border-bottom: 0; }
 .today-row:hover, .today-row:focus-visible { background: var(--surface-hover, rgba(127, 127, 127, 0.08)); }
@@ -244,10 +243,12 @@ button, input, textarea { font: inherit; }
 .section-intro { display: flex; justify-content: space-between; align-items: end; margin-bottom: 22px; }
 .data-boundary { margin: 18px 0; padding: 14px 17px; border-radius: 12px; display: flex; gap: 12px; color: var(--privacy-text); background: var(--privacy-bg); border: 1px solid var(--privacy-border); }
 .patient-results { overflow: hidden; }
-.patient-row { min-height: 84px; display: grid; grid-template-columns: auto minmax(190px, 1.5fr) 1fr auto auto; align-items: center; gap: 16px; padding: 14px 20px; border-bottom: 1px solid var(--border-soft); cursor: pointer; }
+.patient-row { min-height: 84px; display: grid; grid-template-columns: auto minmax(190px, 1.5fr) minmax(140px, 1fr) 170px auto; align-items: center; gap: 16px; padding: 14px 20px; border-bottom: 1px solid var(--border-soft); cursor: pointer; }
 .patient-row:hover { background: var(--hover); }
 .patient-row:last-child { border-bottom: 0; }
 .patient-main { min-width: 0; }
+/* Колонка согласия одной ширины во всех строках: телефон не сдвигается из-за длины подписи. */
+.patient-row > .MuiChip-root { justify-self: end; }
 .empty { min-height: 260px; display: flex; flex-direction: column; justify-content: center; align-items: center; color: var(--muted); gap: 8px; }
 .empty svg { font-size: 44px; color: var(--label); }
 .patient-header { display: flex; gap: 17px; align-items: center; background: var(--paper); border: 1px solid var(--border); border-radius: 15px; padding: 22px; margin-bottom: 16px; }

@@ -1,4 +1,4 @@
-import { ArticleRounded, BadgeRounded, CalendarMonthRounded, ContactPhoneRounded, HealthAndSafetyRounded, HistoryRounded, InsightsRounded, MedicalServicesRounded, OutboxRounded, PaymentsRounded, PeopleAltRounded, ShieldOutlined, TodayRounded, TuneRounded } from '@mui/icons-material'
+import { ArticleRounded, BadgeRounded, CalendarMonthRounded, ContactPhoneRounded, HealthAndSafetyRounded, HistoryRounded, InsightsRounded, MedicalServicesRounded, OutboxRounded, PaymentsRounded, PeopleAltRounded, TodayRounded, TuneRounded } from '@mui/icons-material'
 import { Avatar, Box, Stack, Typography } from '@mui/material'
 import type { ReactNode } from 'react'
 import type { StaffItem } from '../api/types'
@@ -62,10 +62,6 @@ export function Sidebar({ className, page, staff, live, visits, activeVisit, onN
             <NavItem key={visit.appointmentId ?? visit.encounter?.encounterId ?? visit.patientId} active={activeVisit === visit} icon={<MedicalServicesRounded />} label={`Приём: ${visit.patientName}${visit.time ? ` · ${visit.time}` : ''}`} onClick={() => onVisit(visit)} />
           ))}
         </Stack>
-      </Box>
-      <Box className="privacy-note">
-        <ShieldOutlined />
-        <Box><Typography sx={{ fontWeight: 700, fontSize: 13 }}>Данные разделены</Typography><Typography sx={{ fontSize: 12 }}>Доступ к клинической карте — только при участии в лечении</Typography></Box>
       </Box>
       <Box className="profile">
         <Avatar sx={{ bgcolor: 'action.selected', color: 'primary.main' }}>{profile.initials}</Avatar>

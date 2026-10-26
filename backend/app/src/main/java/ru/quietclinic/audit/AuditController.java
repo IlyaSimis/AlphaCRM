@@ -43,6 +43,21 @@ public class AuditController {
         .toList();
   }
 
+  /** Журнал постранично: по 20 событий (size 1–100), новые сверху; total — для числа страниц. */
+  @GetMapping("/page")
+  AuditPage page(
+      @RequestParam(required = false) String result,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size) {
+    requireRole("MANAGER", "ADMINISTRATOR");
+    var actors = clinicActors();
+    var safePage = Math.max(page, 0);
+    var safeSize = Math.min(Math.max(size, 1), 100);
+    var rows = audit.page(actors.keySet(), result, safePage, safeSize);
+    return rows.withItems(
+        rows.items().stream().map(e -> e.withActorName(actors.get(e.actorId()))).toList());
+  }
+
   /** Авторы действий своей клиники и их имена: у врача автор — id карточки врача. */
   private Map<UUID, String> clinicActors() {
     var actors = new HashMap<UUID, String>();
