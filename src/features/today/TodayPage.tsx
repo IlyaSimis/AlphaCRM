@@ -7,6 +7,7 @@ import { loadAppointments } from '../../api/schedule'
 import type { ChargeItem, OutboxItem, PatientItem, Practitioner, ScheduleItem, TaskItem } from '../../api/types'
 import { formatClinicMoment } from '../../shared/clinicTime'
 import { formatDay, localToday, shiftDate, shortDate } from '../../shared/dates'
+import { greeting } from '../../shared/greeting'
 import type { Role } from '../../shared/roles'
 import { buildCashierRows, stateLabels, type CashierRow } from '../cashier/cashier'
 import { channelLabels, reasonText, templateLabels } from '../outbox/outboxLabels'
@@ -16,7 +17,7 @@ import { TodayBlock } from './TodayBlock'
 
 type TodayPageProps = {
   role: Role
-  /** Кто вошёл — показывается рядом с датой. */
+  /** ФИО того, кто вошёл: рядом с датой — приветствие по первому слову. */
   selfName: string
   apiOnline: boolean
   practitioners: Practitioner[]
@@ -89,7 +90,7 @@ export function TodayPage(props: TodayPageProps) {
         <Box>
           <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, flexWrap: 'wrap' }}>
             <Typography variant="h4" sx={{ fontWeight: 750 }}>{formatDay(today)}</Typography>
-            <Typography sx={{ color: 'text.secondary', fontWeight: 650 }}>{props.selfName}</Typography>
+            <Typography className="greeting">{greeting(props.selfName)}</Typography>
           </Box>
           <Typography sx={{ color: 'text.secondary' }}>Что требует внимания: ближайшие записи и незакрытые дела.</Typography>
           {(actions.booking || actions.patient || actions.cashier) && <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1.5, flexWrap: 'wrap' }} role="group" aria-label="Быстрые действия">

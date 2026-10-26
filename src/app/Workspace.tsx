@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Box, Drawer, Snackbar } from '@mui/material'
+import { Box, Drawer, Snackbar, Typography } from '@mui/material'
 import { changePassword } from '../api/auth'
 import { PETROV_ID } from '../api/client'
 import type { AssignedStaff, EncounterView, PatientItem, ScheduleItem, StaffItem, WaitlistItem } from '../api/types'
@@ -28,7 +28,9 @@ import { TodayPage } from '../features/today/TodayPage'
 import { Visit } from '../features/visit/Visit'
 import type { VisitTarget } from '../features/visit/visit'
 import { formatDay, localToday } from '../shared/dates'
+import { clinicHour, dayPeriod, greeting } from '../shared/greeting'
 import { canManageClinic, canSeeRegistry } from '../shared/roles'
+import { Landscape } from './Landscape'
 import { canOpen, pageTitles, startPage, type Page } from './pages'
 import { Sidebar } from './Sidebar'
 import { Topbar } from './Topbar'
@@ -49,6 +51,8 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
   const clinic = useClinicData(doctorId, live)
   const registry = useRegistry(staff, live, clinic.apiOnline, clinic.notify)
   const [page, setPage] = useState<Page>(() => startPage(role))
+  // Часть дня для пейзажа — один раз на вход: сцена выплывает при входе и дальше не меняется.
+  const [period] = useState(() => dayPeriod(clinicHour()))
   const [query, setQuery] = useState('')
   const [drawer, setDrawer] = useState(false)
   const [doctorFilter, setDoctorFilter] = useState('all')
@@ -182,9 +186,12 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
       <Box className="desktop-sidebar"><Sidebar className="sidebar" page={page} staff={staff} live={live} visits={visits} activeVisit={page === 'visit' ? visit : null} onNavigate={navigate} onVisit={openVisit} /></Box>
       <Drawer open={drawer} onClose={() => setDrawer(false)}><Sidebar className="sidebar sidebar-in-drawer" page={page} staff={staff} live={live} visits={visits} activeVisit={page === 'visit' ? visit : null} onNavigate={navigate} onVisit={(target) => { openVisit(target); setDrawer(false) }} /></Drawer>
       <Box component="main" className="main">
+        <Landscape period={period} />
         <Topbar eyebrow={eyebrow} title={pageTitles[page]} live={live} clinicName={staff.clinicName} onPassword={() => { setPasswordError(''); setPassword(true) }} onSignOut={onSignOut} onMenu={() => setDrawer(true)} />
         <Box className="content">
           {page === 'today' && <TodayPage role={role} selfName={staff.fullName} onNewAppointment={() => openBooking(localToday())} onNewPatient={() => { setCreateError(''); setPatientDialog(true) }} apiOnline={clinic.apiOnline} practitioners={practitioners} patients={patientItems} localAppointments={scheduleItems} localCharges={clinic.localCharges} dueTasks={registry.todayTasks} tasksError={registry.error} staffName={registry.staffName} onPatient={openPatientOf} onOpen={navigate} />}
+          {/* Врача встречают на расписании; остальных — на «Сегодня». */}
+          {page === 'schedule' && role === 'DOCTOR' && <Typography className="greeting" sx={{ mb: 1.5 }}>{greeting(staff.fullName)}</Typography>}
           {page === 'schedule' && <Schedule role={role} doctorId={doctorId} date={scheduleDate} view={clinic.scheduleView} appointments={scheduleItems} practitioners={practitioners} doctorFilter={doctorFilter} onDoctorFilter={setDoctorFilter} apiOnline={clinic.apiOnline} onDate={clinic.setScheduleDate} onView={clinic.setScheduleView} onBooking={openBooking} onStatus={(item, to) => clinic.changeStatus(item, to, role)} onPatient={openPatientOf} onStartVisit={startVisit} onReschedule={(item) => { setMoveError(''); setMoving(item) }} onCancel={(item) => clinic.cancelBooking(item, role)} waitlistCount={(item) => registry.matches(item.practitionerId, item.date).length} onWaitlist={(item) => { setWaitError(''); setWaitSlot(item) }} />}
           {page === 'patients' && <PatientsList query={query} setQuery={setQuery} patients={visiblePatients} onPatient={openPatient} onCreate={() => setPatientDialog(true)} />}
           {page === 'patient' && selectedPatient && <PatientCard key={selectedPatient.id} patient={selectedPatient} role={role} doctorId={doctorId} apiOnline={clinic.apiOnline} appointments={scheduleItems} practitioners={practitioners} revision={clinic.revision}

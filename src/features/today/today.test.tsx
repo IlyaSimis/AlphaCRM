@@ -129,7 +129,9 @@ describe('«Сегодня» — домашняя страница', () => {
     // Повторное нажатие на уже открытой «Сегодня» ничего не ломает.
     await user.click(within(sidebar()).getByRole('button', { name: 'На главную' }))
     expect(screen.getByRole('heading', { name: '20 октября 2026, вторник', level: 4 })).toBeInTheDocument()
-    expect(within(content()).getByText('Администратор песочницы')).toBeInTheDocument()
+    // «Сейчас» в тестах — 06:00 по часам клиники (UTC): утро, имя — первое слово ФИО.
+    expect(within(content()).getByText('Доброе утро, Администратор')).toBeInTheDocument()
+    expect(within(content()).queryByText('Администратор песочницы')).not.toBeInTheDocument()
   })
 
   it('the doctor has no «Старт» block; the AlphaCRM button returns to the schedule and keeps open visits', async () => {
