@@ -180,6 +180,9 @@ button, input, textarea { font: inherit; }
 .login-card .brand { padding-bottom: 6px; }
 .demo-profile { display: flex; align-items: center; gap: 12px; }
 .demo-profile .MuiButton-root { flex: 1; justify-content: flex-start; }
+/* «Сегодня»: приветствие крупно рядом с датой, списки ниже шапки страницы. */
+.greeting.greeting--large { font-size: 26px !important; font-weight: 700 !important; line-height: 1.2 !important; }
+.section-intro.today-intro { margin-bottom: 56px; }
 .today-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; align-items: start; }
 .today-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 4px; border: 0; border-bottom: 1px solid var(--border-soft); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .today-row:last-child { border-bottom: 0; }
@@ -281,6 +284,8 @@ button, input, textarea { font: inherit; }
   .analytics-columns { grid-template-columns: 1fr; }
 }
 @media (max-width: 650px) {
+  .section-intro.today-intro { margin-bottom: 28px; }
+  .greeting.greeting--large { font-size: 20px !important; }
   .topbar { height: 76px; }
   .topbar h5 { font-size: 18px; }
   .role-switch > p { display: none; }

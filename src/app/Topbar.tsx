@@ -21,7 +21,7 @@ export function Topbar({ eyebrow, title, live, clinicName, onPassword, onSignOut
   return (
     <Box className="topbar">
       <IconButton className="mobile-menu" onClick={onMenu}><MenuRounded /></IconButton>
-      <Box><Typography className="eyebrow">{eyebrow}</Typography><Typography variant="h5" sx={{ fontWeight: 750 }}>{title}</Typography></Box>
+      <Box><Typography className="eyebrow">{eyebrow}</Typography>{title && <Typography variant="h5" sx={{ fontWeight: 750 }}>{title}</Typography>}</Box>
       <Box className="role-switch">
         {live && clinicName && <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>{clinicName}</Typography>}
         {!live && <Chip size="small" color="warning" variant="outlined" label="Демо-песочница: данные не сохраняются" />}

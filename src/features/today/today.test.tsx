@@ -130,7 +130,11 @@ describe('«Сегодня» — домашняя страница', () => {
     await user.click(within(sidebar()).getByRole('button', { name: 'На главную' }))
     expect(screen.getByRole('heading', { name: '20 октября 2026, вторник', level: 4 })).toBeInTheDocument()
     // «Сейчас» в тестах — 06:00 по часам клиники (UTC): утро, имя — первое слово ФИО.
-    expect(within(content()).getByText('Доброе утро, Администратор')).toBeInTheDocument()
+    expect(within(content()).getByText('Доброе утро, Администратор')).toHaveClass('greeting--large')
+    // В шапке страницы — только строка с датой, без заголовка «Сегодня»; подзаголовка нет.
+    expect(within(document.querySelector('.topbar') as HTMLElement).queryByRole('heading', { name: 'Сегодня' })).not.toBeInTheDocument()
+    expect(within(document.querySelector('.topbar') as HTMLElement).getByText(/РАБОЧИЙ ДЕНЬ/)).toBeInTheDocument()
+    expect(screen.queryByText(/Что требует внимания/)).not.toBeInTheDocument()
     expect(within(content()).queryByText('Администратор песочницы')).not.toBeInTheDocument()
   })
 

@@ -90,10 +90,9 @@ export function TodayPage(props: TodayPageProps) {
         <Box>
           <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, flexWrap: 'wrap' }}>
             <Typography variant="h4" sx={{ fontWeight: 750 }}>{formatDay(today)}</Typography>
-            <Typography className="greeting">{greeting(props.selfName)}</Typography>
+            <Typography className="greeting greeting--large">{greeting(props.selfName)}</Typography>
           </Box>
-          <Typography sx={{ color: 'text.secondary' }}>Что требует внимания: ближайшие записи и незакрытые дела.</Typography>
-          {(actions.booking || actions.patient || actions.cashier) && <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1.5, flexWrap: 'wrap' }} role="group" aria-label="Быстрые действия">
+          {(actions.booking || actions.patient || actions.cashier) && <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 2, flexWrap: 'wrap' }} role="group" aria-label="Быстрые действия">
             {actions.booking && <Button variant="contained" startIcon={<AddRounded />} onClick={props.onNewAppointment}>Новая запись</Button>}
             {actions.patient && <Button variant="outlined" startIcon={<PersonAddAlt1Rounded />} onClick={props.onNewPatient}>Новый пациент</Button>}
             {actions.cashier && <Button variant="outlined" startIcon={<PaymentsRounded />} onClick={() => props.onOpen('cashier')}>Касса</Button>}

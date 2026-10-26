@@ -84,7 +84,7 @@ describe('landscape layout', () => {
 
     // Деревья нарисованы после ближнего холма — стоят на первой линии, а не за горами.
     const { container } = render(<Landscape />)
-    const order = Array.from(container.querySelectorAll('.ls-far, .ls-near, .ls-trees')).map((node) => node.getAttribute('class'))
+    const order = Array.from(container.querySelectorAll('.ls-far, .ls-near, .ls-trees')).map((node: Element) => node.getAttribute('class'))
     expect(order).toEqual(['ls-far', 'ls-near', 'ls-trees'])
     expect(container.querySelectorAll('.ls-trees .ls-crown')).toHaveLength(3)
   })
