@@ -34,12 +34,13 @@ import { Visit } from '../features/visit/Visit'
 import type { VisitTarget } from '../features/visit/visit'
 import { formatDay, localToday } from '../shared/dates'
 import { greeting } from '../shared/greeting'
-import { administratorRoles, canManagePrices, canManageRegistry, canSeeRegistry, canWriteClinical } from '../shared/roles'
+import { administratorRoles, canManagePrices, canManageRegistry, canSeeRegistry, canWriteClinical, staffRolesOf } from '../shared/roles'
 import { Landscape } from './Landscape'
 import { canOpen, driveView, firstPageOf, pageTitles, serviceOf, servicesFor, startPage, stockSection, type Page, type Service } from './pages'
 import { Sidebar } from './Sidebar'
 import { Topbar } from './Topbar'
 import { useClinicData } from './useClinicData'
+import { rolesOf } from '../shared/permissions'
 
 type WorkspaceProps = {
   staff: StaffItem
@@ -50,7 +51,7 @@ type WorkspaceProps = {
 
 /** Рабочее место сотрудника. Роль и врач берутся из учётной записи — переключить их нельзя. */
 export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
-  const role = staff.role
+  const role = rolesOf(staff)
   // Для врача автор действия — его карточка врача: тот же id, что actorId() на сервере.
   const doctorId = staff.practitionerId ?? ''
   const clinic = useClinicData(doctorId, live)
@@ -178,7 +179,7 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
   }
 
   // Постоянный администратор выбирается из активных администраторов клиники.
-  const administrators = registry.staffList.filter((item) => administratorRoles.includes(item.role))
+  const administrators = registry.staffList.filter((item) => staffRolesOf(item).some((itemRole) => administratorRoles.includes(itemRole)))
   const assignedOf = (id: string | null, current?: AssignedStaff | null): AssignedStaff | null => {
     if (!id) return null
     if (current?.id === id) return current

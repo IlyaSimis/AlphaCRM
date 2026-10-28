@@ -17,7 +17,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.quietclinic.audit.AuditService;
 import ru.quietclinic.platform.Permission;
-import ru.quietclinic.platform.RolePermissions;
 
 /**
  * Административные данные пациента: поиск, регистрация, карточка и редактирование. Всё — в пределах
@@ -29,13 +28,6 @@ import ru.quietclinic.platform.RolePermissions;
  */
 @Service
 class PatientService {
-  /** Постоянный администратор пациента — сотрудник одной из этих ролей. */
-  static final java.util.Set<String> ADMINISTRATORS =
-      java.util.Set.of(
-          RolePermissions.OWNER,
-          RolePermissions.SENIOR_ADMINISTRATOR,
-          RolePermissions.ADMINISTRATOR);
-
   private final PatientRepository patients;
   private final ContactRepository contacts;
   private final AuditService audit;
@@ -112,8 +104,10 @@ class PatientService {
     if (staffId == null || staffId.equals(current)) return;
     var rows =
         jdbc.query(
-            "select role, active from staff_user where id = ? and clinic_id = ?",
-            (rs, i) -> ADMINISTRATORS.contains(rs.getString("role")) && rs.getBoolean("active"),
+            "select u.active, (select count(*) from staff_role r where r.staff_id = u.id"
+                + " and r.role in ('OWNER', 'SENIOR_ADMINISTRATOR', 'ADMINISTRATOR')) as admin"
+                + " from staff_user u where u.id = ? and u.clinic_id = ?",
+            (rs, i) -> rs.getLong("admin") > 0 && rs.getBoolean("active"),
             staffId,
             clinicId());
     if (rows.isEmpty()) throw notFound("STAFF_NOT_FOUND", "Staff member not found");

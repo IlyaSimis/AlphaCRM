@@ -6,11 +6,9 @@ import static ru.quietclinic.platform.PlatformConfig.unauthorized;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
@@ -72,8 +70,7 @@ class AuthService {
     throttle.succeeded(address, username);
     var principal = StaffPrincipal.of(user.get());
     var authentication =
-        UsernamePasswordAuthenticationToken.authenticated(
-            principal, null, List.of(new SimpleGrantedAuthority("ROLE_" + principal.role())));
+        UsernamePasswordAuthenticationToken.authenticated(principal, null, principal.authorities());
     var context = SecurityContextHolder.createEmptyContext();
     context.setAuthentication(authentication);
     SecurityContextHolder.setContext(context);

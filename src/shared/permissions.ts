@@ -75,19 +75,35 @@ export const rolePermissions: Record<StaffRole, Permission[]> = {
   ],
 }
 
-/** Разрешения сотрудника: с сервера, если пришли, иначе по роли. */
-export function permissionsOf(staff: Pick<StaffItem, 'role' | 'permissions'>): Permission[] {
-  return staff.permissions && staff.permissions.length > 0 ? (staff.permissions as Permission[]) : rolePermissions[staff.role] ?? []
+/** Одна роль или несколько: у сотрудника с несколькими ролями права складываются. */
+export type RoleSet = StaffRole | readonly StaffRole[]
+
+const asList = (role: RoleSet): readonly StaffRole[] => (typeof role === 'string' ? [role] : role)
+
+/** Роли сотрудника для проверок прав: одна — кодом, несколько — тем же массивом (без копии). */
+export function rolesOf(staff: Pick<StaffItem, 'role' | 'roles'>): RoleSet {
+  return staff.roles && staff.roles.length > 1 ? staff.roles : staff.role
 }
 
-/** Есть ли у роли хотя бы одно из разрешений. */
-export function can(role: StaffRole, ...permissions: Permission[]) {
-  const granted = rolePermissions[role] ?? []
-  return permissions.some((permission) => granted.includes(permission))
+/** Разрешения сотрудника: с сервера, если пришли, иначе по ролям. */
+export function permissionsOf(staff: Pick<StaffItem, 'role' | 'roles' | 'permissions'>): Permission[] {
+  if (staff.permissions && staff.permissions.length > 0) return staff.permissions as Permission[]
+  return [...new Set(asList(rolesOf(staff)).flatMap((role) => rolePermissions[role] ?? []))]
 }
+
+/** Есть ли у роли (у одной из ролей) хотя бы одно из разрешений. */
+export function can(role: RoleSet, ...permissions: Permission[]) {
+  return asList(role).some((item) => {
+    const granted = rolePermissions[item] ?? []
+    return permissions.some((permission) => granted.includes(permission))
+  })
+}
+
+/** Есть ли среди ролей эта. */
+export const hasRole = (role: RoleSet, target: StaffRole) => asList(role).includes(target)
 
 /** Роли, которые сотрудник может назначить (и обслуживать): не выше своих прав. */
-export function assignableRoles(role: StaffRole): StaffRole[] {
+export function assignableRoles(role: RoleSet): StaffRole[] {
   const all: StaffRole[] = ['OWNER', 'SENIOR_ADMINISTRATOR', 'ADMINISTRATOR', 'MANAGER', 'DOCTOR', 'NURSE', 'CASHIER', 'SUPPORT']
   return all.filter((target) => {
     if (target === 'OWNER' || target === 'SENIOR_ADMINISTRATOR') return can(role, 'identity.role.assign-privileged')

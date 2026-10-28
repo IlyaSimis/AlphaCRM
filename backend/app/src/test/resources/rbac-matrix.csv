@@ -332,3 +332,11 @@ DOCTOR;GET;/api/v1/clinical/break-glass?from=2026-10-01&to=2026-10-31;403;
 NURSE;GET;/api/v1/clinical/break-glass?from=2026-10-01&to=2026-10-31;403;
 CASHIER;GET;/api/v1/clinical/break-glass?from=2026-10-01&to=2026-10-31;403;
 SUPPORT;GET;/api/v1/clinical/break-glass?from=2026-10-01&to=2026-10-31;403;
+OWNER;PUT;/api/v1/staff/{random}/roles;ok;{"roles":["NURSE"]}
+SENIOR_ADMINISTRATOR;PUT;/api/v1/staff/{random}/roles;ok;{"roles":["NURSE"]}
+ADMINISTRATOR;PUT;/api/v1/staff/{random}/roles;ok;{"roles":["NURSE"]}
+MANAGER;PUT;/api/v1/staff/{random}/roles;ok;{"roles":["NURSE"]}
+DOCTOR;PUT;/api/v1/staff/{random}/roles;403;{"roles":["NURSE"]}
+NURSE;PUT;/api/v1/staff/{random}/roles;403;{"roles":["NURSE"]}
+CASHIER;PUT;/api/v1/staff/{random}/roles;403;{"roles":["NURSE"]}
+SUPPORT;PUT;/api/v1/staff/{random}/roles;403;{"roles":["NURSE"]}

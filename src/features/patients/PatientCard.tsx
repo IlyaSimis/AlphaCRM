@@ -7,7 +7,7 @@ import type { BreakGlassGrant, EncounterView, PatientItem, Practitioner, Schedul
 import { clinicTimeZone } from '../../shared/clinicTime'
 import { localToday } from '../../shared/dates'
 import { can } from '../../shared/permissions'
-import { canEditPatients, canWriteAppointments, canWriteClinical, roleLabels, type Role } from '../../shared/roles'
+import { canEditPatients, canWriteAppointments, canWriteClinical, roleText, type Role } from '../../shared/roles'
 import { initialsOf, isUuid } from '../../shared/text'
 import { Info } from '../../shared/ui'
 import { BreakGlassDialog } from '../breakglass/BreakGlassDialog'
@@ -132,7 +132,7 @@ function ClinicalPanel({ patient, role, doctorId, apiOnline, revision, onOpenEnc
   return (
     <Box className="panel clinical-panel">
       <Box className="panel-title-row"><Typography className="panel-label">КЛИНИЧЕСКИЙ КОНТУР</Typography><LockOutlined fontSize="small" /></Box>
-      {!clinicalRole && <Box className="locked-state"><LockOutlined /><Typography sx={{ fontWeight: 750 }}>Клинические данные недоступны</Typography><Typography sx={{ fontSize: 14 }}>Роль «{roleLabels[role]}» не имеет доступа к жалобам, диагнозам, назначениям и медицинским документам.</Typography></Box>}
+      {!clinicalRole && <Box className="locked-state"><LockOutlined /><Typography sx={{ fontWeight: 750 }}>Клинические данные недоступны</Typography><Typography sx={{ fontSize: 14 }}>Роль «{roleText(role)}» не имеет доступа к жалобам, диагнозам, назначениям и медицинским документам.</Typography></Box>}
       {clinicalRole && !enabled && <Box className="locked-state"><EventNoteRounded /><Typography sx={{ fontWeight: 750 }}>История приёмов хранится на сервере</Typography><Typography sx={{ fontSize: 14 }}>{apiOnline ? 'У этого пациента нет карты на сервере.' : 'Демо-режим: сервер недоступен, клиническая история не загружается.'}</Typography></Box>}
       {enabled && clinical.loading && <CircularProgress size={24} aria-label="Загрузка истории приёмов" />}
       {enabled && clinical.error && <Alert severity="warning">{clinical.error}</Alert>}

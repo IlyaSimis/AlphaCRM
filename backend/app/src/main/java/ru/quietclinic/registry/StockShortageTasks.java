@@ -52,9 +52,10 @@ class StockShortageTasks implements DomainEventHandler {
     var assignee =
         jdbc
             .queryForList(
-                "select id from staff_user where clinic_id = ? and active = true"
-                    + " and role in ('OWNER', 'SENIOR_ADMINISTRATOR', 'ADMINISTRATOR')"
-                    + " order by created_at",
+                "select u.id from staff_user u where u.clinic_id = ? and u.active = true"
+                    + " and exists (select 1 from staff_role r where r.staff_id = u.id"
+                    + " and r.role in ('OWNER', 'SENIOR_ADMINISTRATOR', 'ADMINISTRATOR'))"
+                    + " order by u.created_at",
                 UUID.class,
                 event.clinicId())
             .stream()

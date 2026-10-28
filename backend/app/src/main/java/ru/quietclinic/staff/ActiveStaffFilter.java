@@ -41,7 +41,16 @@ final class ActiveStaffFilter extends OncePerRequestFilter {
         var session = request.getSession(false);
         if (session != null) session.invalidate();
         SecurityContextHolder.clearContext();
-      } else if (user.get().mustChangePassword
+      } else if (!user.get().roleSet().equals(principal.roles())) {
+        // Роли сменили, пока сотрудник в системе: права пересчитываются с этого же запроса.
+        var fresh = StaffPrincipal.of(user.get());
+        SecurityContextHolder.getContext()
+            .setAuthentication(
+                org.springframework.security.authentication.UsernamePasswordAuthenticationToken
+                    .authenticated(fresh, null, fresh.authorities()));
+      }
+      if (user.isPresent()
+          && user.get().mustChangePassword
           && request.getRequestURI().startsWith("/api/")
           && !ALLOWED_BEFORE_PASSWORD_CHANGE.contains(request.getRequestURI())) {
         JsonErrors.passwordChangeRequired(response);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { assignableRoles, can, rolePermissions } from './permissions'
-import { canManagePrices, canSeeAnalytics, canSeeAudit, canSeeCashier, canSeeDrive, canSeeInventory, canSeeRegistry, canSeeSignedDocuments, canSeeWaitlist, canTakePayments, canWriteClinical, profileOf, roleLabels } from './roles'
+import { assignableRoles, can, rolePermissions, rolesOf } from './permissions'
+import { rolesChangeProblem } from '../features/staff/staffRules'
+import { canManagePrices, canSeeAnalytics, canSeeAudit, canSeeCashier, canSeeDrive, canSeeInventory, canSeeRegistry, canSeeSignedDocuments, canSeeWaitlist, canTakePayments, canWriteClinical, profileOf, roleLabels, roleText, staffRolesOf } from './roles'
 
 describe('interface roles', () => {
   it('keeps the role as the API code and shows its on-screen label', () => {
@@ -59,5 +60,18 @@ describe('interface roles', () => {
     expect(assignableRoles('ADMINISTRATOR')).toContain('SUPPORT')
     expect(assignableRoles('MANAGER')).toEqual(['MANAGER', 'DOCTOR', 'NURSE', 'CASHIER'])
     expect(assignableRoles('CASHIER')).toEqual([])
+  })
+
+  it('several roles add up their permissions and read as a list', () => {
+    const roles = ['NURSE', 'CASHIER'] as const
+    expect(canSeeInventory(roles)).toBe(true)
+    expect(canTakePayments(roles)).toBe(true)
+    expect(canWriteClinical(roles)).toBe(false)
+    expect(roleText(roles)).toBe('Медперсонал, Кассир')
+    expect(rolesOf({ role: 'CASHIER', roles: ['CASHIER'] })).toBe('CASHIER')
+    expect(staffRolesOf({ role: 'NURSE', roles: ['CASHIER', 'NURSE'] })).toEqual(['NURSE', 'CASHIER'])
+    expect(profileOf({ fullName: 'Ирина Котова', role: 'NURSE', roles: ['NURSE', 'CASHIER'] }).role).toBe('Медперсонал, Кассир')
+    expect(assignableRoles(['MANAGER', 'CASHIER'])).not.toContain('ADMINISTRATOR')
+    expect(rolesChangeProblem([])).not.toBeNull()
   })
 })

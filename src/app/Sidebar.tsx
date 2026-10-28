@@ -5,6 +5,7 @@ import type { StaffItem } from '../api/types'
 import type { VisitTarget } from '../features/visit/visit'
 import { canWriteClinical, profileOf } from '../shared/roles'
 import { pageTitles, sectionsFor, serviceOf, serviceTitles, startPage, type Page, type Service } from './pages'
+import { rolesOf } from '../shared/permissions'
 
 export const pageIcons: Partial<Record<Page, ReactNode>> = {
   today: <TodayRounded />,
@@ -52,7 +53,7 @@ type SidebarProps = {
 /** Боковое меню: разделы выбранного сервиса и открытые приёмы врача. */
 export function Sidebar({ className, page, service, staff, live, visits, activeVisit, onNavigate, onVisit }: SidebarProps) {
   const profile = profileOf(staff)
-  const role = staff.role
+  const role = rolesOf(staff)
   const sections = sectionsFor(service, role)
   const current = page === 'patient' ? 'patients' : page
   return (

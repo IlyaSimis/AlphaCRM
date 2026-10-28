@@ -27,3 +27,5 @@ databaseChangeLog:
       file: db/changelog/013-finance.sql
   - include:
       file: db/changelog/014-break-glass.sql
+  - include:
+      file: db/changelog/015-staff-roles.sql

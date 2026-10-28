@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react'
 import { AddRounded } from '@mui/icons-material'
 import { Alert, Box, Button, Chip, Typography } from '@mui/material'
-import { createStaff, loadStaff, resetStaffPassword, setStaffActive } from '../../api/staff'
-import type { Practitioner, StaffItem } from '../../api/types'
+import { createStaff, loadStaff, resetStaffPassword, setStaffActive, setStaffRoles } from '../../api/staff'
+import type { Practitioner, StaffItem, StaffRole } from '../../api/types'
 import { sandboxStaff as initialSandboxStaff } from '../../app/demoData'
 import { specialtyAndRoom } from '../../shared/practitioners'
-import { assignableRoles, can } from '../../shared/permissions'
-import { roleLabels } from '../../shared/roles'
+import { assignableRoles, can, rolesOf } from '../../shared/permissions'
+import { roleText, staffRolesOf } from '../../shared/roles'
 import { useSandboxState } from '../../shared/sandbox'
 import { PasswordDialog } from '../auth/PasswordDialog'
+import { RolesDialog } from './RolesDialog'
 import { StaffDialog } from './StaffDialog'
 import { fromRows } from '../settings/shifts'
 import { canDeactivate, freePractitioners, staffProblem, toCreateStaffInput, type StaffDraft } from './staffRules'
@@ -39,10 +40,14 @@ export function StaffPage({ self, live, practitioners, notify, onPractitionerAdd
   // Временный пароль показывается один раз — сразу после того, как администратор его ввёл.
   const [issued, setIssued] = useState<{ username: string; password: string } | null>(null)
   const items = live ? remote ?? [] : sandboxStaff
-  const roles = assignableRoles(self.role)
-  const manage = can(self.role, 'identity.staff.manage')
+  const roles = assignableRoles(rolesOf(self))
+  const manage = can(rolesOf(self), 'identity.staff.manage')
   /** Сбросить пароль: свою роль не выше — или техподдержка любому, кроме владельца. */
-  const mayReset = (item: StaffItem) => (can(self.role, 'identity.staff.reset-password') && roles.includes(item.role)) || (can(self.role, 'identity.staff.reset-password-platform') && item.role !== 'OWNER')
+  /** Обслуживать сотрудника можно, если все его роли не выше своих. */
+  const mayManage = (item: StaffItem) => staffRolesOf(item).every((role) => roles.includes(role))
+  const mayReset = (item: StaffItem) => (can(rolesOf(self), 'identity.staff.reset-password') && mayManage(item)) || (can(rolesOf(self), 'identity.staff.reset-password-platform') && !staffRolesOf(item).includes('OWNER'))
+  const [editingRoles, setEditingRoles] = useState<StaffItem | null>(null)
+  const [rolesError, setRolesError] = useState('')
   const cardOf = (item: StaffItem) => item.practitionerId ? practitioners.find((card) => card.id === item.practitionerId) : undefined
 
   useEffect(() => {
@@ -118,10 +123,28 @@ export function StaffPage({ self, live, practitioners, notify, onPractitionerAdd
     setResetting(null)
   }
 
+  const saveRoles = async (next: StaffRole[]) => {
+    if (!editingRoles) return
+    if (live) {
+      try {
+        await setStaffRoles(editingRoles.id, next)
+      } catch (reason) {
+        setRolesError((reason as Error).message)
+        return
+      }
+      setRevision((value) => value + 1)
+      notify(`Роли изменены: ${roleText(next)}`)
+    } else {
+      setSandboxStaff((rows) => rows.map((row) => row.id === editingRoles.id ? { ...row, roles: next, role: next.includes('DOCTOR') ? 'DOCTOR' : next[0] } : row))
+      notify('Демо-режим: роли видны до обновления страницы')
+    }
+    setEditingRoles(null)
+  }
+
   return (
     <>
       <Box className="section-intro">
-        <Box><Typography variant="h4" sx={{ fontWeight: 750 }}>Сотрудники</Typography><Typography sx={{ color: 'text.secondary' }}>Учётные записи для входа. Роль задаётся при создании и дальше не меняется.</Typography></Box>
+        <Box><Typography variant="h4" sx={{ fontWeight: 750 }}>Сотрудники</Typography><Typography sx={{ color: 'text.secondary' }}>Учётные записи для входа. У сотрудника может быть несколько ролей — права складываются; роль врача привязана к карточке врача.</Typography></Box>
         {manage && <Button variant="contained" startIcon={<AddRounded />} onClick={() => { setCreateError(''); setCreating(true) }}>Новый сотрудник</Button>}
       </Box>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -133,13 +156,14 @@ export function StaffPage({ self, live, practitioners, notify, onPractitionerAdd
           <Box className="history-item" key={item.id}>
             <Box>
               <Typography sx={{ fontWeight: 650 }}>{item.fullName}{item.id === self.id ? ' (вы)' : ''}</Typography>
-              <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>{item.username} · {roleLabels[item.role]}{cardOf(item) ? ` · ${specialtyAndRoom(cardOf(item)!)}` : ''}</Typography>
+              <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>{item.username} · {roleText(staffRolesOf(item))}{cardOf(item) ? ` · ${specialtyAndRoom(cardOf(item)!)}` : ''}</Typography>
             </Box>
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
               <Chip size="small" variant="outlined" label={item.active ? 'Активен' : 'Отключён'} color={item.active ? 'success' : 'default'} />
               {item.mustChangePassword && <Chip size="small" variant="outlined" color="warning" label="Сменит пароль при входе" />}
               {mayReset(item) && <Button size="small" aria-label={`Задать пароль ${item.fullName}`} onClick={() => { setResetError(''); setResetting(item) }}>Задать пароль</Button>}
-              {manage && roles.includes(item.role) && (item.active
+              {manage && mayManage(item) && item.id !== self.id && <Button size="small" aria-label={`Роли ${item.fullName}`} onClick={() => { setRolesError(''); setEditingRoles(item) }}>Роли</Button>}
+              {manage && mayManage(item) && (item.active
                 ? <Button size="small" color="warning" disabled={!canDeactivate(item, self.id)} aria-label={`Отключить ${item.fullName}`} onClick={() => void toggle(item)}>Отключить</Button>
                 : <Button size="small" aria-label={`Включить ${item.fullName}`} onClick={() => void toggle(item)}>Включить</Button>)}
             </Box>
@@ -147,6 +171,7 @@ export function StaffPage({ self, live, practitioners, notify, onPractitionerAdd
         ))}
       </Box>
       {creating && <StaffDialog practitioners={freePractitioners(practitioners, items)} error={createError} roles={roles} onClose={() => setCreating(false)} onSave={(draft) => void create(draft)} />}
+      {editingRoles && <RolesDialog item={editingRoles} assignable={roles} error={rolesError} onClose={() => setEditingRoles(null)} onSave={(next) => void saveRoles(next)} />}
       {resetting && <PasswordDialog requireCurrent={false} title={`Временный пароль: ${resetting.fullName}`} error={resetError} onClose={() => setResetting(null)} onSave={(input) => void reset(input.newPassword)} />}
     </>
   )

@@ -7,6 +7,7 @@ import { localToday } from '../../shared/dates'
 import { canManageRegistry, canSeeRegistry, canSeeStaff, canSeeWaitlist } from '../../shared/roles'
 import { useSandboxState } from '../../shared/sandbox'
 import { dueTasks, matchingWaitlist } from './registry'
+import { rolesOf } from '../../shared/permissions'
 
 export type TaskDraft = { title: string; dueDate: string; assigneeId: string; patientId: string | null }
 export type WaitlistDraft = { patientId: string; practitionerId: string; serviceId: string; wishFrom: string; wishTo: string }
@@ -16,7 +17,7 @@ export type WaitlistDraft = { patientId: string; practitionerId: string; service
  * пациенту ничего не отправляется. На сервере — API регистратуры, в песочнице — память вкладки.
  */
 export function useRegistry(staff: StaffItem, live: boolean, apiOnline: boolean, notify: (message: string) => void) {
-  const role = staff.role
+  const role = rolesOf(staff)
   const sandbox = !live
   const [tasks, setTasks] = useSandboxState<TaskItem[]>('tasks', live ? [] : demoTasks, sandbox)
   const [waitlist, setWaitlist] = useSandboxState<WaitlistItem[]>('waitlist', live ? [] : demoWaitlist, sandbox)

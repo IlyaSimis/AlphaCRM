@@ -81,7 +81,10 @@ export type StaffItem = {
   id: string
   fullName: string
   username: string
+  /** Основная роль; у врача — DOCTOR. */
   role: StaffRole
+  /** Все роли сотрудника: права складываются (раздел C). */
+  roles?: StaffRole[]
   practitionerId?: string | null
   active: boolean
   mustChangePassword?: boolean

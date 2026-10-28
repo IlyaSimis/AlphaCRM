@@ -1,9 +1,12 @@
 import type { StaffItem, StaffRole } from '../api/types'
-import { can } from './permissions'
+import { can, type RoleSet } from './permissions'
 import { initialsOf } from './text'
 
-/** Роль в интерфейсе — тот же машинный код, что у учётной записи на сервере. */
-export type Role = StaffRole
+/**
+ * Роль в интерфейсе — тот же машинный код, что у учётной записи на сервере. У сотрудника с
+ * несколькими ролями — массив кодов: права складываются.
+ */
+export type Role = RoleSet
 
 /** Название роли на экране. */
 export const roleLabels: Record<StaffRole, string> = {
@@ -22,9 +25,21 @@ export const staffRoles: StaffRole[] = ['OWNER', 'SENIOR_ADMINISTRATOR', 'ADMINI
 /** Роли, которые могут быть постоянным администратором пациента. */
 export const administratorRoles: StaffRole[] = ['OWNER', 'SENIOR_ADMINISTRATOR', 'ADMINISTRATOR']
 
-/** Имя, инициалы и название роли сотрудника для боковой панели. */
-export function profileOf(staff: Pick<StaffItem, 'fullName' | 'role'>) {
-  return { name: staff.fullName, initials: initialsOf(staff.fullName), role: roleLabels[staff.role] ?? staff.role }
+/** Названия ролей через запятую: «Менеджер, Кассир». */
+export function roleText(role: Role) {
+  const list: readonly StaffRole[] = typeof role === 'string' ? [role] : role
+  return list.map((item) => roleLabels[item] ?? item).join(', ')
+}
+
+/** Роли сотрудника по старшинству (как на экране «Сотрудники»). */
+export function staffRolesOf(staff: Pick<StaffItem, 'role' | 'roles'>): StaffRole[] {
+  const list = staff.roles && staff.roles.length > 0 ? staff.roles : [staff.role]
+  return staffRoles.filter((role) => list.includes(role))
+}
+
+/** Имя, инициалы и название ролей сотрудника для боковой панели. */
+export function profileOf(staff: Pick<StaffItem, 'fullName' | 'role' | 'roles'>) {
+  return { name: staff.fullName, initials: initialsOf(staff.fullName), role: roleText(staffRolesOf(staff)) }
 }
 
 /** Аналитика клиники — у тех, кому она разрешена (врачу — только свои приёмы на дашборде). */

@@ -47,4 +47,10 @@ public class StaffController {
   void resetPassword(@PathVariable UUID id, @Valid @RequestBody PasswordResetRequest request) {
     staff.resetPassword(id, request);
   }
+
+  /** Все роли сотрудника: права складываются; менять — только роли не выше своих. */
+  @org.springframework.web.bind.annotation.PutMapping("/{id}/roles")
+  StaffView setRoles(@PathVariable UUID id, @Valid @RequestBody StaffRolesRequest request) {
+    return staff.setRoles(id, request);
+  }
 }

@@ -33,6 +33,7 @@ class StaffService {
   private final AuthService auth;
   private final JdbcTemplate jdbc;
   private final AuditService audit;
+  private final ru.quietclinic.platform.DomainEvents events;
   private final PractitionerCards practitionerCards;
 
   StaffService(
@@ -41,13 +42,15 @@ class StaffService {
       AuthService auth,
       JdbcTemplate jdbc,
       AuditService audit,
-      PractitionerCards practitionerCards) {
+      PractitionerCards practitionerCards,
+      ru.quietclinic.platform.DomainEvents events) {
     this.staff = staff;
     this.encoder = encoder;
     this.auth = auth;
     this.jdbc = jdbc;
     this.audit = audit;
     this.practitionerCards = practitionerCards;
+    this.events = events;
   }
 
   @Transactional(readOnly = true)
@@ -116,7 +119,7 @@ class StaffService {
   StaffView setActive(UUID id, boolean active) {
     requirePermission(Permission.STAFF_MANAGE);
     var user = find(id);
-    requireMayAssign(user.role);
+    requireMayManage(user);
     if (!active && user.id.equals(auth.current().id)) {
       throw conflict("CANNOT_DEACTIVATE_SELF", "You cannot deactivate your own account");
     }
@@ -140,9 +143,10 @@ class StaffService {
     // Техподдержка сбрасывает пароль любому, кроме владельца; остальные — тем, чью роль назначают.
     var allowed =
         (granted.contains(Permission.STAFF_PASSWORD_RESET)
-                && RolePermissions.mayAssign(granted, user.role))
+                && user.roleSet().stream()
+                    .allMatch(role -> RolePermissions.mayAssign(granted, role)))
             || (granted.contains(Permission.STAFF_PASSWORD_RESET_PLATFORM)
-                && !RolePermissions.OWNER.equals(user.role));
+                && !user.roleSet().contains(RolePermissions.OWNER));
     if (!allowed) {
       audit.record(
           actorId(), "STAFF_PASSWORD_RESET", "STAFF", user.id, "DENIED", "role:" + user.role);
@@ -151,6 +155,52 @@ class StaffService {
     user.passwordHash = encoder.encode(request.newPassword());
     user.mustChangePassword = true;
     audit.record(actorId(), "STAFF_PASSWORD_RESET", "STAFF", user.id, "ALLOWED", null);
+  }
+
+  /**
+   * Новый набор ролей сотрудника (раздел C: одна или несколько ролей, права складываются). Менять
+   * можно только роли не выше своих — и прежние, и новые; свои роли — нельзя. Роль врача связана с
+   * карточкой врача и здесь не добавляется и не снимается.
+   */
+  @Transactional
+  StaffView setRoles(UUID id, StaffRolesRequest request) {
+    requirePermission(Permission.STAFF_MANAGE);
+    var user = find(id);
+    if (user.id.equals(auth.current().id)) {
+      throw conflict("CANNOT_CHANGE_OWN_ROLES", "You cannot change your own roles");
+    }
+    var next = new java.util.HashSet<String>();
+    for (var raw : request.roles()) {
+      var role = raw.trim().toUpperCase(Locale.ROOT);
+      if (!StaffRoles.ALL.contains(role)) throw conflict("INVALID_ROLE", "Unknown staff role");
+      next.add(role);
+    }
+    if (next.contains(StaffRoles.DOCTOR) != (user.practitionerId != null)) {
+      throw conflict(
+          "DOCTOR_ROLE_FIXED", "The doctor role follows the practitioner card and cannot change");
+    }
+    var touched = new java.util.HashSet<>(user.roleSet());
+    touched.addAll(next);
+    touched.forEach(this::requireMayAssign);
+    var before = user.orderedRoles();
+    user.assignRoles(next);
+    staff.saveAndFlush(user);
+    audit.record(
+        actorId(),
+        "STAFF_ROLES_CHANGED",
+        "STAFF",
+        user.id,
+        "ALLOWED",
+        "roles:" + String.join(",", user.orderedRoles()));
+    events.publish(
+        "RolesChanged",
+        java.util.Map.of("staffId", user.id, "before", before, "after", user.orderedRoles()));
+    return auth.view(user);
+  }
+
+  /** Обслуживать сотрудника можно, только если все его роли не выше своих прав. */
+  private void requireMayManage(StaffUser user) {
+    user.roleSet().forEach(this::requireMayAssign);
   }
 
   /** Назначить (и обслуживать) роль можно только не выше своих прав. */
