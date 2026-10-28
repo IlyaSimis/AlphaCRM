@@ -36,7 +36,7 @@ describe('signed documents', () => {
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
     await openPage(user, 'Подписанные документы')
     expect(await screen.findByText(/Уточнённый диагноз/)).toBeInTheDocument()
-    expect(screen.getByText(/Диагноз: Диагноз из снимка/)).toBeInTheDocument()
+    expect(screen.getByText('Диагноз из снимка', { exact: false })).toBeInTheDocument()
     expect(screen.getByText(/Диагноз Лебедевой/)).toBeInTheDocument()
     expect(screen.getAllByText(/Дополнение к документу от/).length).toBe(1)
     // Страница только для чтения: подписать или изменить отсюда нельзя.

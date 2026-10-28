@@ -78,13 +78,17 @@ export const actionLabels: Record<string, string> = {
   DRIVE_SHARE_CHANGED: 'Изменение доступа на диске',
   DRIVE_ACCESS: 'Доступ к файлу на диске',
   DRIVE_QUOTA_CHANGED: 'Изменение квоты диска',
+  WORKSPACE_ITEM_CREATED: 'Новая личная запись',
+  WORKSPACE_ITEM_UPDATED: 'Изменение личной записи',
+  WORKSPACE_ITEM_ARCHIVED: 'Личная запись в архив',
+  WORKSPACE_ITEM_RESTORED: 'Восстановление личной записи',
 }
 
 export const objectLabels: Record<string, string> = {
   PATIENT: 'Пациент', APPOINTMENT: 'Запись', ENCOUNTER: 'Приём', DOCUMENT: 'Документ', CHARGE: 'Счёт', PAYMENT: 'Платёж', CONSENT: 'Согласие',
   TASK: 'Задача', WAITLIST: 'Лист ожидания', PRACTITIONER: 'Врач', SERVICE: 'Услуга', STAFF: 'Сотрудник', OUTBOX: 'Внешний вывод', CLINIC: 'Клиника', PATIENT_FILE: 'Файл PDF',
   ITEM: 'Позиция склада', ITEM_CATEGORY: 'Категория склада', WAREHOUSE: 'Склад', STOCK_DOCUMENT: 'Накладная', MARKING_OPERATION: 'Операция маркировки',
-  DRIVE_NODE: 'Файл или папка диска', CLINIC_DRIVE: 'Диск клиники',
+  DRIVE_NODE: 'Файл или папка диска', CLINIC_DRIVE: 'Диск клиники', WORKSPACE_ITEM: 'Личная запись',
 }
 
 /** Коды, которые только повторяют колонку «Действие». */

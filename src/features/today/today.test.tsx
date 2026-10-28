@@ -62,7 +62,7 @@ describe('«Сегодня»', () => {
 
     await user.click(within(overdue).getByRole('button', { name: 'Просроченная задача: Перезвонить в лабораторию' }))
     expect(await screen.findByText('ЗАДАЧИ НА СЕГОДНЯ')).toBeInTheDocument()
-    await user.click(within(document.querySelector('.desktop-sidebar') as HTMLElement).getByRole('button', { name: 'Сегодня' }))
+    await openPage(user, 'Сегодня')
     await user.click(await screen.findByRole('button', { name: /^Открыть карточку: Анна Михайлова/ }))
     expect(await screen.findByRole('heading', { name: 'Анна Михайлова' })).toBeInTheDocument()
   })
@@ -113,7 +113,7 @@ describe('«Сегодня» — домашняя страница', () => {
     expect(within(tabs).getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Дашборды', 'База данных пациентов', 'Склад', 'Финансы', 'Диск'])
     expect(within(tabs).getByRole('tab', { name: 'Дашборды' })).toHaveAttribute('aria-selected', 'true')
     const overview = within(sidebar()).getByRole('navigation', { name: 'Обзор' })
-    expect(within(overview).getAllByRole('button').map((button) => button.textContent)).toEqual(['Сегодня', 'Аналитика', 'Мои условия работы'])
+    expect(within(overview).getAllByRole('button').map((button) => button.textContent)).toEqual(['Сегодня', 'Моё пространство', 'Аналитика', 'Мои условия работы'])
     expect(within(within(sidebar()).getByRole('navigation', { name: 'Управление' })).getAllByRole('button').map((button) => button.textContent)).toEqual(['Сотрудники', 'Журнал аудита', 'Внешние выводы'])
     expect(within(overview).getByRole('button', { name: 'Сегодня' })).toHaveClass('active')
 

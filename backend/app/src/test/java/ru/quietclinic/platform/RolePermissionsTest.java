@@ -65,6 +65,13 @@ class RolePermissionsTest {
   }
 
   @Test
+  void everyStaffRoleHasAPersonalWorkspace() {
+    for (var role : RolePermissions.STAFF_ROLES) {
+      assertThat(RolePermissions.of(role)).as(role).contains(Permission.WORKSPACE_USE);
+    }
+  }
+
+  @Test
   void permissionCodesAreUniqueAndDotted() {
     var codes = new java.util.HashSet<String>();
     for (var permission : Permission.values()) {

@@ -302,12 +302,14 @@ class PatientFileControllerTest {
             .getContentAsString();
     String id = JsonPath.read(body, "$.id");
     mvc.perform(get("/api/v1/patients/" + ANNA + "/files").with(staff.doctor(StaffSessions.PETROV)))
-        .andExpect(jsonPath("$[?(@.id == '" + id + "')].appointmentId")
-            .value(hasItem("00000000-0000-0000-0000-000000000301")));
+        .andExpect(
+            jsonPath("$[?(@.id == '" + id + "')].appointmentId")
+                .value(hasItem("00000000-0000-0000-0000-000000000301")));
     // Запись другого пациента к файлу Анны не привязывается.
     mvc.perform(
             multipart("/api/v1/patients/" + ANNA + "/files")
-                .file(new MockMultipartFile("file", "x.pdf", "application/pdf", pdf("чужая запись")))
+                .file(
+                    new MockMultipartFile("file", "x.pdf", "application/pdf", pdf("чужая запись")))
                 .param("appointmentId", "00000000-0000-0000-0000-000000000302")
                 .with(staff.doctor(StaffSessions.PETROV)))
         .andExpect(status().isNotFound())

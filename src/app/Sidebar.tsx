@@ -2,13 +2,14 @@ import { ArticleRounded, AssignmentTurnedInRounded, BadgeRounded, CalendarMonthR
 import { Avatar, Box, Stack, Typography } from '@mui/material'
 import type { ReactNode } from 'react'
 import type { StaffItem } from '../api/types'
-import type { VisitTarget } from '../features/visit/visit'
+import type { VisitTarget } from '../features/visit/visitRules'
 import { canWriteClinical, profileOf } from '../shared/roles'
 import { pageTitles, sectionsFor, serviceOf, serviceTitles, startPage, type Page, type Service } from './pages'
 import { rolesOf } from '../shared/permissions'
 
 export const pageIcons: Partial<Record<Page, ReactNode>> = {
   today: <TodayRounded />,
+  workspace: <AssignmentTurnedInRounded />,
   analytics: <InsightsRounded />,
   staff: <BadgeRounded />,
   hr: <WorkRounded />,

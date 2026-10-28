@@ -19,9 +19,7 @@ class BotSecurityConfig {
   @Bean
   @Order(1)
   SecurityFilterChain botSecurity(
-      HttpSecurity http,
-      BotClinicResolver clinics,
-      @Value("${clinic.bot.api-token:}") String token)
+      HttpSecurity http, BotClinicResolver clinics, @Value("${clinic.bot.api-token:}") String token)
       throws Exception {
     return http.securityMatcher("/api/v1/bot/**")
         .csrf(AbstractHttpConfigurer::disable)

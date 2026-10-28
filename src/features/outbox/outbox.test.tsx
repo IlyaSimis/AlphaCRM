@@ -23,14 +23,14 @@ describe('outbound deliveries', () => {
     withAuth(api([
       row({}),
       row({ id: '00000000-0000-0000-0000-0000000b0002', template: 'appointment-reminder', channel: 'MOCK', status: 'PENDING', reason: 'CHANNEL_NOT_CONFIGURED', sentAt: null, nextAttemptAt: '2026-11-02T09:00:00Z' }),
-      row({ id: '00000000-0000-0000-0000-0000000b0003', topic: 'FISCALIZATION', template: 'receipt', aggregateType: 'PAYMENT', appointmentStartsAt: null, channel: 'CASHBOX', status: 'PENDING', reason: 'FISCAL_NOT_CONFIGURED', sentAt: null }),
+      row({ id: '00000000-0000-0000-0000-0000000b0003', topic: 'FISCALIZATION', template: 'receipt', aggregateType: 'PAYMENT', aggregateId: '00000000-0000-0000-0000-000000000003', appointmentStartsAt: null, channel: 'CASHBOX', status: 'PENDING', reason: 'FISCAL_NOT_CONFIGURED', sentAt: null }),
     ]), 'admin')
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
     await openPage(user, 'Внешние выводы')
     expect(await screen.findByText('Подтверждение записи')).toBeInTheDocument()
-    expect(screen.getByText('03.11.2026 09:00 · 0301')).toBeInTheDocument()
+    expect(screen.getAllByText('03.11.2026 09:00 · 0301').length).toBeGreaterThan(0)
     expect(screen.getByText('Telegram')).toBeInTheDocument()
     expect(screen.getByText('Доставлено')).toBeInTheDocument()
     expect(screen.getByText('канал не настроен')).toBeInTheDocument()

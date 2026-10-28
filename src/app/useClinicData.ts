@@ -34,7 +34,7 @@ import {
   withStatus,
 } from '../api/schedule'
 import type { AppointmentStatus, AssignedStaff, ChargeItem, PatientItem, Practitioner, RegistryInput, ScheduleItem, ServiceItem } from '../api/types'
-import { localCharge } from '../features/cashier/cashier'
+import { localCharge } from '../features/cashier/cashierRules'
 import { estimateOf, localBooking, validateBooking, type BookingDraft } from '../features/schedule/booking'
 import type { RescheduleDraft } from '../features/schedule/RescheduleDialog'
 import type { ScheduleView } from '../features/schedule/scheduleView'

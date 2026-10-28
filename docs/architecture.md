@@ -75,6 +75,7 @@ flowchart TB
     inventory["inventory<br/>склад, партии, Честный знак"]
     drive["drive<br/>корпоративный диск"]
     insights["insights<br/>персональный дашборд"]
+    workspace["workspace<br/>личные задачи, заметки, произвольные поля и представления"]
     platform["platform<br/>ошибки, шифрование, KMS, clinicId(),<br/>разрешения ролей, доменные события"]
 
     scheduling -->|"CareRelationshipService"| clinical
@@ -90,8 +91,8 @@ flowchart TB
     bot -->|"OnlineBooking"| scheduling
     bot -->|"TelegramPatients"| patients
     bot -->|"OperatorRequests"| registry
-    scheduling & clinical & billing & registry & patients & staff & inventory & drive --> audit
-    scheduling & clinical & billing & registry & patients & staff & audit & inventory & drive & insights --> platform
+    scheduling & clinical & billing & registry & patients & staff & inventory & drive & workspace --> audit
+    scheduling & clinical & billing & registry & patients & staff & audit & inventory & drive & insights & workspace --> platform
 ```
 
 | Модуль | Отвечает за | Зависит от кода |
@@ -108,6 +109,7 @@ flowchart TB
 | `inventory` | номенклатура, склады, документы движения и остатки по партиям (FIFO), расход по нормам услуги (по событию `AppointmentCompleted`), событие `StockShortage`; коды маркировки GS1, очередь операций Честного знака (`MarkingRelay`, порт `MarkingPort`: `UnconfiguredMarkingAdapter` или `MockMarkingAdapter`) | platform, audit |
 | `drive` | папки, файлы и версии, права с наследованием (`VIEW`/`EDIT`/`MANAGE`), ссылки только на просмотр после входа, корзина и квота; содержимое — шифрованные объекты в `ObjectStorage` (`LocalObjectStorage`) | platform, audit |
 | `insights` | `GET /me/dashboard`: виджеты по разрешениям роли, только агрегаты запросами к таблицам других модулей | platform |
+| `workspace` | личные задачи, заметки и записи произвольных типов; свободные статусы, теги, чек-листы и поля; сроки, связи, архив и сохранённые представления. Каждая строка ограничена `clinic_id + owner_id`; клинический текст сюда не переносится | platform, audit |
 | `communications` | `OutboxService` (постановка по событию), `OutboxDispatcher` (доставка, повторы, переносы), `NotificationPort` → вебхук клиники, Telegram или mock, порт кассы `FiscalPort`, экран `GET /outbox` | platform, audit |
 
 Правила, на которых держатся границы:
@@ -212,7 +214,7 @@ flowchart TB
 
 - Роль, статус, состояние согласия — машинные коды из API (`DOCTOR`, `COMPLETED`, `ACTIVE`). Надпись выбирается картой: `roleLabels`, `statusLabel`, `consentLabels`, `actionLabels`/`reasonLabel` в журнале.
 - Списки, которые ведёт администратор, приходят с сервера: услуги (`GET /services?all=true`, в записи — только `active`), сотрудники, врачи. В живом режиме зашитых списков нет.
-- `localStorage` — только удобства одного браузера: тема (`alphacrm-color-mode`) и день расписания (`alphacrm-schedule-date`). Чтение сначала нового ключа, затем прежнего `quiet-clinic-*`; запись — только под новым (`shared/storage.ts`, `public/theme-init.js`).
+- `localStorage` — удобства одного браузера: тема (`alphacrm-color-mode`), день расписания (`alphacrm-schedule-date`) и личное пространство в песочнице (`alphacrm.workspace.<staffId>`). В живом режиме записи пространства хранятся на сервере. Чтение старых настроек сначала пробует новый ключ, затем прежний `quiet-clinic-*`; запись — только под новым (`shared/storage.ts`, `public/theme-init.js`).
 
 ## Ошибки: код и фраза
 
@@ -247,7 +249,7 @@ flowchart LR
 
 ## Демо-песочница
 
-Если сервер недоступен, страница входа предлагает «Песочница: <роль>». Песочница работает без запросов от имени роли: данные из `app/demoData.ts` и `demoServices`, изменения живут в памяти вкладки (`shared/sandbox.ts`) до обновления страницы. В шапке висит «Демо-песочница: данные не сохраняются». Людей в песочнице нет — только учётные записи по ролям.
+Если сервер недоступен, страница входа предлагает «Песочница: <роль>». Песочница работает без запросов от имени роли: общие данные из `app/demoData.ts` и `demoServices`, их изменения живут в памяти вкладки (`shared/sandbox.ts`) до обновления страницы. Личное пространство — исключение: оно сохраняется локально в `alphacrm.workspace.<staffId>` и не отправляется на сервер. Шапка разделяет эти два режима хранения. Людей в песочнице нет — только учётные записи по ролям.
 
 ## Тесты
 

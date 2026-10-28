@@ -15,8 +15,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
- * Вход бота по сервисному токену в заголовке {@code X-Bot-Token} (CLINIC_BOT_API_TOKEN). Без токена в
- * настройках API бота выключено. Сессия не создаётся, CSRF не нужен: cookie здесь нет. Не бин —
+ * Вход бота по сервисному токену в заголовке {@code X-Bot-Token} (CLINIC_BOT_API_TOKEN). Без токена
+ * в настройках API бота выключено. Сессия не создаётся, CSRF не нужен: cookie здесь нет. Не бин —
  * добавляется только в цепочку /api/v1/bot/**.
  */
 final class BotTokenFilter extends OncePerRequestFilter {
@@ -35,7 +35,8 @@ final class BotTokenFilter extends OncePerRequestFilter {
       HttpServletRequest request, HttpServletResponse response, FilterChain chain)
       throws ServletException, IOException {
     if (token.length == 0) {
-      error(response, 401, "BOT_API_DISABLED", "Bot API is disabled: CLINIC_BOT_API_TOKEN is empty");
+      error(
+          response, 401, "BOT_API_DISABLED", "Bot API is disabled: CLINIC_BOT_API_TOKEN is empty");
       return;
     }
     var presented = request.getHeader(HEADER);

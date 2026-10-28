@@ -339,3 +339,20 @@ button, input, textarea { font: inherit; }
 /* Продажи: полоса доли выручки строки. */
 .sales-bar-cell { width: 28%; min-width: 80px; }
 .sales-bar { height: 10px; border-radius: 5px; background: var(--active-text); opacity: .55; min-width: 2px; }
+
+/* Личное рабочее пространство: карточки и доска произвольных статусов. */
+.workspace-card { position: relative; overflow: hidden; }
+.workspace-card::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--workspace-accent, var(--active-text)); }
+.workspace-card--green { --workspace-accent: #2f8f6f; }
+.workspace-card--blue { --workspace-accent: #5d8ee7; }
+.workspace-card--orange { --workspace-accent: #d9822b; }
+.workspace-card--red { --workspace-accent: #d0654c; }
+.workspace-card--purple { --workspace-accent: #8b6fbe; }
+.workspace-card--gray { --workspace-accent: #8a9995; }
+.workspace-card.completed { opacity: .72; }
+.workspace-board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(260px, 1fr); gap: 12px; align-items: start; overflow-x: auto; padding-bottom: 12px; }
+.workspace-board-column { min-height: 180px; padding: 6px; border: 1px solid var(--border); border-radius: 14px; background: color-mix(in srgb, var(--paper) 76%, transparent); }
+@media (max-width: 700px) {
+  .workspace-board { grid-auto-columns: minmax(250px, 86vw); }
+  .workspace-filters { padding: 12px !important; }
+}

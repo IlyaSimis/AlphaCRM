@@ -353,3 +353,40 @@ export type DriveShare = { id: string; principalType: 'USER' | 'ROLE' | 'CLINIC'
 export type DriveQuota = { bytesUsed: number; bytesLimit: number; maxFileBytes: number }
 
 export type DrivePrincipal = { id: string; fullName: string; role: StaffRole }
+
+/** Личная запись рабочего пространства. Тип и статус — свободные строки, а не закрытый справочник. */
+export type WorkspaceField = { name: string; value: string }
+export type ChecklistItem = { text: string; done: boolean }
+export type WorkspaceItemInput = {
+  title: string
+  type: string
+  body: string
+  status: string
+  color: 'green' | 'blue' | 'orange' | 'red' | 'purple' | 'gray'
+  completed: boolean
+  dueAt: string | null
+  remindAt: string | null
+  patientId: string | null
+  appointmentId: string | null
+  tags: string[]
+  fields: WorkspaceField[]
+  checklist: ChecklistItem[]
+}
+export type WorkspaceItem = WorkspaceItemInput & {
+  id: string
+  createdAt: string
+  updatedAt: string
+  completedAt: string | null
+  archivedAt: string | null
+}
+export type WorkspaceDueFilter = 'all' | 'today' | 'overdue' | 'week' | 'none'
+export type WorkspaceFilter = {
+  query: string
+  type: string
+  status: string
+  tag: string
+  due: WorkspaceDueFilter
+  sort: 'due' | 'updated' | 'created' | 'title'
+  display: 'list' | 'board'
+}
+export type WorkspaceView = { id: string; name: string; filter: WorkspaceFilter; createdAt: string }

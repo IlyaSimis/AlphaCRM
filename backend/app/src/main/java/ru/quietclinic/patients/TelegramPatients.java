@@ -51,7 +51,9 @@ public class TelegramPatients {
     return patients.findByIdAndClinicId(patientId, clinicId()).map(TelegramPatient::of);
   }
 
-  /** Карточка связана с этим chat id: только такой пациент может подтвердить или отменить запись. */
+  /**
+   * Карточка связана с этим chat id: только такой пациент может подтвердить или отменить запись.
+   */
   @Transactional(readOnly = true)
   public boolean isLinked(UUID patientId, String chatId) {
     requireRole(ROLE);
@@ -60,9 +62,9 @@ public class TelegramPatients {
 
   /**
    * Карточка для онлайн-записи. Сначала ищется уже заведённая карточка того же человека — то же
-   * ФИО, дата рождения и телефон (основной или второй); среди них — уже связанная с этим chat id. Её
-   * связывает с Telegram и, если действующего согласия нет, добавляет согласие из бота. Не нашлась —
-   * заводится новая карточка с телефоном, контактом Telegram и согласием.
+   * ФИО, дата рождения и телефон (основной или второй); среди них — уже связанная с этим chat id.
+   * Её связывает с Telegram и, если действующего согласия нет, добавляет согласие из бота. Не
+   * нашлась — заводится новая карточка с телефоном, контактом Telegram и согласием.
    */
   @Transactional
   public UUID resolveForBooking(TelegramPatientRequest request) {
@@ -98,7 +100,8 @@ public class TelegramPatients {
     }
     var patient = new Patient(name, request.birthDate());
     patient.clinicId = clinicId();
-    patient.update(new PatientDetails(name, request.birthDate(), request.phone(), null, null, null));
+    patient.update(
+        new PatientDetails(name, request.birthDate(), request.phone(), null, null, null));
     patient.updateTelegram(request.chatId(), false);
     patient.consents.add(new Consent(patient, request.consentVersion().trim(), CONSENT_BASIS));
     patients.save(patient);

@@ -120,7 +120,7 @@ describe('PDF пациента', () => {
       if (address.endsWith('/clinical/encounters') && method === 'POST') return jsonResponse(encounter, 201)
       if (address.includes('/clinical/patients/')) return jsonResponse([encounter])
       if (address.includes('/patients')) return jsonResponse([anna])
-      if (address.includes('/appointments')) return jsonResponse([{ id: appointmentId, patientId: anna.id, practitionerId: '00000000-0000-0000-0000-000000000201', startsAt: '2026-10-20T09:00:00Z', endsAt: '2026-10-20T09:50:00Z', serviceName: 'Первичный приём', status: 'ARRIVED' }])
+      if (address.includes('/appointments')) return jsonResponse([{ id: appointmentId, patientId: anna.id, practitionerId: '00000000-0000-0000-0000-000000000201', startsAt: '2026-10-20T09:00:00Z', endsAt: '2026-10-20T09:50:00Z', serviceName: 'Серверный приём', status: 'ARRIVED' }])
       return jsonResponse({}, 404)
     }, 't.petrov')
     const tab = { addEventListener: vi.fn(), focus: vi.fn(), print: vi.fn() }
@@ -128,6 +128,7 @@ describe('PDF пациента', () => {
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
+    expect(await screen.findByText('Серверный приём')).toBeInTheDocument()
     await user.click(await screen.findByRole('button', { name: 'Начать приём 09:00 Анна Михайлова' }))
     const block = await screen.findByRole('region', { name: 'Заключения и файлы приёма' })
     // Файлы других приёмов здесь не показываются — они в карточке пациента.

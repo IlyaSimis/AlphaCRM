@@ -3,7 +3,7 @@ import { amendDocument, createDocument, loadEncounters, saveNote, signDocument, 
 import type { DocumentSummary, EncounterView, NoteFields } from '../../api/types'
 import { useSandboxState } from '../../shared/sandbox'
 import { isUuid } from '../../shared/text'
-import { activeDocument, emptyNote, latestSigned, noteComplete, noteOf, upsertDocument, type VisitTarget } from './visit'
+import { activeDocument, emptyNote, latestSigned, noteComplete, noteOf, upsertDocument, type VisitTarget } from './visitRules'
 
 const INCOMPLETE = 'Заполните все четыре раздела заметки'
 

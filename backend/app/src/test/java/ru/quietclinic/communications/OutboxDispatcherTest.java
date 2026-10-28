@@ -159,7 +159,9 @@ class OutboxDispatcherTest {
     // Перенос сам в outbox ничего не кладёт.
     assertThat(outbox.findByAggregateIdOrderByCreatedAt(UUID.fromString(appointment))).hasSize(2);
 
+    // Первый проход находит перенос и ставит сообщения на новое время, второй их доставляет.
     drain(Instant.now());
+    drain(Instant.now().plusMillis(1));
 
     var sent = port.sentFor(appointment, NoticeTemplates.CONFIRMED);
     assertThat(sent).hasSize(1);

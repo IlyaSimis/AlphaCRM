@@ -7,7 +7,7 @@ import { can } from '../../shared/permissions'
 import type { Role } from '../../shared/roles'
 import { SignedPdfList } from '../files/SignedPdfList'
 import { SignedDocumentDialog } from './SignedDocumentDialog'
-import { documentKind, preview, signedMoment } from './signedDocuments'
+import { documentKind, preview, signedMoment } from './signedDocumentRules'
 
 type SignedDocumentsProps = {
   role: Role

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SignedDocumentItem } from '../../api/types'
-import { documentKind, preview, signedMoment } from './signedDocuments'
+import { documentKind, preview, signedMoment } from './signedDocumentRules'
 
 const doc = (id: string, amendsDocumentId: string | null = null): SignedDocumentItem => ({
   id, encounterId: 'e1', appointmentId: 'a1', patientId: 'p1', practitionerId: 'd1', signedAt: '2026-10-20T09:40:00Z', templateVersion: 'v2.4', amendsDocumentId,

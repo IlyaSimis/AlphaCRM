@@ -2,7 +2,7 @@ import type { ScheduleItem, TaskItem } from '../../api/types'
 import type { Role } from '../../shared/roles'
 import { can } from '../../shared/permissions'
 import { canEditPatients, canSeeCashier, canSeeOutbox, canSeeRegistry, canWriteAppointments } from '../../shared/roles'
-import type { CashierRow } from '../cashier/cashier'
+import type { CashierRow } from '../cashier/cashierRules'
 
 /** Сколько дней назад касса и «Сегодня» ищут завершённые неоплаченные приёмы. */
 export const UNPAID_PERIOD_DAYS = 90

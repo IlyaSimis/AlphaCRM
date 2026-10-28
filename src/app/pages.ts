@@ -2,7 +2,7 @@ import { canManagePrices, canManageSchedule, canSeeAnalytics, canSeeAudit, canSe
 import { can } from '../shared/permissions'
 
 export type Page =
-  | 'today' | 'analytics' | 'hr-me' | 'staff' | 'hr' | 'audit' | 'break-glass' | 'outbox'
+  | 'today' | 'workspace' | 'analytics' | 'hr-me' | 'staff' | 'hr' | 'audit' | 'break-glass' | 'outbox'
   | 'schedule' | 'patients' | 'patient' | 'visit' | 'registry' | 'documents' | 'hours'
   | 'stock-balances' | 'stock-items' | 'stock-documents' | 'stock-marking' | 'stock-norms'
   | 'cashier' | 'sales' | 'prices'
@@ -23,6 +23,7 @@ export const services: Service[] = ['dashboards', 'patients', 'inventory', 'fina
 
 export const pageTitles: Record<Page, string> = {
   today: 'Сегодня',
+  workspace: 'Моё пространство',
   analytics: 'Аналитика',
   staff: 'Сотрудники',
   hr: 'Ставки и условия',
@@ -53,7 +54,7 @@ export const pageTitles: Record<Page, string> = {
 /** Разделы сервиса в боковом меню, по группам. Карточка пациента и приём в меню не стоят. */
 export const serviceSections: Record<Service, Array<{ label: string; pages: Page[] }>> = {
   dashboards: [
-    { label: 'ОБЗОР', pages: ['today', 'analytics', 'hr-me'] },
+    { label: 'ОБЗОР', pages: ['today', 'workspace', 'analytics', 'hr-me'] },
     { label: 'УПРАВЛЕНИЕ', pages: ['staff', 'hr', 'audit', 'break-glass', 'outbox'] },
   ],
   patients: [
@@ -82,6 +83,7 @@ export function serviceOf(page: Page): Service {
 function allowed(page: Page, role: Role): boolean {
   switch (page) {
     case 'today': return hasTodayPage(role)
+    case 'workspace': return can(role, 'workspace.item.use')
     case 'analytics': return canSeeAnalytics(role)
     case 'staff': return canSeeStaff(role)
     case 'hr': return can(role, 'identity.hr.manage')

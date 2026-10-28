@@ -46,7 +46,8 @@ class BotService {
 
   /** Клиника отвечает и при ненастроенной услуге онлайн-записи: тогда serviceName — null. */
   BotClinicView clinic() {
-    var name = jdbc.queryForObject("select name from clinic where id = ?", String.class, clinicId());
+    var name =
+        jdbc.queryForObject("select name from clinic where id = ?", String.class, clinicId());
     String service;
     try {
       service = booking.serviceName();

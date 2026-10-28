@@ -107,7 +107,9 @@ class AuditControllerTest {
             .getResponse()
             .getContentAsString();
     org.assertj.core.api.Assertions.assertThat(JsonPath.<String>read(second, "$.items[0].id"))
-        .isNotIn(JsonPath.<String>read(first, "$.items[0].id"), JsonPath.<String>read(first, "$.items[1].id"));
+        .isNotIn(
+            JsonPath.<String>read(first, "$.items[0].id"),
+            JsonPath.<String>read(first, "$.items[1].id"));
     // По умолчанию — 20 на страницу, больше 100 не отдаётся.
     mvc.perform(get("/api/v1/audit/page").with(staff.role("MANAGER")))
         .andExpect(jsonPath("$.size").value(20));

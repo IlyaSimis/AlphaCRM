@@ -18,7 +18,7 @@ describe('services and pages by role', () => {
 
   it('the administrator sees everything operational, grouped by service', () => {
     expect(navigationFor('ADMINISTRATOR')).toEqual([
-      'today', 'analytics', 'hr-me', 'staff', 'audit', 'outbox',
+      'today', 'workspace', 'analytics', 'hr-me', 'staff', 'audit', 'outbox',
       'schedule', 'patients', 'registry', 'hours',
       'stock-balances', 'stock-items', 'stock-documents', 'stock-marking', 'stock-norms',
       'cashier', 'sales', 'prices',
@@ -33,11 +33,11 @@ describe('services and pages by role', () => {
     expect(sectionsFor('dashboards', 'ADMINISTRATOR').map((section) => section.label)).toEqual(['ОБЗОР', 'УПРАВЛЕНИЕ'])
   })
 
-  it('a cashier has no inventory service; a doctor has no finance, and in dashboards only his own terms (his dashboard is above the schedule)', () => {
+  it('a cashier has no inventory service; every role has a personal workspace', () => {
     expect(servicesFor('CASHIER')).toEqual(['dashboards', 'patients', 'finance', 'drive'])
-    expect(navigationFor('CASHIER')).toEqual(['today', 'hr-me', 'schedule', 'patients', 'registry', 'cashier', 'drive', 'drive-shared', 'drive-trash'])
+    expect(navigationFor('CASHIER')).toEqual(['today', 'workspace', 'hr-me', 'schedule', 'patients', 'registry', 'cashier', 'drive', 'drive-shared', 'drive-trash'])
     expect(servicesFor('DOCTOR')).toEqual(['dashboards', 'patients', 'inventory', 'drive'])
-    expect(sectionsFor('dashboards', 'DOCTOR').flatMap((section) => section.pages)).toEqual(['hr-me'])
+    expect(sectionsFor('dashboards', 'DOCTOR').flatMap((section) => section.pages)).toEqual(['workspace', 'hr-me'])
     expect(sectionsFor('inventory', 'DOCTOR').flatMap((section) => section.pages)).toEqual(['stock-balances', 'stock-items'])
     expect(canOpen('cashier', 'DOCTOR')).toBe(false)
     expect(canOpen('visit', 'DOCTOR')).toBe(true)
@@ -55,7 +55,7 @@ describe('services and pages by role', () => {
 
   it('a service tab opens its first page available to the role', () => {
     expect(firstPageOf('dashboards', 'ADMINISTRATOR')).toBe('today')
-    expect(firstPageOf('dashboards', 'DOCTOR')).toBe('hr-me')
+    expect(firstPageOf('dashboards', 'DOCTOR')).toBe('workspace')
     expect(firstPageOf('inventory', 'NURSE')).toBe('stock-balances')
     expect(firstPageOf('finance', 'NURSE')).toBeNull()
   })

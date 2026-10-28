@@ -198,6 +198,27 @@ class DashboardService {
               List.of()));
     }
 
+    if (can(Permission.WORKSPACE_USE)) {
+      widgets.add(
+          new Widget(
+              "workspace.due",
+              "OWN",
+              count(
+                  "select count(*) from workspace.item where clinic_id = ? and owner_id = ?"
+                      + " and completed = false and archived_at is null and due_at <= ?",
+                  clinicId(),
+                  staffId(),
+                  Timestamp.from(time.startOf(today.plusDays(1)))),
+              count(
+                  "select count(*) from workspace.item where clinic_id = ? and owner_id = ?"
+                      + " and completed = false and archived_at is null and due_at < ?",
+                  clinicId(),
+                  staffId(),
+                  Timestamp.from(time.startOf(today))),
+              "count",
+              List.of()));
+    }
+
     if (can(Permission.REGISTRY_TASK_READ)) {
       var mine = !can(Permission.REGISTRY_TASK_MANAGE);
       widgets.add(

@@ -71,7 +71,7 @@ describe('audit log reason column', () => {
 
   it('shows an unknown code as is', () => {
     expect(reasonLabel('something-new')).toBe('something-new')
-    expect(reasonLabel('phone,email')).toBe('phone,email')
+    expect(reasonLabel('phone,unknown-field')).toBe('phone,unknown-field')
     expect(reasonLabel('BOOKED->LOST')).toBe('BOOKED->LOST')
     expect(reasonLabel('to SOMEWHERE')).toBe('to SOMEWHERE')
   })

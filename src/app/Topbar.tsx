@@ -44,7 +44,8 @@ export function Topbar({ eyebrow, title, services, service, onService, live, cli
         </Tabs>
         <Box className="role-switch">
           {live && clinicName && <Typography className="topbar-clinic" sx={{ fontSize: 13, color: 'text.secondary' }}>{clinicName}</Typography>}
-          {!live && <Chip size="small" color="warning" variant="outlined" label="Демо-песочница: данные не сохраняются" />}
+          {live && <Chip size="small" color="success" variant="outlined" label="API подключён" />}
+          {!live && <Chip size="small" color="warning" variant="outlined" label="Демо: общие данные в памяти, пространство — локально" />}
           <Tooltip title={themeLabel}>
             <IconButton onClick={toggle} aria-label={themeLabel}>
               {mode === 'light' ? <DarkModeRounded /> : <LightModeRounded />}

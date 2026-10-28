@@ -40,6 +40,8 @@ export function widgetText(widget: DashboardWidget): { label: string; note: stri
       return { label: 'выручка за месяц', note: `оплат ${second}, за вычетом возвратов`, accent: false }
     case 'tasks.due':
       return { label: own ? 'моих задач на сегодня' : 'задач на сегодня', note: 'открытые, срок наступил', accent: widget.value > 0 }
+    case 'workspace.due':
+      return { label: 'личных записей на сегодня', note: `просрочено ${second}`, accent: second > 0 }
     case 'stock.shortage':
       return { label: 'позиций в минусе', note: 'нехватка на складе', accent: widget.value > 0 }
     case 'stock.expiring':

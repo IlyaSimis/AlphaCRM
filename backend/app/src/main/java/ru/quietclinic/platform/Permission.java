@@ -88,6 +88,9 @@ public enum Permission {
   DRIVE_USE("drive.file.use"),
   DRIVE_ADMIN("drive.clinic.admin"),
 
+  // workspace: личные задачи, заметки и настраиваемые представления
+  WORKSPACE_USE("workspace.item.use"),
+
   // insights
   DASHBOARD_READ("insights.dashboard.read"),
   ANALYTICS_READ("insights.analytics.read"),

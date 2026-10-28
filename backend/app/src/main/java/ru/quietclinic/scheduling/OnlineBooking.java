@@ -18,8 +18,8 @@ import ru.quietclinic.platform.ClinicTime;
 
 /**
  * Онлайн-запись для Telegram-бота: врачи с графиком, свободные окна и запись пациента на одну
- * услугу из справочника ({@code clinic.online-booking.service-name}). Вызывающий — сервисная учётная
- * запись бота с ролью BOT, клиника — из неё же.
+ * услугу из справочника ({@code clinic.online-booking.service-name}). Вызывающий — сервисная
+ * учётная запись бота с ролью BOT, клиника — из неё же.
  */
 @Service
 public class OnlineBooking {
@@ -127,8 +127,7 @@ public class OnlineBooking {
   public OnlineAppointment book(UUID patientId, UUID practitionerId, Instant startsAt) {
     requireRole(ROLE);
     return OnlineAppointment.of(
-        appointmentService.createOnline(
-            patientId, practitionerId, startsAt, onlineService().name));
+        appointmentService.createOnline(patientId, practitionerId, startsAt, onlineService().name));
   }
 
   @Transactional(readOnly = true)

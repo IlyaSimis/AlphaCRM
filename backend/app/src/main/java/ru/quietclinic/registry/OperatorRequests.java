@@ -70,7 +70,8 @@ public class OperatorRequests {
         jdbc.queryForList(
             "select u.id from staff_user u where u.active = true and u.clinic_id = ?"
                 + " and exists (select 1 from staff_role r where r.staff_id = u.id"
-                + " and r.role = 'ADMINISTRATOR') order by u.full_name, u.id",
+                + " and r.role in ('OWNER', 'SENIOR_ADMINISTRATOR', 'ADMINISTRATOR'))"
+                + " order by u.full_name, u.id",
             UUID.class,
             clinicId());
     if (admins.isEmpty()) {

@@ -30,6 +30,10 @@ export const errorMessages: Record<string, string> = {
   SERVICE_NOT_FOUND: 'Услуга не найдена',
   TASK_NOT_FOUND: 'Задача не найдена',
   WAITLIST_NOT_FOUND: 'Ожидание не найдено',
+  WORKSPACE_ITEM_NOT_FOUND: 'Запись рабочего пространства не найдена',
+  WORKSPACE_VIEW_NOT_FOUND: 'Сохранённое представление не найдено',
+  WORKSPACE_VIEW_EXISTS: 'Представление с таким названием уже есть',
+  WORKSPACE_REFERENCE_MISMATCH: 'Выбранная запись в расписании относится к другому пациенту',
 
   SLOT_ALREADY_BOOKED: 'Интервал врача уже занят',
   APPOINTMENT_IN_PAST: 'Это время уже прошло: выберите будущее',

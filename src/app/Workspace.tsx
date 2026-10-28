@@ -29,13 +29,14 @@ import { SettingsPage } from '../features/settings/SettingsPage'
 import { StaffPage } from '../features/staff/StaffPage'
 import { DashboardWidgets } from '../features/today/DashboardWidgets'
 import { TodayPage } from '../features/today/TodayPage'
+import { WorkspacePage } from '../features/workspace/WorkspacePage'
 import { InventoryPage } from '../features/inventory/InventoryPage'
 import { DrivePage } from '../features/drive/DrivePage'
 import { Visit } from '../features/visit/Visit'
-import type { VisitTarget } from '../features/visit/visit'
+import type { VisitTarget } from '../features/visit/visitRules'
 import { formatDay, localToday } from '../shared/dates'
 import { greeting } from '../shared/greeting'
-import { administratorRoles, canManagePrices, canManageRegistry, canSeeRegistry, canWriteClinical, staffRolesOf } from '../shared/roles'
+import { administratorRoles, canManagePrices, canManageRegistry, canSeePatients, canSeeRegistry, canWriteClinical, staffRolesOf } from '../shared/roles'
 import { Landscape } from './Landscape'
 import { canOpen, driveView, firstPageOf, pageTitles, serviceOf, servicesFor, startPage, stockSection, type Page, type Service } from './pages'
 import { Sidebar } from './Sidebar'
@@ -212,6 +213,7 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
         <Topbar eyebrow={eyebrow} title={page === 'today' ? '' : pageTitles[page]} services={servicesFor(role)} service={service} onService={openService} live={live} clinicName={staff.clinicName} onPassword={() => { setPasswordError(''); setPassword(true) }} onSignOut={onSignOut} onMenu={() => setDrawer(true)} />
         <Box className="content">
           {page === 'today' && <TodayPage role={role} selfName={staff.fullName} onNewAppointment={() => openBooking(localToday())} onNewPatient={() => { setCreateError(''); setPatientDialog(true) }} apiOnline={clinic.apiOnline} practitioners={practitioners} patients={patientItems} localAppointments={scheduleItems} localCharges={clinic.localCharges} dueTasks={registry.todayTasks} tasksError={registry.error} staffName={registry.staffName} onPatient={openPatientOf} onOpen={navigate} />}
+          {page === 'workspace' && <WorkspacePage key={staff.id} apiOnline={clinic.apiOnline} selfId={staff.id} patients={canSeePatients(role) ? patientItems : []} appointments={scheduleItems} notify={clinic.notify} />}
           {/* Врача встречают на расписании; остальных — на «Сегодня». */}
           {page === 'schedule' && canWriteClinical(role) && <Typography className="greeting" sx={{ mb: 1.5 }}>{greeting(staff.fullName)}</Typography>}
           {page === 'schedule' && canWriteClinical(role) && <DashboardWidgets apiOnline={clinic.apiOnline} />}

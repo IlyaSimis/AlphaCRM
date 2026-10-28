@@ -155,7 +155,7 @@ export async function enterDemo(user: User, role: StaffRole = 'DOCTOR') {
 
 /** Администратор, кассир и менеджер начинают со страницы «Сегодня»: перейти в расписание. */
 export async function openSchedule(user: User) {
-  await user.click(await screen.findByRole('button', { name: 'Расписание' }))
+  await openPage(user, 'Расписание')
 }
 
 /** Вход через форму, как это делает сотрудник. */

@@ -1,10 +1,11 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-import css from '../index.css?raw'
+import { readFileSync } from 'node:fs'
 import { enterDemo, goOffline, menu, renderApp, openPage } from '../test/helpers'
 import { Landscape, MOUNTAINS } from './Landscape'
 
+const css = readFileSync('src/index.css', 'utf8')
 const content = () => document.querySelector('.content') as HTMLElement
 
 describe('workspace background and greeting', () => {

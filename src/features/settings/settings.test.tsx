@@ -43,7 +43,7 @@ describe('working hours and prices', () => {
     const fetchMock = withAuth((address, init) => {
       const method = init?.method ?? 'GET'
       if (address.includes('/working-hours') && method === 'PUT') return jsonResponse({ id: '00000000-0000-0000-0000-000000000201', fullName: 'Александр Петров', specialty: 'Психиатр', workingHours: JSON.parse(String(init?.body)).shifts })
-      if (address.includes('/price') && method === 'PUT') return jsonResponse({ id: '00000000-0000-0000-0000-000000000602', name: 'Повторный приём', durationMinutes: 30, priceMinor: JSON.parse(String(init?.body)).priceMinor, currency: 'RUB' })
+      if (address.includes('/pricing') && method === 'PUT') return jsonResponse({ id: '00000000-0000-0000-0000-000000000602', name: 'Повторный приём', durationMinutes: 30, ...JSON.parse(String(init?.body)), currency: 'RUB' })
       if (address.includes('/patients')) return jsonResponse([anna])
       if (address.includes('/appointments')) return jsonResponse([])
       return jsonResponse({}, 404)
@@ -63,9 +63,9 @@ describe('working hours and prices', () => {
     await user.clear(price)
     await user.type(price, '3200,50')
     await user.click(screen.getByRole('button', { name: 'Сохранить цену Повторный приём' }))
-    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/price'))).toBe(true))
-    const saved = fetchMock.mock.calls.find(([url]) => String(url).includes('/price'))
-    expect(JSON.parse(String(saved?.[1]?.body))).toEqual({ priceMinor: 320050 })
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/pricing'))).toBe(true))
+    const saved = fetchMock.mock.calls.find(([url]) => String(url).includes('/pricing'))
+    expect(JSON.parse(String(saved?.[1]?.body))).toEqual({ priceMode: 'FIXED', priceMinor: 320050 })
   })
 
   it('specialty and room are edited next to the shifts; the room shows in the schedule header', async () => {

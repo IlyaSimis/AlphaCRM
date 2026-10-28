@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ChargeItem, ScheduleItem } from '../../api/types'
-import { buildCashierRows, localCharge, totals } from './cashier'
+import { buildCashierRows, localCharge, totals } from './cashierRules'
 
 const visit = (id: string, date: string, statusCode: ScheduleItem['statusCode'] = 'COMPLETED', amountMinor: number | null = 300000): ScheduleItem => ({
   id, date, time: '09:00', duration: '30 мин', minutes: 30, name: 'Анна', type: 'Повторный приём', status: '', statusCode, tone: '', practitionerId: 'd', patientId: 'p', amountMinor, currency: 'RUB',

@@ -70,6 +70,8 @@ describe('several visits in a row', () => {
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
+    // 10:00 есть только в ответе API: дожидаемся замены демо-расписания серверным.
+    expect(await screen.findByText('10:00')).toBeInTheDocument()
 
     await user.click(await screen.findByRole('button', { name: 'Начать приём 09:00 Анна Михайлова' }))
     await waitFor(() => expect(statuses[first]).toBe('IN_PROGRESS'))

@@ -109,6 +109,7 @@ describe('schedule', () => {
     first.unmount()
 
     renderApp()
+    expect(await screen.findByText('API подключён')).toBeInTheDocument()
     await openSchedule(user)
     expect(await screen.findByText('15:05')).toBeInTheDocument()
     expect(screen.getByLabelText('День расписания')).toHaveValue('2026-10-22')
@@ -162,14 +163,15 @@ describe('schedule', () => {
         status = JSON.parse(String(init?.body)).status
         return jsonResponse({ status })
       }
-      if (address.includes('/appointments')) return jsonResponse([{ id: '00000000-0000-0000-0000-000000000301', patientId: anna.id, practitionerId: '00000000-0000-0000-0000-000000000201', startsAt: '2026-10-20T09:00:00Z', endsAt: '2026-10-20T09:50:00Z', serviceName: 'Первичный приём', status }])
+      if (address.includes('/appointments')) return jsonResponse([{ id: '00000000-0000-0000-0000-000000000301', patientId: anna.id, practitionerId: '00000000-0000-0000-0000-000000000201', startsAt: '2026-10-20T09:00:00Z', endsAt: '2026-10-20T09:50:00Z', serviceName: 'Серверный приём', status }])
       return jsonResponse({}, 404)
     }, 't.petrov')
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
+    expect(await screen.findByText('Серверный приём')).toBeInTheDocument()
     await user.click(await screen.findByRole('button', { name: 'Изменить статус 09:00 Анна Михайлова' }))
-    await user.click(screen.getByRole('menuitem', { name: 'Завершить приём' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Завершить приём' }))
     expect(await screen.findByText('Завершён')).toBeInTheDocument()
     const call = fetchMock.mock.calls.find(([url]) => String(url).includes('/status'))
     // Роль и автор — из сессии на сервере; клиент шлёт только cookie и CSRF-заголовок.
@@ -219,10 +221,10 @@ describe('schedule', () => {
     const user = userEvent.setup()
     renderApp()
     await signIn(user, 't.lebedeva')
-    expect(await screen.findByText('API подключён')).toBeInTheDocument()
+    expect((await screen.findAllByText('API подключён')).length).toBeGreaterThan(0)
     expect(screen.getByText('Ольга Лебедева', { selector: '.profile *' })).toBeInTheDocument()
     await user.click(await screen.findByRole('button', { name: 'Изменить статус 15:00 Анна Михайлова' }))
-    await user.click(screen.getByRole('menuitem', { name: 'Завершить приём' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Завершить приём' }))
     expect(await screen.findByText('Завершён')).toBeInTheDocument()
     const call = fetchMock.mock.calls.find(([url]) => String(url).includes('/status'))
     expect(call?.[1]?.headers).not.toHaveProperty('X-Actor-Id')

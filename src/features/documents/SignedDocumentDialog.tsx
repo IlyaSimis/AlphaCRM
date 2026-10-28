@@ -2,7 +2,7 @@ import { LockOutlined } from '@mui/icons-material'
 import { Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Typography } from '@mui/material'
 import type { SignedDocumentItem } from '../../api/types'
 import { Info } from '../../shared/ui'
-import { documentKind, signedMoment, snapshotFields } from './signedDocuments'
+import { documentKind, signedMoment, snapshotFields } from './signedDocumentRules'
 
 type SignedDocumentDialogProps = {
   document: SignedDocumentItem

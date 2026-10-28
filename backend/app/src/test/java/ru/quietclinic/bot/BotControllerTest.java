@@ -41,6 +41,7 @@ import ru.quietclinic.StaffSessions;
 class BotControllerTest {
   static final String TOKEN = "test-bot-token-0123456789abcdef0123456789";
   static final String PETROV = "00000000-0000-0000-0000-000000000201";
+
   /** «Сейчас» тестов (clinic.fixed-time) плюс запас min-lead в два часа. */
   static final Instant EARLIEST = Instant.parse("2026-10-19T02:00:00Z");
 
@@ -198,7 +199,7 @@ class BotControllerTest {
             "$.patient.id");
     var second =
         JsonPath.read(
-            book(chat, "повторова", all.get(all.size() - 2))
+            book(chat, "повторова", slots(PETROV).get(slots(PETROV).size() - 1))
                 .andExpect(status().isCreated())
                 .andReturn()
                 .getResponse()
