@@ -4,8 +4,9 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Строка кассы: счёт по приёму и его оплата. Ни диагнозов, ни текста приёма. При свободной цене
- * (priceMode = OPEN) до ввода суммы amountMinor пуст, статус AWAITING_AMOUNT.
+ * Строка кассы: счёт по приёму, его оплата и возврат. Ни диагнозов, ни текста приёма. При свободной
+ * цене (priceMode = OPEN) до ввода суммы amountMinor пуст, статус AWAITING_AMOUNT. Аннулированный
+ * счёт — VOIDED с кодом причины; возвращённый — REFUNDED со строкой возврата.
  */
 record ChargeView(
     UUID chargeId,
@@ -20,9 +21,20 @@ record ChargeView(
     String priceMode,
     Long minMinor,
     Long maxMinor,
-    Long estimateMinor) {
+    Long estimateMinor,
+    Instant paidAt,
+    String voidReason,
+    Instant voidedAt,
+    UUID refundId,
+    String refundReason,
+    String refundFiscalStatus,
+    Instant refundedAt) {
 
   static ChargeView of(Charge charge, PaymentRecord payment) {
+    return of(charge, payment, null);
+  }
+
+  static ChargeView of(Charge charge, PaymentRecord payment, RefundRecord refund) {
     return new ChargeView(
         charge.id,
         charge.appointmentId,
@@ -36,6 +48,13 @@ record ChargeView(
         charge.priceMode,
         charge.minMinor,
         charge.maxMinor,
-        charge.estimateMinor);
+        charge.estimateMinor,
+        payment == null ? null : payment.createdAt,
+        charge.voidReason,
+        charge.voidedAt,
+        refund == null ? null : refund.id,
+        refund == null ? null : refund.reason,
+        refund == null ? null : refund.fiscalStatus,
+        refund == null ? null : refund.createdAt);
   }
 }

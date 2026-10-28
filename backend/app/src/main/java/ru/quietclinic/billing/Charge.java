@@ -9,7 +9,8 @@ import java.util.UUID;
 
 /**
  * Счёт по приёму. Статусы: {@code AWAITING_AMOUNT} (свободная цена, суммы ещё нет) → {@code
- * PENDING} → {@code PAID}. Пределы свободной цены — снимок услуги на момент завершения приёма.
+ * PENDING} → {@code PAID} → {@code REFUNDED} (возврат); неоплаченный можно аннулировать — {@code
+ * VOIDED}. Пределы свободной цены — снимок услуги на момент завершения приёма.
  */
 @Entity
 @Table(name = "charge")
@@ -17,6 +18,8 @@ class Charge {
   static final String AWAITING_AMOUNT = "AWAITING_AMOUNT";
   static final String PENDING = "PENDING";
   static final String PAID = "PAID";
+  static final String VOIDED = "VOIDED";
+  static final String REFUNDED = "REFUNDED";
 
   @Id UUID id;
 
@@ -42,6 +45,13 @@ class Charge {
 
   @Column(nullable = false)
   Instant createdAt;
+
+  Instant voidedAt;
+
+  UUID voidedBy;
+
+  /** Машинный код причины аннулирования. */
+  String voidReason;
 
   protected Charge() {}
 
@@ -74,9 +84,9 @@ class Charge {
       throw ru.quietclinic.platform.PlatformConfig.conflict(
           "AMOUNT_FIXED", "The price of this charge is fixed");
     }
-    if (PAID.equals(status)) {
+    if (!AWAITING_AMOUNT.equals(status) && !PENDING.equals(status)) {
       throw ru.quietclinic.platform.PlatformConfig.conflict(
-          "CHARGE_NOT_PAYABLE", "Charge is already paid");
+          "CHARGE_NOT_PAYABLE", "Charge is already paid or closed");
     }
     if ((minMinor != null && amount < minMinor) || (maxMinor != null && amount > maxMinor)) {
       throw ru.quietclinic.platform.PlatformConfig.conflict(
@@ -88,5 +98,21 @@ class Charge {
     }
     amountMinor = amount;
     status = PENDING;
+  }
+
+  /** Аннулировать можно только неоплаченный счёт; оплаченный закрывается возвратом. */
+  void voidBy(UUID actor, String reason, Instant at) {
+    if (PAID.equals(status) || REFUNDED.equals(status)) {
+      throw ru.quietclinic.platform.PlatformConfig.conflict(
+          "CHARGE_PAID", "A paid charge is closed by a refund, not voided");
+    }
+    if (VOIDED.equals(status)) {
+      throw ru.quietclinic.platform.PlatformConfig.conflict(
+          "CHARGE_VOIDED", "The charge is already voided");
+    }
+    status = VOIDED;
+    voidedAt = at;
+    voidedBy = actor;
+    voidReason = reason;
   }
 }

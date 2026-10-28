@@ -11,6 +11,9 @@ import { canTakePayments, type Role } from '../../shared/roles'
 import { Metric } from '../../shared/ui'
 import { formatMoney, rublesFromInput } from '../schedule/booking'
 import { buildCashierRows, stateLabels, totals, type CashierRow } from './cashier'
+import { CloseChargeDialog } from './CloseChargeDialog'
+import { refundReasonLabels, voidReasonLabels } from '../finance/finance'
+import type { RefundReason, VoidReason } from '../../api/types'
 
 type CashierProps = {
   role: Role
@@ -52,6 +55,10 @@ export function Cashier({ role, apiOnline, practitioners, localAppointments, loc
   const [amounts, setAmounts] = useState<Record<string, string>>({})
   const payments = canTakePayments(role)
   const amountsAllowed = can(role, 'finance.invoice.set-amount')
+  const mayVoid = can(role, 'finance.invoice.void')
+  const mayRefund = can(role, 'finance.payment.refund')
+  /** Открытое окно аннулирования или возврата. */
+  const [closing, setClosing] = useState<{ mode: 'void' | 'refund'; row: CashierRow } | null>(null)
   const today = localToday()
 
   useEffect(() => {
@@ -174,7 +181,7 @@ export function Cashier({ role, apiOnline, practitioners, localAppointments, loc
       </Box>
       <Box className="summary-grid" sx={{ mb: 2 }}>
         <Metric value={formatMoney(sums.pending)} label="ожидает оплаты" note="выставленные счета" accent={sums.pending > 0} />
-        <Metric value={formatMoney(sums.paid)} label="оплачено" note="за период" />
+        <Metric value={formatMoney(sums.paid)} label="оплачено" note={sums.refunded > 0 ? `за период; возвращено ${formatMoney(sums.refunded)}` : 'за период'} />
         <Metric value={String(sums.withoutCharge)} label="без счёта" note={payments ? 'можно выставить' : 'выставляют касса и администратор'} />
         {sums.awaitingAmount > 0 && <Metric value={String(sums.awaitingAmount)} label="ждут суммы" note="свободная цена" accent />}
       </Box>
@@ -195,7 +202,11 @@ export function Cashier({ role, apiOnline, practitioners, localAppointments, loc
                     <td>{doctorName(row.appointment.practitionerId)}</td>
                     <td>{row.appointment.type}</td>
                     <td className="nowrap">{amount == null ? (row.charge?.priceMode === 'OPEN' || row.appointment.priceMode === 'OPEN' ? openRange(row) : '—') : formatMoney(amount, row.charge?.currency ?? row.appointment.currency ?? 'RUB')}</td>
-                    <td><Chip size="small" variant="outlined" label={stateLabels[row.state]} color={row.state === 'PAID' ? 'success' : row.state === 'PENDING' || row.state === 'AWAITING_AMOUNT' ? 'warning' : 'default'} /></td>
+                    <td>
+                      <Chip size="small" variant="outlined" label={stateLabels[row.state]} color={row.state === 'PAID' ? 'success' : row.state === 'PENDING' || row.state === 'AWAITING_AMOUNT' ? 'warning' : row.state === 'REFUNDED' ? 'error' : 'default'} />
+                      {row.state === 'VOIDED' && row.charge?.voidReason && <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 0.5 }}>{voidReasonLabels[row.charge.voidReason as VoidReason] ?? row.charge.voidReason}</Typography>}
+                      {row.state === 'REFUNDED' && row.charge?.refundReason && <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 0.5 }}>{refundReasonLabels[row.charge.refundReason as RefundReason] ?? row.charge.refundReason}</Typography>}
+                    </td>
                     <td className="nowrap">
                       {row.state === 'AWAITING_AMOUNT' && amountsAllowed && row.charge && <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                         <TextField size="small" label="Сумма, ₽" value={amounts[row.charge.chargeId] ?? ''} onChange={(event) => setAmounts((current) => ({ ...current, [row.charge?.chargeId ?? '']: event.target.value }))} slotProps={{ htmlInput: { 'aria-label': `Сумма ${row.appointment.name} ${row.appointment.time}, рублей` } }} sx={{ width: 120 }} />
@@ -203,6 +214,8 @@ export function Cashier({ role, apiOnline, practitioners, localAppointments, loc
                       </Stack>}
                       {row.state === 'NO_CHARGE' && payments && <Button size="small" disabled={busy !== null || row.appointment.amountMinor == null} aria-label={`Выставить счёт ${row.appointment.name} ${row.appointment.time}`} onClick={() => issue(row)}>Выставить счёт</Button>}
                       {row.state === 'PENDING' && payments && <Button size="small" variant="contained" disabled={busy !== null} aria-label={`Принять оплату ${row.appointment.name} ${row.appointment.time}`} onClick={() => pay(row)}>Принять оплату</Button>}
+                      {apiOnline && mayVoid && (row.state === 'PENDING' || row.state === 'AWAITING_AMOUNT') && <Button size="small" color="warning" disabled={busy !== null} aria-label={`Аннулировать счёт ${row.appointment.name} ${row.appointment.time}`} onClick={() => setClosing({ mode: 'void', row })}>Аннулировать</Button>}
+                      {apiOnline && mayRefund && row.state === 'PAID' && row.charge?.paymentId && <Button size="small" color="error" disabled={busy !== null} aria-label={`Возврат ${row.appointment.name} ${row.appointment.time}`} onClick={() => setClosing({ mode: 'refund', row })}>Возврат</Button>}
                     </td>
                   </tr>
                 )
@@ -211,6 +224,7 @@ export function Cashier({ role, apiOnline, practitioners, localAppointments, loc
           </table>
         )}
       </Box>
+      {closing?.row.charge && <CloseChargeDialog mode={closing.mode} charge={closing.row.charge} subject={`${closing.row.appointment.name}, ${shortDay(closing.row.appointment.date)} ${closing.row.appointment.time}, ${closing.row.appointment.type}`} onClose={() => setClosing(null)} onDone={(message) => { setClosing(null); notify(message); setRevision((value) => value + 1) }} />}
     </>
   )
 }

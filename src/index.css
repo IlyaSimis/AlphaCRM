@@ -335,3 +335,7 @@ button, input, textarea { font: inherit; }
   .visit-banner .MuiChip-root { max-width: 130px; height: auto; }
   .clinical-form { padding: 2px 16px; }
 }
+
+/* Продажи: полоса доли выручки строки. */
+.sales-bar-cell { width: 28%; min-width: 80px; }
+.sales-bar { height: 10px; border-radius: 5px; background: var(--active-text); opacity: .55; min-width: 2px; }

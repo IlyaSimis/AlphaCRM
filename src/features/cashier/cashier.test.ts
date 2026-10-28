@@ -14,7 +14,7 @@ describe('cashier', () => {
       [charge('a', 'PAID'), charge('b', 'PENDING', 450000)],
     )
     expect(rows.map((row) => [row.appointment.id, row.state])).toEqual([['c', 'NO_CHARGE'], ['b', 'PENDING'], ['a', 'PAID']])
-    expect(totals(rows)).toEqual({ pending: 450000, paid: 300000, withoutCharge: 1, awaitingAmount: 0 })
+    expect(totals(rows)).toEqual({ pending: 450000, paid: 300000, refunded: 0, withoutCharge: 1, awaitingAmount: 0 })
   })
 
   it('a local charge takes the appointment price snapshot', () => {
@@ -28,5 +28,14 @@ describe('cashier', () => {
     const rows = buildCashierRows([visit('b', '2026-10-13'), open], [charge('b', 'PENDING'), { ...charge('o', 'AWAITING_AMOUNT'), amountMinor: null }])
     expect(rows.map((row) => row.state)).toEqual(['AWAITING_AMOUNT', 'PENDING'])
     expect(totals(rows).awaitingAmount).toBe(1)
+  })
+
+  it('voided and refunded charges close the row: they sort last and do not count as paid', () => {
+    const rows = buildCashierRows(
+      [visit('p', '2026-10-06'), visit('r', '2026-10-07'), visit('v', '2026-10-08'), visit('n', '2026-10-09')],
+      [charge('p', 'PAID'), charge('r', 'REFUNDED'), { ...charge('v', 'VOIDED'), amountMinor: null }, charge('n', 'PENDING')],
+    )
+    expect(rows.map((row) => [row.appointment.id, row.state])).toEqual([['n', 'PENDING'], ['p', 'PAID'], ['r', 'REFUNDED'], ['v', 'VOIDED']])
+    expect(totals(rows)).toMatchObject({ paid: 300000, refunded: 300000, pending: 300000 })
   })
 })

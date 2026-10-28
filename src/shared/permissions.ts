@@ -14,7 +14,7 @@ export type Permission =
   | 'clinical.patient.read' | 'clinical.patient.read-care' | 'clinical.patient.contacts-read' | 'clinical.patient.write'
   | 'clinical.note.write' | 'clinical.signed-document.read' | 'clinical.signed-document.read-own'
   | 'clinical.patient-file.write' | 'clinical.patient-file.write-care' | 'clinical.patient-file.read' | 'clinical.patient-file.read-signed'
-  | 'finance.invoice.read' | 'finance.invoice.write' | 'finance.invoice.set-amount' | 'finance.revenue.read'
+  | 'finance.invoice.read' | 'finance.invoice.write' | 'finance.invoice.set-amount' | 'finance.invoice.void' | 'finance.payment.refund' | 'finance.revenue.read'
   | 'inventory.item.read' | 'inventory.item.write' | 'inventory.document.write' | 'inventory.document.allow-negative'
   | 'inventory.stock.read' | 'inventory.marking.read' | 'inventory.marking.manage'
   | 'drive.file.use' | 'drive.admin'
@@ -28,7 +28,7 @@ const OPERATIONS: Permission[] = [
   'schedule.service.read', 'schedule.service.manage', 'schedule.registry-task.read', 'schedule.registry-task.manage',
   'schedule.waitlist.read', 'schedule.waitlist.manage',
   'clinical.patient.read', 'clinical.patient.contacts-read', 'clinical.patient.write', 'clinical.patient-file.write', 'clinical.patient-file.read',
-  'finance.invoice.read', 'finance.invoice.write', 'finance.invoice.set-amount', 'finance.revenue.read',
+  'finance.invoice.read', 'finance.invoice.write', 'finance.invoice.set-amount', 'finance.invoice.void', 'finance.payment.refund', 'finance.revenue.read',
   'inventory.item.read', 'inventory.item.write', 'inventory.document.write', 'inventory.document.allow-negative',
   'inventory.stock.read', 'inventory.marking.read', 'inventory.marking.manage',
   'drive.file.use', 'drive.admin', 'insights.dashboard.read', 'insights.analytics.read', 'audit.event.read',

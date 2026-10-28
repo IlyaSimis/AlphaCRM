@@ -202,8 +202,10 @@ class OutboxDispatcher {
   private DeliveryResult send(Prepared prepared) {
     try {
       if (prepared.patientMessage() == null) {
-        return fiscal
-            .sendReceipt(prepared.message().aggregateId, prepared.message().idempotencyKey)
+        var message = prepared.message();
+        return (NoticeTemplates.REFUND_RECEIPT.equals(message.template)
+                ? fiscal.sendRefund(message.aggregateId, message.idempotencyKey)
+                : fiscal.sendReceipt(message.aggregateId, message.idempotencyKey))
             .asDelivery();
       }
       return notifications.deliver(prepared.patientMessage());

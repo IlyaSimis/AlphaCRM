@@ -76,6 +76,10 @@ public final class PlatformConfig {
     return DomainException.conflict(code, message);
   }
 
+  public static RuntimeException badRequest(String code, String message) {
+    return DomainException.badRequest(code, message);
+  }
+
   public static RuntimeException forbidden(String code, String message) {
     return DomainException.forbidden(code, message);
   }

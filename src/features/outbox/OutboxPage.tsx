@@ -56,7 +56,7 @@ export function OutboxPage({ apiOnline }: { apiOnline: boolean }) {
                   <tr key={item.id}>
                     <td className="nowrap">{moment(item.createdAt)}</td>
                     <td>{templateLabels[item.template] ?? item.template}</td>
-                    <td className="nowrap">{item.aggregateType === 'PAYMENT' ? `Платёж · ${item.aggregateId.slice(-4)}` : `${appointmentTime(item.appointmentStartsAt)} · ${item.aggregateId.slice(-4)}`}</td>
+                    <td className="nowrap">{item.aggregateType === 'PAYMENT' ? `Платёж · ${item.aggregateId.slice(-4)}` : item.aggregateType === 'REFUND' ? `Возврат · ${item.aggregateId.slice(-4)}` : `${appointmentTime(item.appointmentStartsAt)} · ${item.aggregateId.slice(-4)}`}</td>
                     <td>{item.channel ? channelLabels[item.channel] ?? item.channel : '—'}</td>
                     <td>
                       <Chip size="small" variant="outlined" label={statusLabels[item.status] ?? item.status} color={statusTone[item.status] ?? 'default'} />

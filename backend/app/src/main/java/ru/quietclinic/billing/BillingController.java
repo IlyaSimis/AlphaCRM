@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import ru.quietclinic.audit.AuditService;
 import ru.quietclinic.communications.OutboxService;
+import ru.quietclinic.platform.DomainEvents;
 import ru.quietclinic.platform.Permission;
 
 @RestController
@@ -32,6 +33,8 @@ public class BillingController {
   private final OutboxService outbox;
   private final AuditService audit;
   private final ChargeService chargeService;
+  private final FinanceService finance;
+  private final DomainEvents events;
 
   BillingController(
       ChargeRepository charges,
@@ -39,13 +42,30 @@ public class BillingController {
       PaymentGateway gateway,
       OutboxService outbox,
       AuditService audit,
-      ChargeService chargeService) {
+      ChargeService chargeService,
+      FinanceService finance,
+      DomainEvents events) {
     this.charges = charges;
     this.payments = payments;
     this.gateway = gateway;
     this.outbox = outbox;
     this.audit = audit;
     this.chargeService = chargeService;
+    this.finance = finance;
+    this.events = events;
+  }
+
+  /** Аннулировать неоплаченный счёт: код причины из списка. */
+  @PostMapping("/charges/{chargeId}/void")
+  ChargeView voidCharge(@PathVariable UUID chargeId, @Valid @RequestBody VoidRequest request) {
+    return finance.voidCharge(chargeId, request);
+  }
+
+  /** Полный возврат оплаты с чеком возврата. */
+  @PostMapping("/payments/{paymentId}/refunds")
+  @ResponseStatus(HttpStatus.CREATED)
+  RefundView refund(@PathVariable UUID paymentId, @Valid @RequestBody RefundRequest request) {
+    return finance.refund(paymentId, request);
   }
 
   @GetMapping("/charges")
@@ -81,6 +101,9 @@ public class BillingController {
     if (Charge.AWAITING_AMOUNT.equals(charge.status)) {
       throw conflict("AMOUNT_REQUIRED", "Enter the amount before accepting payment");
     }
+    if (Charge.VOIDED.equals(charge.status)) {
+      throw conflict("CHARGE_VOIDED", "The charge is voided");
+    }
     if (!charge.status.equals("PENDING")) {
       throw conflict("CHARGE_NOT_PAYABLE", "Charge is already paid");
     }
@@ -99,6 +122,15 @@ public class BillingController {
     // Чек уходит доставщиком outbox через порт кассы; пока касса не подключена — QUEUED.
     outbox.fiscalReceipt(payment.id, charge.appointmentId);
     audit.record(actorId(), "PAYMENT_CONFIRMED", "PAYMENT", payment.id, "ALLOWED", "billing");
+    events.publish(
+        "InvoicePaid",
+        java.util.Map.of(
+            "chargeId", charge.id,
+            "paymentId", payment.id,
+            "appointmentId", charge.appointmentId,
+            "amountMinor", charge.amountMinor,
+            "currency", charge.currency,
+            "priceMode", charge.priceMode));
     return view(charge, payment);
   }
 

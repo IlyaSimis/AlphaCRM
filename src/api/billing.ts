@@ -1,5 +1,5 @@
 import { failure, apiFetch } from './client'
-import type { ChargeItem } from './types'
+import type { ChargeItem, RefundReason, VoidReason } from './types'
 
 export async function loadCharges(): Promise<ChargeItem[]> {
   const response = await apiFetch(`/billing/charges`)
@@ -24,5 +24,19 @@ export async function setChargeAmount(chargeId: string, amountMinor: number): Pr
 export async function payCharge(chargeId: string, idempotencyKey: string) {
   const response = await apiFetch(`/billing/charges/${chargeId}/payments`, { method: 'POST', body: JSON.stringify({ idempotencyKey }) })
   if (!response.ok) throw await failure(response, 'Не удалось провести оплату')
+  return response.json()
+}
+
+/** Аннулировать неоплаченный счёт — администраторы; причина — код из списка. */
+export async function voidCharge(chargeId: string, reason: VoidReason): Promise<ChargeItem> {
+  const response = await apiFetch(`/billing/charges/${chargeId}/void`, { method: 'POST', body: JSON.stringify({ reason }) })
+  if (!response.ok) throw await failure(response, 'Не удалось аннулировать счёт')
+  return response.json()
+}
+
+/** Полный возврат оплаты с чеком возврата — администраторы. Повтор с тем же ключом не вернёт дважды. */
+export async function refundPayment(paymentId: string, reason: RefundReason, idempotencyKey: string) {
+  const response = await apiFetch(`/billing/payments/${paymentId}/refunds`, { method: 'POST', body: JSON.stringify({ idempotencyKey, reason }) })
+  if (!response.ok) throw await failure(response, 'Не удалось оформить возврат')
   return response.json()
 }

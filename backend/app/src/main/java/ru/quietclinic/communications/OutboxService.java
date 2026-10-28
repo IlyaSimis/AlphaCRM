@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class OutboxService {
   static final Duration REMINDER_LEAD = Duration.ofHours(24);
+
   /** Причина SKIPPED у подтверждения записи, сделанной в боте: пациент уже видел ответ бота. */
   static final String SHOWN_IN_BOT = "SHOWN_IN_BOT";
 
@@ -87,6 +88,20 @@ public class OutboxService {
         clinicOfAppointment(appointmentId),
         NoticeTemplates.RECEIPT,
         NoticeTemplates.RECEIPT + ":" + paymentId,
+        null,
+        Instant.now());
+  }
+
+  /** Чек возврата: тем же портом кассы, что чек оплаты; клиника — по записи счёта. */
+  @Transactional
+  public void fiscalRefund(UUID refundId, UUID appointmentId) {
+    enqueue(
+        NoticeTemplates.FISCALIZATION,
+        "REFUND",
+        refundId,
+        clinicOfAppointment(appointmentId),
+        NoticeTemplates.REFUND_RECEIPT,
+        NoticeTemplates.REFUND_RECEIPT + ":" + refundId,
         null,
         Instant.now());
   }

@@ -8,6 +8,7 @@ final class NoticeTemplates {
   static final String REMINDER = "appointment-reminder";
   static final String CANCELLED = "appointment-cancelled";
   static final String RECEIPT = "receipt";
+  static final String REFUND_RECEIPT = "refund-receipt";
 
   static final String NOTIFICATION = "NOTIFICATION";
   static final String FISCALIZATION = "FISCALIZATION";

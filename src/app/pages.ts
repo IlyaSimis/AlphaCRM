@@ -5,7 +5,7 @@ export type Page =
   | 'today' | 'analytics' | 'staff' | 'audit' | 'outbox'
   | 'schedule' | 'patients' | 'patient' | 'visit' | 'registry' | 'documents' | 'hours'
   | 'stock-balances' | 'stock-items' | 'stock-documents' | 'stock-marking' | 'stock-norms'
-  | 'cashier' | 'prices'
+  | 'cashier' | 'sales' | 'prices'
   | 'drive' | 'drive-shared' | 'drive-trash'
 
 /** Сервис — вкладка верхней панели; его разделы — в боковом меню. */
@@ -40,6 +40,7 @@ export const pageTitles: Record<Page, string> = {
   'stock-marking': 'Маркировка',
   'stock-norms': 'Нормы расхода',
   cashier: 'Касса',
+  sales: 'Продажи и выручка',
   prices: 'Услуги и цены',
   drive: 'Мой диск',
   'drive-shared': 'Доступные мне',
@@ -61,7 +62,7 @@ export const serviceSections: Record<Service, Array<{ label: string; pages: Page
     { label: 'УЧЁТ', pages: ['stock-marking', 'stock-norms'] },
   ],
   finance: [
-    { label: 'ФИНАНСЫ', pages: ['cashier', 'prices'] },
+    { label: 'ФИНАНСЫ', pages: ['cashier', 'sales', 'prices'] },
   ],
   drive: [
     { label: 'КОРПОРАТИВНЫЙ ДИСК', pages: ['drive', 'drive-shared', 'drive-trash'] },
@@ -95,6 +96,7 @@ function allowed(page: Page, role: Role): boolean {
     case 'stock-marking': return can(role, 'inventory.marking.read')
     case 'stock-norms': return can(role, 'schedule.service.manage', 'inventory.item.write')
     case 'cashier': return canSeeCashier(role)
+    case 'sales': return can(role, 'finance.revenue.read')
     case 'prices': return canManageSchedule(role) || canManagePrices(role)
     case 'drive':
     case 'drive-shared':

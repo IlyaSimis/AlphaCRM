@@ -56,6 +56,10 @@ public enum Permission {
   INVOICE_READ("finance.invoice.read"),
   INVOICE_WRITE("finance.invoice.write"),
   INVOICE_SET_AMOUNT("finance.invoice.set-amount"),
+  /** Аннулировать неоплаченный счёт. */
+  INVOICE_VOID("finance.invoice.void"),
+  /** Вернуть оплату (полный возврат с чеком возврата). */
+  PAYMENT_REFUND("finance.payment.refund"),
   /** Выручка и продажи — только агрегаты. */
   REVENUE_READ("finance.revenue.read"),
 

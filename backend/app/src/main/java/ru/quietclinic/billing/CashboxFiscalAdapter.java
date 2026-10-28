@@ -27,6 +27,7 @@ class CashboxFiscalAdapter implements FiscalPort {
 
   private final PaymentRepository payments;
   private final ChargeRepository charges;
+  private final RefundRepository refunds;
   private final TransactionTemplate tx;
   private final String url;
   private final String secret;
@@ -36,11 +37,13 @@ class CashboxFiscalAdapter implements FiscalPort {
   CashboxFiscalAdapter(
       PaymentRepository payments,
       ChargeRepository charges,
+      RefundRepository refunds,
       TransactionTemplate tx,
       @Value("${clinic.cashbox.url:}") String url,
       @Value("${clinic.cashbox.secret:}") String secret) {
     this.payments = payments;
     this.charges = charges;
+    this.refunds = refunds;
     this.tx = tx;
     this.url = url == null ? "" : url.trim();
     this.secret = secret == null ? "" : secret;
@@ -51,6 +54,24 @@ class CashboxFiscalAdapter implements FiscalPort {
     if (url.isEmpty() || secret.isBlank()) return FiscalResult.notConfigured();
     var body = tx.execute(status -> body(paymentId, idempotencyKey));
     if (body == null) return new FiscalResult("REJECTED", "PAYMENT_NOT_FOUND");
+    return post(
+        body,
+        idempotencyKey,
+        () -> payments.findById(paymentId).ifPresent(p -> p.fiscalStatus = SENT_STATUS));
+  }
+
+  @Override
+  public FiscalResult sendRefund(UUID refundId, String idempotencyKey) {
+    if (url.isEmpty() || secret.isBlank()) return FiscalResult.notConfigured();
+    var body = tx.execute(status -> refundBody(refundId, idempotencyKey));
+    if (body == null) return new FiscalResult("REJECTED", "REFUND_NOT_FOUND");
+    return post(
+        body,
+        idempotencyKey,
+        () -> refunds.findById(refundId).ifPresent(r -> r.fiscalStatus = SENT_STATUS));
+  }
+
+  private FiscalResult post(String body, String idempotencyKey, Runnable onSent) {
     var timestamp = Instant.now().getEpochSecond();
     try {
       var request =
@@ -64,10 +85,7 @@ class CashboxFiscalAdapter implements FiscalPort {
               .build();
       var status = client.send(request, HttpResponse.BodyHandlers.discarding()).statusCode();
       var result = FiscalResult.ofHttp(status);
-      if ("SENT".equals(result.outcome())) {
-        tx.executeWithoutResult(
-            s -> payments.findById(paymentId).ifPresent(p -> p.fiscalStatus = SENT_STATUS));
-      }
+      if ("SENT".equals(result.outcome())) tx.executeWithoutResult(s -> onSent.run());
       return result;
     } catch (InterruptedException ex) {
       Thread.currentThread().interrupt();
@@ -94,6 +112,27 @@ class CashboxFiscalAdapter implements FiscalPort {
         + charge.currency
         + "\",\"paidAt\":\""
         + payment.createdAt
+        + "\"}";
+  }
+
+  /** Возврат прихода: сумма, валюта, id возврата, платежа и счёта — без ФИО и данных приёма. */
+  private String refundBody(UUID refundId, String idempotencyKey) {
+    var refund = refunds.findById(refundId).orElse(null);
+    if (refund == null) return null;
+    return "{\"idempotencyKey\":\""
+        + idempotencyKey
+        + "\",\"operation\":\"refund\",\"refundId\":\""
+        + refund.id
+        + "\",\"paymentId\":\""
+        + refund.paymentId
+        + "\",\"chargeId\":\""
+        + refund.chargeId
+        + "\",\"amountMinor\":"
+        + refund.amountMinor
+        + ",\"currency\":\""
+        + refund.currency
+        + "\",\"refundedAt\":\""
+        + refund.createdAt
         + "\"}";
   }
 }

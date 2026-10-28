@@ -4,6 +4,7 @@ export const templateLabels: Record<string, string> = {
   'appointment-reminder': 'Напоминание за сутки',
   'appointment-cancelled': 'Отмена записи',
   receipt: 'Чек',
+  'refund-receipt': 'Чек возврата',
   unknown: 'Прежнее сообщение',
 }
 
@@ -38,6 +39,7 @@ export const reasonLabels: Record<string, string> = {
   EXPIRED: 'время записи прошло',
   APPOINTMENT_NOT_FOUND: 'запись не найдена',
   PAYMENT_NOT_FOUND: 'платёж не найден',
+  REFUND_NOT_FOUND: 'возврат не найден',
   NETWORK_ERROR: 'нет связи с получателем',
   DELIVERY_ERROR: 'ошибка доставки',
   DELIVERY_UNCERTAIN: 'неизвестно, дошло ли: без повтора',

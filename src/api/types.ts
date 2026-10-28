@@ -135,7 +135,7 @@ export type ChargeItem = {
   /** Пусто, пока сумма свободной цены не введена (status: AWAITING_AMOUNT). */
   amountMinor: number | null
   currency: string
-  status: 'AWAITING_AMOUNT' | 'PENDING' | 'PAID' | string
+  status: 'AWAITING_AMOUNT' | 'PENDING' | 'PAID' | 'VOIDED' | 'REFUNDED' | string
   createdAt: string
   paymentId?: string | null
   paymentStatus?: string | null
@@ -143,6 +143,29 @@ export type ChargeItem = {
   minMinor?: number | null
   maxMinor?: number | null
   estimateMinor?: number | null
+  paidAt?: string | null
+  /** Аннулирование: код причины и время. */
+  voidReason?: string | null
+  voidedAt?: string | null
+  /** Возврат оплаты: код причины, статус чека возврата, время. */
+  refundId?: string | null
+  refundReason?: string | null
+  refundFiscalStatus?: string | null
+  refundedAt?: string | null
+}
+
+export type VoidReason = 'DUPLICATE' | 'ERROR' | 'PATIENT_DECLINED' | 'OTHER'
+export type RefundReason = 'PATIENT_REQUEST' | 'SERVICE_NOT_PROVIDED' | 'ERROR' | 'OTHER'
+
+export type SalesGroup = 'day' | 'service' | 'practitioner'
+export type SalesLine = { key: string; label: string; payments: number; amountMinor: number; refunds: number; refundedMinor: number; netMinor: number; openPriceMinor: number }
+export type SalesReport = {
+  from: string
+  to: string
+  groupBy: SalesGroup
+  currency: string
+  lines: SalesLine[]
+  totals: Omit<SalesLine, 'key' | 'label'>
 }
 
 export type DocumentState = 'DRAFT' | 'SIGNED_LOCKED'

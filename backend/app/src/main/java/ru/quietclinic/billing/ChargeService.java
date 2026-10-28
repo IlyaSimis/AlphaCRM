@@ -21,13 +21,19 @@ import ru.quietclinic.platform.Permission;
 public class ChargeService {
   private final ChargeRepository charges;
   private final PaymentRepository payments;
+  private final RefundRepository refunds;
   private final AuditService audit;
   private final JdbcTemplate jdbc;
 
   ChargeService(
-      ChargeRepository charges, PaymentRepository payments, AuditService audit, JdbcTemplate jdbc) {
+      ChargeRepository charges,
+      PaymentRepository payments,
+      RefundRepository refunds,
+      AuditService audit,
+      JdbcTemplate jdbc) {
     this.charges = charges;
     this.payments = payments;
+    this.refunds = refunds;
     this.audit = audit;
     this.jdbc = jdbc;
   }
@@ -113,10 +119,14 @@ public class ChargeService {
     var own = clinicAppointments();
     return charges.findAllByOrderByCreatedAtDesc().stream()
         .filter(c -> own.contains(c.appointmentId))
-        .map(
-            c ->
-                ChargeView.of(
-                    c, payments.findFirstByChargeIdOrderByCreatedAtDesc(c.id).orElse(null)))
+        .map(this::view)
         .toList();
+  }
+
+  ChargeView view(Charge charge) {
+    return ChargeView.of(
+        charge,
+        payments.findFirstByChargeIdOrderByCreatedAtDesc(charge.id).orElse(null),
+        refunds.findByChargeId(charge.id).orElse(null));
   }
 }

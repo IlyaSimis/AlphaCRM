@@ -6,6 +6,8 @@ describe('services and pages by role', () => {
     expect(servicesFor('ADMINISTRATOR')).toEqual(['dashboards', 'patients', 'inventory', 'finance', 'drive'])
     expect(serviceOf('cashier')).toBe('finance')
     expect(serviceOf('prices')).toBe('finance')
+    expect(serviceOf('sales')).toBe('finance')
+    expect(canOpen('sales', 'CASHIER')).toBe(false)
     expect(serviceOf('patient')).toBe('patients')
     expect(serviceOf('visit')).toBe('patients')
     expect(serviceOf('hours')).toBe('patients')
@@ -19,7 +21,7 @@ describe('services and pages by role', () => {
       'today', 'analytics', 'staff', 'audit', 'outbox',
       'schedule', 'patients', 'registry', 'hours',
       'stock-balances', 'stock-items', 'stock-documents', 'stock-marking', 'stock-norms',
-      'cashier', 'prices',
+      'cashier', 'sales', 'prices',
       'drive', 'drive-shared', 'drive-trash',
     ])
     expect(navigationFor('OWNER')).toEqual(navigationFor('ADMINISTRATOR'))
@@ -38,7 +40,7 @@ describe('services and pages by role', () => {
   })
 
   it('manager sees prices read-only in finance, nurse works with stock, support has no patients', () => {
-    expect(sectionsFor('finance', 'MANAGER').flatMap((section) => section.pages)).toEqual(['cashier', 'prices'])
+    expect(sectionsFor('finance', 'MANAGER').flatMap((section) => section.pages)).toEqual(['cashier', 'sales', 'prices'])
     expect(canOpen('outbox', 'MANAGER')).toBe(false)
     expect(sectionsFor('inventory', 'NURSE').flatMap((section) => section.pages)).toEqual(['stock-balances', 'stock-items', 'stock-documents', 'stock-marking', 'stock-norms'])
     expect(servicesFor('SUPPORT')).toEqual(['dashboards', 'patients', 'inventory', 'drive'])

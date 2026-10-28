@@ -27,7 +27,7 @@ public final class RolePermissions {
   public static final String SUPPORT = "SUPPORT";
 
   /** Версия набора разрешений: отдаётся в /auth/me как permissionsVersion. */
-  public static final String VERSION = "2026-10-28.1";
+  public static final String VERSION = "2026-10-28.2";
 
   /** Роли сотрудников в порядке экрана «Сотрудники». */
   public static final List<String> STAFF_ROLES =
@@ -68,6 +68,8 @@ public final class RolePermissions {
             INVOICE_READ,
             INVOICE_WRITE,
             INVOICE_SET_AMOUNT,
+            INVOICE_VOID,
+            PAYMENT_REFUND,
             REVENUE_READ,
             INVENTORY_CATALOG_READ,
             INVENTORY_CATALOG_WRITE,

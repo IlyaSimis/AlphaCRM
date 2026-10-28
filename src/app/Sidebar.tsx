@@ -1,4 +1,4 @@
-import { ArticleRounded, AssignmentTurnedInRounded, BadgeRounded, CalendarMonthRounded, ContactPhoneRounded, DeleteOutlineRounded, DescriptionRounded, EventNoteRounded, FolderSharedRounded, FolderRounded, HealthAndSafetyRounded, HistoryRounded, InsightsRounded, Inventory2Rounded, ListAltRounded, MedicalServicesRounded, OutboxRounded, PaymentsRounded, PeopleAltRounded, QrCode2Rounded, ReceiptLongRounded, SellRounded, TodayRounded } from '@mui/icons-material'
+import { ArticleRounded, AssignmentTurnedInRounded, BadgeRounded, CalendarMonthRounded, ContactPhoneRounded, DeleteOutlineRounded, DescriptionRounded, EventNoteRounded, FolderSharedRounded, FolderRounded, HealthAndSafetyRounded, HistoryRounded, InsightsRounded, Inventory2Rounded, ListAltRounded, MedicalServicesRounded, OutboxRounded, PaymentsRounded, PeopleAltRounded, QrCode2Rounded, QueryStatsRounded, ReceiptLongRounded, SellRounded, TodayRounded } from '@mui/icons-material'
 import { Avatar, Box, Stack, Typography } from '@mui/material'
 import type { ReactNode } from 'react'
 import type { StaffItem } from '../api/types'
@@ -23,6 +23,7 @@ export const pageIcons: Partial<Record<Page, ReactNode>> = {
   'stock-marking': <QrCode2Rounded />,
   'stock-norms': <AssignmentTurnedInRounded />,
   cashier: <PaymentsRounded />,
+  sales: <QueryStatsRounded />,
   prices: <SellRounded />,
   drive: <FolderRounded />,
   'drive-shared': <FolderSharedRounded />,

@@ -153,11 +153,23 @@ class DashboardService {
               clinicId(),
               from,
               to);
+      // Возвраты месяца вычитаются: выручка — оплаты минус возвраты (раздел D4).
+      var refunded =
+          jdbc.queryForObject(
+              "select coalesce(sum(f.amount_minor), 0) from refund_record f"
+                  + " join charge c on c.id = f.charge_id"
+                  + " join appointment a on a.id = c.appointment_id"
+                  + " join practitioner p on p.id = a.practitioner_id"
+                  + " where p.clinic_id = ? and f.created_at >= ? and f.created_at < ?",
+              Long.class,
+              clinicId(),
+              from,
+              to);
       widgets.add(
           new Widget(
               "revenue.month",
               "CLINIC",
-              number(revenue.get("total")),
+              number(revenue.get("total")) - (refunded == null ? 0 : refunded),
               number(revenue.get("cnt")),
               "money",
               List.of()));

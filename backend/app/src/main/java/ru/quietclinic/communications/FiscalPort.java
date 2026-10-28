@@ -8,4 +8,7 @@ import java.util.UUID;
  */
 public interface FiscalPort {
   FiscalResult sendReceipt(UUID paymentId, String idempotencyKey);
+
+  /** Чек возврата прихода по строке возврата. */
+  FiscalResult sendRefund(UUID refundId, String idempotencyKey);
 }
