@@ -11,6 +11,7 @@ export const pageIcons: Partial<Record<Page, ReactNode>> = {
   analytics: <InsightsRounded />,
   staff: <BadgeRounded />,
   audit: <HistoryRounded />,
+  'break-glass': <HealthAndSafetyRounded />,
   outbox: <OutboxRounded />,
   schedule: <CalendarMonthRounded />,
   patients: <PeopleAltRounded />,

@@ -88,6 +88,11 @@ public final class RolePermissions {
 
     var owner = EnumSet.copyOf(operations);
     owner.add(ROLE_ASSIGN_PRIVILEGED);
+    owner.add(CLINICAL_BREAK_GLASS);
+    owner.add(CLINICAL_BREAK_GLASS_REVIEW);
+
+    var senior = EnumSet.copyOf(operations);
+    senior.add(CLINICAL_BREAK_GLASS_REVIEW);
 
     var manager =
         EnumSet.of(
@@ -186,7 +191,7 @@ public final class RolePermissions {
 
     var map = new LinkedHashMap<String, Set<Permission>>();
     map.put(OWNER, Set.copyOf(owner));
-    map.put(SENIOR_ADMINISTRATOR, Set.copyOf(operations));
+    map.put(SENIOR_ADMINISTRATOR, Set.copyOf(senior));
     map.put(ADMINISTRATOR, Set.copyOf(operations));
     map.put(MANAGER, Set.copyOf(manager));
     map.put(DOCTOR, Set.copyOf(doctor));

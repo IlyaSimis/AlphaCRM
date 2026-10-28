@@ -2,7 +2,7 @@ import { canManagePrices, canManageSchedule, canSeeAnalytics, canSeeAudit, canSe
 import { can } from '../shared/permissions'
 
 export type Page =
-  | 'today' | 'analytics' | 'staff' | 'audit' | 'outbox'
+  | 'today' | 'analytics' | 'staff' | 'audit' | 'break-glass' | 'outbox'
   | 'schedule' | 'patients' | 'patient' | 'visit' | 'registry' | 'documents' | 'hours'
   | 'stock-balances' | 'stock-items' | 'stock-documents' | 'stock-marking' | 'stock-norms'
   | 'cashier' | 'sales' | 'prices'
@@ -26,6 +26,7 @@ export const pageTitles: Record<Page, string> = {
   analytics: 'Аналитика',
   staff: 'Сотрудники',
   audit: 'Журнал аудита',
+  'break-glass': 'Экстренные доступы',
   outbox: 'Внешние выводы',
   schedule: 'Расписание',
   patients: 'Пациенты',
@@ -51,7 +52,7 @@ export const pageTitles: Record<Page, string> = {
 export const serviceSections: Record<Service, Array<{ label: string; pages: Page[] }>> = {
   dashboards: [
     { label: 'ОБЗОР', pages: ['today', 'analytics'] },
-    { label: 'УПРАВЛЕНИЕ', pages: ['staff', 'audit', 'outbox'] },
+    { label: 'УПРАВЛЕНИЕ', pages: ['staff', 'audit', 'break-glass', 'outbox'] },
   ],
   patients: [
     { label: 'РАБОТА С ПАЦИЕНТАМИ', pages: ['schedule', 'patients', 'registry', 'documents'] },
@@ -82,6 +83,7 @@ function allowed(page: Page, role: Role): boolean {
     case 'analytics': return canSeeAnalytics(role)
     case 'staff': return canSeeStaff(role)
     case 'audit': return canSeeAudit(role)
+    case 'break-glass': return can(role, 'clinical.break-glass.review')
     case 'outbox': return canSeeOutbox(role)
     case 'schedule': return true
     case 'patients':

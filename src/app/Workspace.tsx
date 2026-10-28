@@ -8,6 +8,7 @@ import { AuditLog } from '../features/audit/AuditLog'
 import { PasswordDialog } from '../features/auth/PasswordDialog'
 import { Cashier } from '../features/cashier/Cashier'
 import { SalesPage } from '../features/finance/SalesPage'
+import { BreakGlassLog } from '../features/breakglass/BreakGlassLog'
 import { SignedDocuments } from '../features/documents/SignedDocuments'
 import { PatientFiles } from '../features/files/PatientFiles'
 import { OutboxPage } from '../features/outbox/OutboxPage'
@@ -226,6 +227,7 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
           {(page === 'hours' || page === 'prices') && <SettingsPage key={page} section={page} practitioners={practitioners} services={clinic.services} onSaveHours={clinic.saveHours} onSaveCard={clinic.saveCard} onSavePrice={clinic.savePrice} onCreateService={clinic.addService} onToggleService={clinic.toggleService} canEditPrices={canManagePrices(role)} />}
           {page === 'outbox' && <OutboxPage apiOnline={clinic.apiOnline} />}
           {page === 'sales' && <SalesPage apiOnline={clinic.apiOnline} />}
+          {page === 'break-glass' && <BreakGlassLog apiOnline={clinic.apiOnline} />}
           {stock && <InventoryPage role={role} apiOnline={clinic.apiOnline} services={clinic.services} notify={clinic.notify} section={stock} onSection={(next) => navigate(`stock-${next}`)} />}
           {drive && <DrivePage role={role} apiOnline={clinic.apiOnline} self={staff} notify={clinic.notify} section={drive} onSection={(next) => navigate(next === 'mine' ? 'drive' : `drive-${next}`)} />}
           {page === 'staff' && <StaffPage self={staff} live={live} practitioners={practitioners} notify={clinic.notify} onPractitionerAdded={clinic.practitionerAdded} />}

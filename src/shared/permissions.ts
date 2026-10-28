@@ -13,6 +13,7 @@ export type Permission =
   | 'schedule.registry-task.read' | 'schedule.registry-task.manage' | 'schedule.waitlist.read' | 'schedule.waitlist.manage'
   | 'clinical.patient.read' | 'clinical.patient.read-care' | 'clinical.patient.contacts-read' | 'clinical.patient.write'
   | 'clinical.note.write' | 'clinical.signed-document.read' | 'clinical.signed-document.read-own'
+  | 'clinical.record.break-glass' | 'clinical.break-glass.review'
   | 'clinical.patient-file.write' | 'clinical.patient-file.write-care' | 'clinical.patient-file.read' | 'clinical.patient-file.read-signed'
   | 'finance.invoice.read' | 'finance.invoice.write' | 'finance.invoice.set-amount' | 'finance.invoice.void' | 'finance.payment.refund' | 'finance.revenue.read'
   | 'inventory.item.read' | 'inventory.item.write' | 'inventory.document.write' | 'inventory.document.allow-negative'
@@ -36,8 +37,8 @@ const OPERATIONS: Permission[] = [
 ]
 
 export const rolePermissions: Record<StaffRole, Permission[]> = {
-  OWNER: [...OPERATIONS, 'identity.role.assign-privileged'],
-  SENIOR_ADMINISTRATOR: OPERATIONS,
+  OWNER: [...OPERATIONS, 'identity.role.assign-privileged', 'clinical.record.break-glass', 'clinical.break-glass.review'],
+  SENIOR_ADMINISTRATOR: [...OPERATIONS, 'clinical.break-glass.review'],
   ADMINISTRATOR: OPERATIONS,
   MANAGER: [
     'identity.staff.read', 'identity.staff.manage', 'identity.staff.reset-password',

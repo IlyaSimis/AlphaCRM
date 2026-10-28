@@ -11,7 +11,8 @@ export const errorMessages: Record<string, string> = {
   ACCESS_DENIED: 'Недостаточно прав для операции',
   PASSWORD_CHANGE_REQUIRED: 'Сначала смените временный пароль',
   PASSWORD_NOT_CHANGED: 'Новый пароль должен отличаться от временного',
-  WRONG_PASSWORD: 'Текущий пароль указан неверно',
+  WRONG_PASSWORD: 'Пароль указан неверно',
+  TOO_MANY_ATTEMPTS: 'Слишком много неверных паролей. Подождите 15 минут',
   VALIDATION_ERROR: 'Проверьте заполнение полей',
 
   PATIENT_NOT_FOUND: 'Пациент не найден',

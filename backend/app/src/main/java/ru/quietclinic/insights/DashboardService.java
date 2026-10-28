@@ -112,6 +112,29 @@ class DashboardService {
           new Widget("documents.unsigned", "OWN", drafts + files, null, "count", List.of()));
     }
 
+    // Экстренные доступы за 7 дней (K1): старшему администратору — по клинике, врачу — к его
+    // пациентам (по действующей связи с лечением). Только счётчик, без причин.
+    var weekAgo = Timestamp.from(time.now().minus(java.time.Duration.ofDays(7)));
+    if (can(Permission.CLINICAL_BREAK_GLASS_REVIEW)) {
+      var granted =
+          count(
+              "select count(*) from break_glass_grant where clinic_id = ? and granted_at >= ?",
+              clinicId(),
+              weekAgo);
+      widgets.add(new Widget("clinical.break-glass", "CLINIC", granted, null, "count", List.of()));
+    } else if (can(Permission.CLINICAL_RECORD)) {
+      var granted =
+          count(
+              "select count(*) from break_glass_grant g where g.clinic_id = ? and g.granted_at >= ?"
+                  + " and exists (select 1 from care_relationship r where r.patient_id ="
+                  + " g.patient_id and r.practitioner_id = ? and r.valid_until > ?)",
+              clinicId(),
+              weekAgo,
+              actorId(),
+              weekAgo);
+      widgets.add(new Widget("clinical.break-glass", "OWN", granted, null, "count", List.of()));
+    }
+
     if (can(Permission.INVOICE_READ)) {
       var unpaid =
           jdbc.queryForMap(

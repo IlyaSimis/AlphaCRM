@@ -1,13 +1,17 @@
-import { useState, type ReactNode } from 'react'
-import { CheckCircleRounded, EditRounded, EventNoteRounded, LockOutlined } from '@mui/icons-material'
+import { useEffect, useState, type ReactNode } from 'react'
+import { CheckCircleRounded, EditRounded, EventNoteRounded, HealthAndSafetyRounded, LockOutlined } from '@mui/icons-material'
 import { Alert, Avatar, Box, Button, Chip, CircularProgress, Divider, Typography } from '@mui/material'
+import { loadBreakGlass, loadEncounters } from '../../api/clinical'
 import { CANCELLABLE } from '../../api/schedule'
-import type { EncounterView, PatientItem, Practitioner, ScheduleItem } from '../../api/types'
+import type { BreakGlassGrant, EncounterView, PatientItem, Practitioner, ScheduleItem } from '../../api/types'
 import { clinicTimeZone } from '../../shared/clinicTime'
 import { localToday } from '../../shared/dates'
+import { can } from '../../shared/permissions'
 import { canEditPatients, canWriteAppointments, canWriteClinical, roleLabels, type Role } from '../../shared/roles'
 import { initialsOf, isUuid } from '../../shared/text'
 import { Info } from '../../shared/ui'
+import { BreakGlassDialog } from '../breakglass/BreakGlassDialog'
+import { untilText } from '../breakglass/breakGlass'
 import { RESCHEDULABLE } from '../schedule/statusActions'
 import { ConsentDialog, consentBases } from './ConsentDialog'
 import { consentLabels } from './consentLabels'
@@ -123,6 +127,8 @@ function ClinicalPanel({ patient, role, doctorId, apiOnline, revision, onOpenEnc
   const clinicalRole = canWriteClinical(role)
   const enabled = clinicalRole && apiOnline && isUuid(patient.id)
   const clinical = useClinicalHistory(patient.id, enabled, doctorId, revision)
+  // Владелец: экстренный доступ к истории этого пациента (K1) вместо «недоступно».
+  if (!clinicalRole && can(role, 'clinical.record.break-glass') && apiOnline && isUuid(patient.id)) return <EmergencyPanel patient={patient} />
   return (
     <Box className="panel clinical-panel">
       <Box className="panel-title-row"><Typography className="panel-label">КЛИНИЧЕСКИЙ КОНТУР</Typography><LockOutlined fontSize="small" /></Box>
@@ -145,6 +151,66 @@ function ClinicalPanel({ patient, role, doctorId, apiOnline, revision, onOpenEnc
             </Box>
           ))}
         </>)}
+    </Box>
+  )
+}
+
+/** Экстренный доступ владельца: без доступа — кнопка; с доступом — история только для чтения до конца срока. */
+function EmergencyPanel({ patient }: { patient: PatientItem }) {
+  const [grant, setGrant] = useState<BreakGlassGrant | null>(null)
+  const [encounters, setEncounters] = useState<EncounterView[] | null>(null)
+  const [error, setError] = useState('')
+  const [dialog, setDialog] = useState(false)
+  const active = Boolean(grant?.active)
+
+  useEffect(() => {
+    let cancelled = false
+    loadBreakGlass(patient.id)
+      .then((result) => { if (!cancelled) setGrant(result) })
+      .catch((reason: Error) => { if (!cancelled) setError(reason.message) })
+    return () => { cancelled = true }
+  }, [patient.id])
+
+  useEffect(() => {
+    if (!active) { setEncounters(null); return }
+    let cancelled = false
+    loadEncounters(patient.id)
+      .then((rows) => { if (!cancelled) setEncounters(rows) })
+      .catch((reason: Error) => { if (!cancelled) setError(reason.message) })
+    // Срок вышел — история закрывается без перезагрузки страницы.
+    const left = grant?.expiresAt ? new Date(grant.expiresAt).getTime() - Date.now() : 0
+    const timer = window.setTimeout(() => setGrant((current) => (current ? { ...current, active: false } : current)), Math.max(0, Math.min(left, 2 ** 31 - 1)))
+    return () => { cancelled = true; window.clearTimeout(timer) }
+  }, [active, patient.id, grant?.expiresAt])
+
+  return (
+    <Box className="panel clinical-panel">
+      <Box className="panel-title-row"><Typography className="panel-label">КЛИНИЧЕСКИЙ КОНТУР</Typography><LockOutlined fontSize="small" /></Box>
+      {error && <Alert severity="warning">{error}</Alert>}
+      {!active && <Box className="locked-state">
+        <HealthAndSafetyRounded />
+        <Typography sx={{ fontWeight: 750 }}>Медицинские данные закрыты</Typography>
+        <Typography sx={{ fontSize: 14 }}>Их читает лечащий врач. Владелец клиники может открыть историю этого пациента в экстренном случае — с причиной и паролем, на 60 минут, только чтение.</Typography>
+        <Button variant="outlined" color="error" sx={{ mt: 1 }} onClick={() => setDialog(true)}>Экстренный доступ</Button>
+      </Box>}
+      {active && <>
+        <Alert severity="error" icon={<HealthAndSafetyRounded />}>Экстренный доступ {untilText(grant?.expiresAt, clinicTimeZone())}: только чтение, каждое открытие в журнале.</Alert>
+        {encounters === null ? <CircularProgress size={24} aria-label="Загрузка истории приёмов" />
+          : encounters.length === 0 ? <Typography sx={{ color: 'text.secondary' }}>Приёмов нет</Typography>
+          : encounters.map((encounter) => (
+            <Box className="history-item emergency-item" key={encounter.encounterId}>
+              <Box>
+                <Typography sx={{ fontWeight: 650 }}>Приём {formatDateTime(encounter.startedAt)}</Typography>
+                {encounter.complaints && <Typography sx={{ fontSize: 13 }}><b>Жалобы:</b> {encounter.complaints}</Typography>}
+                {encounter.mentalStatus && <Typography sx={{ fontSize: 13 }}><b>Состояние:</b> {encounter.mentalStatus}</Typography>}
+                {encounter.diagnosis && <Typography sx={{ fontSize: 13 }}><b>Диагноз:</b> {encounter.diagnosis}</Typography>}
+                {encounter.recommendations && <Typography sx={{ fontSize: 13 }}><b>Рекомендации:</b> {encounter.recommendations}</Typography>}
+                {encounter.documents.map((doc) => <Typography key={doc.id} sx={{ fontSize: 13, color: 'text.secondary' }}>{documentLine(doc.state, doc.amendsDocumentId, doc.signedAt)}</Typography>)}
+              </Box>
+            </Box>
+          ))}
+      </>}
+      {dialog && <BreakGlassDialog patientId={patient.id} patientName={patient.name} onClose={() => setDialog(false)} onGranted={(next) => { setDialog(false); setError(''); setGrant(next) }} />}
     </Box>
   )
 }

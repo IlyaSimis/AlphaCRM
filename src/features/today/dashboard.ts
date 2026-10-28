@@ -34,8 +34,10 @@ export function widgetText(widget: DashboardWidget): { label: string; note: stri
       return { label: 'счетов к оплате', note: `на ${formatMoney(second)}`, accent: widget.value > 0 }
     case 'charges.awaitingAmount':
       return { label: 'счетов ждут суммы', note: 'свободная цена', accent: widget.value > 0 }
+    case 'clinical.break-glass':
+      return { label: own ? 'экстренных доступов к моим пациентам' : 'экстренных доступов к медданным', note: 'за 7 дней', accent: widget.value > 0 }
     case 'revenue.month':
-      return { label: 'выручка за месяц', note: `оплат ${second}`, accent: false }
+      return { label: 'выручка за месяц', note: `оплат ${second}, за вычетом возвратов`, accent: false }
     case 'tasks.due':
       return { label: own ? 'моих задач на сегодня' : 'задач на сегодня', note: 'открытые, срок наступил', accent: widget.value > 0 }
     case 'stock.shortage':

@@ -308,3 +308,27 @@ DOCTOR;GET;/api/v1/finance/sales?from=2026-10-01&to=2026-10-31;403;
 NURSE;GET;/api/v1/finance/sales?from=2026-10-01&to=2026-10-31;403;
 CASHIER;GET;/api/v1/finance/sales?from=2026-10-01&to=2026-10-31;403;
 SUPPORT;GET;/api/v1/finance/sales?from=2026-10-01&to=2026-10-31;403;
+OWNER;POST;/api/v1/patients/{patient}/break-glass;ok;{"reasonCode":"OTHER","reasonText":"rbac matrix check","password":"wrong-password"}
+SENIOR_ADMINISTRATOR;POST;/api/v1/patients/{patient}/break-glass;403;{"reasonCode":"OTHER","reasonText":"rbac matrix check","password":"wrong-password"}
+ADMINISTRATOR;POST;/api/v1/patients/{patient}/break-glass;403;{"reasonCode":"OTHER","reasonText":"rbac matrix check","password":"wrong-password"}
+MANAGER;POST;/api/v1/patients/{patient}/break-glass;403;{"reasonCode":"OTHER","reasonText":"rbac matrix check","password":"wrong-password"}
+DOCTOR;POST;/api/v1/patients/{patient}/break-glass;403;{"reasonCode":"OTHER","reasonText":"rbac matrix check","password":"wrong-password"}
+NURSE;POST;/api/v1/patients/{patient}/break-glass;403;{"reasonCode":"OTHER","reasonText":"rbac matrix check","password":"wrong-password"}
+CASHIER;POST;/api/v1/patients/{patient}/break-glass;403;{"reasonCode":"OTHER","reasonText":"rbac matrix check","password":"wrong-password"}
+SUPPORT;POST;/api/v1/patients/{patient}/break-glass;403;{"reasonCode":"OTHER","reasonText":"rbac matrix check","password":"wrong-password"}
+OWNER;GET;/api/v1/patients/{patient}/break-glass;ok;
+SENIOR_ADMINISTRATOR;GET;/api/v1/patients/{patient}/break-glass;403;
+ADMINISTRATOR;GET;/api/v1/patients/{patient}/break-glass;403;
+MANAGER;GET;/api/v1/patients/{patient}/break-glass;403;
+DOCTOR;GET;/api/v1/patients/{patient}/break-glass;403;
+NURSE;GET;/api/v1/patients/{patient}/break-glass;403;
+CASHIER;GET;/api/v1/patients/{patient}/break-glass;403;
+SUPPORT;GET;/api/v1/patients/{patient}/break-glass;403;
+OWNER;GET;/api/v1/clinical/break-glass?from=2026-10-01&to=2026-10-31;ok;
+SENIOR_ADMINISTRATOR;GET;/api/v1/clinical/break-glass?from=2026-10-01&to=2026-10-31;ok;
+ADMINISTRATOR;GET;/api/v1/clinical/break-glass?from=2026-10-01&to=2026-10-31;403;
+MANAGER;GET;/api/v1/clinical/break-glass?from=2026-10-01&to=2026-10-31;403;
+DOCTOR;GET;/api/v1/clinical/break-glass?from=2026-10-01&to=2026-10-31;403;
+NURSE;GET;/api/v1/clinical/break-glass?from=2026-10-01&to=2026-10-31;403;
+CASHIER;GET;/api/v1/clinical/break-glass?from=2026-10-01&to=2026-10-31;403;
+SUPPORT;GET;/api/v1/clinical/break-glass?from=2026-10-01&to=2026-10-31;403;

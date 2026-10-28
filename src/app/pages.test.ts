@@ -24,7 +24,11 @@ describe('services and pages by role', () => {
       'cashier', 'sales', 'prices',
       'drive', 'drive-shared', 'drive-trash',
     ])
-    expect(navigationFor('OWNER')).toEqual(navigationFor('ADMINISTRATOR'))
+    // Владелец и старший администратор вдобавок видят журнал экстренных доступов (K1).
+    const withLog = navigationFor('ADMINISTRATOR').flatMap((page) => (page === 'audit' ? ['audit', 'break-glass'] : [page]))
+    expect(navigationFor('OWNER')).toEqual(withLog)
+    expect(navigationFor('SENIOR_ADMINISTRATOR')).toEqual(withLog)
+    expect(canOpen('break-glass', 'MANAGER')).toBe(false)
     expect(sectionsFor('dashboards', 'ADMINISTRATOR').map((section) => section.label)).toEqual(['ОБЗОР', 'УПРАВЛЕНИЕ'])
   })
 

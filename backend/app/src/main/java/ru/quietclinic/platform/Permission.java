@@ -43,6 +43,13 @@ public enum Permission {
   PATIENT_CONTACTS_READ("clinical.patient.contacts-read"),
   PATIENT_WRITE("clinical.patient.write"),
   /** Приём, заметка, диагноз, документы приёма — при связи с лечением. */
+  /**
+   * Экстренный доступ владельца (break-glass, K1): чтение клинической истории одного пациента без
+   * связи с лечением, 60 минут, с причиной и повторным вводом пароля.
+   */
+  CLINICAL_BREAK_GLASS("clinical.record.break-glass"),
+  /** Журнал экстренных доступов клиники: владелец и старший администратор. */
+  CLINICAL_BREAK_GLASS_REVIEW("clinical.break-glass.review"),
   CLINICAL_RECORD("clinical.note.write"),
   SIGNED_DOCUMENT_READ("clinical.signed-document.read"),
   SIGNED_DOCUMENT_READ_OWN("clinical.signed-document.read-own"),

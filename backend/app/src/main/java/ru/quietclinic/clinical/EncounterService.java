@@ -1,6 +1,7 @@
 package ru.quietclinic.clinical;
 
 import static ru.quietclinic.platform.PlatformConfig.actorId;
+import static ru.quietclinic.platform.PlatformConfig.can;
 import static ru.quietclinic.platform.PlatformConfig.conflict;
 import static ru.quietclinic.platform.PlatformConfig.forbidden;
 import static ru.quietclinic.platform.PlatformConfig.notFound;
@@ -30,6 +31,7 @@ class EncounterService {
   private final ClinicalNoteRepository notes;
   private final MedicalDocumentRepository documents;
   private final CareRelationshipService careRelationships;
+  private final BreakGlassService breakGlass;
   private final VisitAppointments appointments;
   private final EncryptionService encryption;
   private final AuditService audit;
@@ -39,6 +41,7 @@ class EncounterService {
       ClinicalNoteRepository notes,
       MedicalDocumentRepository documents,
       CareRelationshipService careRelationships,
+      BreakGlassService breakGlass,
       VisitAppointments appointments,
       EncryptionService encryption,
       AuditService audit) {
@@ -46,6 +49,7 @@ class EncounterService {
     this.notes = notes;
     this.documents = documents;
     this.careRelationships = careRelationships;
+    this.breakGlass = breakGlass;
     this.appointments = appointments;
     this.encryption = encryption;
     this.audit = audit;
@@ -84,12 +88,20 @@ class EncounterService {
 
   @Transactional(readOnly = true)
   List<ClinicalView> history(UUID patientId) {
-    requireClinicalAccess(patientId);
+    // Владелец с действующим экстренным доступом читает историю без связи с лечением (K1).
+    var emergency = !can(Permission.CLINICAL_RECORD) && breakGlass.active(patientId);
+    if (!emergency) requireClinicalAccess(patientId);
     var result =
         encounters.findByPatientIdOrderByStartedAtDesc(patientId).stream()
             .map(e -> view(e, notes.findByEncounterId(e.id).orElse(null)))
             .toList();
-    audit.record(actorId(), "CLINICAL_HISTORY_READ", "PATIENT", patientId, "ALLOWED", "treatment");
+    audit.record(
+        actorId(),
+        "CLINICAL_HISTORY_READ",
+        "PATIENT",
+        patientId,
+        "ALLOWED",
+        emergency ? "break-glass" : "treatment");
     return result;
   }
 

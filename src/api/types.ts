@@ -190,6 +190,22 @@ export type EncounterView = {
   documents: DocumentSummary[]
 }
 
+export type BreakGlassReason = 'PATIENT_COMPLAINT' | 'LEGAL_REQUEST' | 'DOCTOR_UNAVAILABLE' | 'QUALITY_REVIEW' | 'OTHER'
+
+/** Экстренный доступ владельца к истории пациента; текст причины — только в журнале доступов. */
+export type BreakGlassGrant = {
+  grantId: string | null
+  patientId: string
+  patientName?: string | null
+  ownerId?: string | null
+  ownerName?: string | null
+  reasonCode?: BreakGlassReason | null
+  reasonText?: string | null
+  grantedAt?: string | null
+  expiresAt?: string | null
+  active: boolean
+}
+
 export type Practitioner = {
   id: string
   fullName: string
