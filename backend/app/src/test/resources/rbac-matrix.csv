@@ -275,3 +275,12 @@ DOCTOR;GET;/api/v1/registry/tasks;403;
 NURSE;GET;/api/v1/registry/tasks;403;
 CASHIER;GET;/api/v1/registry/tasks;ok;
 SUPPORT;GET;/api/v1/registry/tasks;403;
+# Быстрый приход: накладная склада (inventory.document.write)
+OWNER;POST;/api/v1/inventory/receipts;ok;{"idempotencyKey":"{unique}","lines":[{"itemId":"{random}","quantity":1}]}
+SENIOR_ADMINISTRATOR;POST;/api/v1/inventory/receipts;ok;{"idempotencyKey":"{unique}","lines":[{"itemId":"{random}","quantity":1}]}
+ADMINISTRATOR;POST;/api/v1/inventory/receipts;ok;{"idempotencyKey":"{unique}","lines":[{"itemId":"{random}","quantity":1}]}
+MANAGER;POST;/api/v1/inventory/receipts;ok;{"idempotencyKey":"{unique}","lines":[{"itemId":"{random}","quantity":1}]}
+DOCTOR;POST;/api/v1/inventory/receipts;403;{"idempotencyKey":"{unique}","lines":[{"itemId":"{random}","quantity":1}]}
+NURSE;POST;/api/v1/inventory/receipts;ok;{"idempotencyKey":"{unique}","lines":[{"itemId":"{random}","quantity":1}]}
+CASHIER;POST;/api/v1/inventory/receipts;403;{"idempotencyKey":"{unique}","lines":[{"itemId":"{random}","quantity":1}]}
+SUPPORT;POST;/api/v1/inventory/receipts;403;{"idempotencyKey":"{unique}","lines":[{"itemId":"{random}","quantity":1}]}

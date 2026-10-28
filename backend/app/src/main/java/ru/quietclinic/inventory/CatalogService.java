@@ -31,6 +31,11 @@ class CatalogService {
   /** Название основного склада — данные, поэтому в конфигурации, а не в коде. */
   private final String defaultWarehouseName;
 
+  /** Названия основных категорий по видам и единица по умолчанию — тоже данные. */
+  private final Map<String, String> defaultCategoryNames;
+
+  private final String defaultUnit;
+
   CatalogService(
       ItemCategoryRepository categories,
       ItemRepository items,
@@ -39,8 +44,25 @@ class CatalogService {
       AuditService audit,
       @org.springframework.beans.factory.annotation.Value(
               "${clinic.inventory.default-warehouse-name:Main warehouse}")
-          String defaultWarehouseName) {
+          String defaultWarehouseName,
+      @org.springframework.beans.factory.annotation.Value(
+              "${clinic.inventory.default-category.drug:Drugs}")
+          String drugs,
+      @org.springframework.beans.factory.annotation.Value(
+              "${clinic.inventory.default-category.medical-device:Medical devices}")
+          String devices,
+      @org.springframework.beans.factory.annotation.Value(
+              "${clinic.inventory.default-category.consumable:Consumables}")
+          String consumables,
+      @org.springframework.beans.factory.annotation.Value(
+              "${clinic.inventory.default-category.goods:Goods}")
+          String goods,
+      @org.springframework.beans.factory.annotation.Value("${clinic.inventory.default-unit:pcs}")
+          String defaultUnit) {
     this.defaultWarehouseName = defaultWarehouseName;
+    this.defaultCategoryNames =
+        Map.of("DRUG", drugs, "MEDICAL_DEVICE", devices, "CONSUMABLE", consumables, "GOODS", goods);
+    this.defaultUnit = defaultUnit;
     this.categories = categories;
     this.items = items;
     this.warehouses = warehouses;
@@ -125,9 +147,8 @@ class CatalogService {
   @Transactional
   ItemView createItem(ItemRequest request) {
     requirePermission(Permission.INVENTORY_CATALOG_WRITE);
-    category(request.categoryId());
-    var item =
-        new Item(clinicId(), request.categoryId(), request.name().trim(), request.unit().trim());
+    var categoryId = categoryOf(request.categoryId(), request.kind());
+    var item = new Item(clinicId(), categoryId, request.name().trim(), request.unit().trim());
     apply(item, request);
     items.save(item);
     audit.record(actorId(), "ITEM_CREATED", "ITEM", item.id, "ALLOWED", null);
@@ -138,8 +159,10 @@ class CatalogService {
   ItemView updateItem(UUID id, ItemRequest request) {
     requirePermission(Permission.INVENTORY_CATALOG_WRITE);
     var item = item(id);
-    category(request.categoryId());
-    item.categoryId = request.categoryId();
+    item.categoryId =
+        request.categoryId() == null && request.kind() == null
+            ? item.categoryId
+            : categoryOf(request.categoryId(), request.kind());
     item.name = request.name().trim();
     item.unit = request.unit().trim();
     apply(item, request);
@@ -179,6 +202,64 @@ class CatalogService {
     var warehouse = warehouses.save(new Warehouse(clinicId(), request.name().trim(), false));
     audit.record(actorId(), "WAREHOUSE_CREATED", "WAREHOUSE", warehouse.id, "ALLOWED", null);
     return WarehouseView.of(warehouse);
+  }
+
+  /** Выбранная категория или основная категория вида (без вида — расходники). */
+  UUID categoryOf(UUID categoryId, String kind) {
+    if (categoryId != null) return category(categoryId).id;
+    return defaultCategory(kind == null ? "CONSUMABLE" : kind).id;
+  }
+
+  /**
+   * Основная категория вида: верхнего уровня, с названием из конфигурации; создаётся при первой
+   * позиции без категории. Так позицию можно завести, не настраивая категории заранее.
+   */
+  ItemCategory defaultCategory(String kind) {
+    var name = defaultCategoryNames.getOrDefault(kind, kind);
+    return categories.findByClinicIdOrderByName(clinicId()).stream()
+        .filter(c -> c.parentId == null && kind.equals(c.kind) && c.name.equalsIgnoreCase(name))
+        .findFirst()
+        .orElseGet(
+            () -> {
+              var category =
+                  categories.saveAndFlush(new ItemCategory(clinicId(), name, null, kind));
+              audit.record(
+                  actorId(),
+                  "ITEM_CATEGORY_CREATED",
+                  "ITEM_CATEGORY",
+                  category.id,
+                  "ALLOWED",
+                  null);
+              return category;
+            });
+  }
+
+  /** Активная позиция с этим GTIN или названием (без учёта регистра); для быстрого прихода. */
+  java.util.Optional<Item> findItem(String gtin, String name) {
+    if (gtin != null && !gtin.isBlank()) {
+      var byGtin = items.findByClinicIdAndGtin(clinicId(), gtin);
+      if (!byGtin.isEmpty()) return java.util.Optional.of(byGtin.get(0));
+    }
+    if (name == null || name.isBlank()) return java.util.Optional.empty();
+    var needle = name.trim();
+    return items.findByClinicIdOrderByName(clinicId()).stream()
+        .filter(i -> i.name.equalsIgnoreCase(needle))
+        .sorted(Comparator.comparing((Item i) -> !i.active))
+        .findFirst();
+  }
+
+  /** Новая немаркируемая позиция в основной категории вида — для строки быстрого прихода. */
+  Item createPlainItem(String name, String kind, String unit, String gtin) {
+    var item =
+        new Item(
+            clinicId(),
+            defaultCategory(kind == null ? "CONSUMABLE" : kind).id,
+            name.trim(),
+            unit == null || unit.isBlank() ? defaultUnit : unit.trim());
+    item.gtin = gtin == null || gtin.isBlank() ? null : gtin;
+    items.saveAndFlush(item);
+    audit.record(actorId(), "ITEM_CREATED", "ITEM", item.id, "ALLOWED", "receipt");
+    return item;
   }
 
   /** Основной склад клиники; создаётся при первом обращении. */

@@ -339,4 +339,76 @@ class InventoryControllerTest {
     mvc.perform(get("/api/v1/inventory/items").with(staff.role("CASHIER")))
         .andExpect(status().isForbidden());
   }
+
+  @Test
+  void quickReceiptCreatesMissingItemsPostsAndReusesThemByName() throws Exception {
+    var name = "Бинт " + UUID.randomUUID().toString().substring(0, 6);
+    var body =
+        """
+        {"idempotencyKey":"%s","supplier":"Аптека","lines":[
+          {"name":"%s","kind":"CONSUMABLE","unit":"шт","quantity":10,"batch":"B1","expiresOn":"2030-01-01"},
+          {"name":"%s","quantity":2}
+        ]}\
+        """
+            .formatted(UUID.randomUUID(), name, name.toUpperCase());
+    var created =
+        postJson("/api/v1/inventory/receipts", staff.role("NURSE"), body)
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.posted").value(true))
+            .andExpect(jsonPath("$.itemsCreated").value(1))
+            .andExpect(jsonPath("$.document.status").value("POSTED"))
+            .andExpect(jsonPath("$.document.type").value("RECEIPT"));
+    var itemId = send(created, "$.document.lines[0].itemId");
+    assertThat(send(created, "$.document.lines[1].itemId")).isEqualTo(itemId);
+    assertThat(stock(staff.role("NURSE"), itemId)).isEqualByComparingTo("12");
+
+    // Второй приход по названию — та же позиция, новая не заводится; категория — основная.
+    postJson(
+            "/api/v1/inventory/receipts",
+            staff.role("NURSE"),
+            "{\"idempotencyKey\":\"%s\",\"lines\":[{\"name\":\"%s\",\"quantity\":3}]}"
+                .formatted(UUID.randomUUID(), name))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.itemsCreated").value(0));
+    assertThat(stock(staff.role("NURSE"), itemId)).isEqualByComparingTo("15");
+    mvc.perform(get("/api/v1/inventory/items?q=" + name.substring(5)).with(staff.role("NURSE")))
+        .andExpect(jsonPath("$[0].categoryName").value("Расходники"))
+        .andExpect(jsonPath("$[0].unit").value("шт"));
+  }
+
+  @Test
+  void itemWithoutCategoryGoesToTheDefaultCategoryOfItsKind() throws Exception {
+    postJson(
+            "/api/v1/inventory/items",
+            staff.role("NURSE"),
+            "{\"name\":\"Аспирин %s\",\"unit\":\"уп\",\"kind\":\"DRUG\"}"
+                .formatted(UUID.randomUUID().toString().substring(0, 6)))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.categoryName").value("Лекарства"))
+        .andExpect(jsonPath("$.kind").value("DRUG"));
+  }
+
+  @Test
+  void quickReceiptOfMarkedItemWithoutCodesStaysDraftAndCashierCannotReceive() throws Exception {
+    var drug =
+        item(
+            category("DRUG"),
+            "{\"categoryId\":\"%s\",\"name\":\"Марк"
+                + " %s\",\"unit\":\"уп\",\"gtin\":\"04601234567893\",\"marked\":true,\"markingSystem\":\"MDLP\"}");
+    postJson(
+            "/api/v1/inventory/receipts",
+            staff.role("NURSE"),
+            "{\"idempotencyKey\":\"%s\",\"lines\":[{\"itemId\":\"%s\",\"quantity\":2}]}"
+                .formatted(UUID.randomUUID(), drug))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.posted").value(false))
+        .andExpect(jsonPath("$.document.status").value("DRAFT"))
+        .andExpect(jsonPath("$.waitingCodes[0]").exists());
+    postJson(
+            "/api/v1/inventory/receipts",
+            staff.role("CASHIER"),
+            "{\"idempotencyKey\":\"%s\",\"lines\":[{\"name\":\"x\",\"quantity\":1}]}"
+                .formatted(UUID.randomUUID()))
+        .andExpect(status().isForbidden());
+  }
 }

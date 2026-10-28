@@ -21,11 +21,21 @@ public class InventoryController {
   private final CatalogService catalog;
   private final StockService stock;
   private final MarkingService marking;
+  private final ReceiptService receipts;
 
-  InventoryController(CatalogService catalog, StockService stock, MarkingService marking) {
+  InventoryController(
+      CatalogService catalog, StockService stock, MarkingService marking, ReceiptService receipts) {
     this.catalog = catalog;
     this.stock = stock;
     this.marking = marking;
+    this.receipts = receipts;
+  }
+
+  /** Приход в одно действие: новые позиции заводятся, накладная проводится. */
+  @PostMapping("/receipts")
+  @ResponseStatus(HttpStatus.CREATED)
+  ReceiptView receive(@Valid @RequestBody ReceiptRequest request) {
+    return receipts.receive(request);
   }
 
   @GetMapping("/categories")
