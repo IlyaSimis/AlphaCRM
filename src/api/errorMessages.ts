@@ -101,6 +101,7 @@ export const errorMessages: Record<string, string> = {
   DOCUMENT_EMPTY: 'В накладной нет строк',
   SAME_WAREHOUSE: 'Для перемещения нужны два разных склада',
   INSUFFICIENT_STOCK: 'Не хватает остатка на складе',
+  RECEIPT_LINE_ITEM_REQUIRED: 'В каждой строке поступления нужно название позиции',
   NEGATIVE_NOT_ALLOWED: 'Сверх остатка можно провести только расход',
   INVALID_MARKING_CODE: 'Код маркировки не читается',
   MARKING_CODES_MISMATCH: 'Отсканируйте марку каждой упаковки: число марок должно совпасть с количеством',

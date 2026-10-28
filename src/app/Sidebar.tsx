@@ -1,34 +1,43 @@
-import { ArticleRounded, BadgeRounded, CalendarMonthRounded, ContactPhoneRounded, FolderSharedRounded, HealthAndSafetyRounded, HistoryRounded, InsightsRounded, Inventory2Rounded, MedicalServicesRounded, OutboxRounded, PaymentsRounded, PeopleAltRounded, TodayRounded, TuneRounded } from '@mui/icons-material'
+import { ArticleRounded, AssignmentTurnedInRounded, BadgeRounded, CalendarMonthRounded, ContactPhoneRounded, DeleteOutlineRounded, DescriptionRounded, EventNoteRounded, FolderSharedRounded, FolderRounded, HealthAndSafetyRounded, HistoryRounded, InsightsRounded, Inventory2Rounded, ListAltRounded, MedicalServicesRounded, OutboxRounded, PaymentsRounded, PeopleAltRounded, QrCode2Rounded, ReceiptLongRounded, SellRounded, TodayRounded } from '@mui/icons-material'
 import { Avatar, Box, Stack, Typography } from '@mui/material'
 import type { ReactNode } from 'react'
 import type { StaffItem } from '../api/types'
 import type { VisitTarget } from '../features/visit/visit'
 import { canWriteClinical, profileOf } from '../shared/roles'
-import { hasTodayPage, navigationFor, pageTitles, startPage, type Page } from './pages'
+import { pageTitles, sectionsFor, serviceOf, serviceTitles, startPage, type Page, type Service } from './pages'
 
-const icons: Partial<Record<Page, ReactNode>> = {
+export const pageIcons: Partial<Record<Page, ReactNode>> = {
   today: <TodayRounded />,
+  analytics: <InsightsRounded />,
+  staff: <BadgeRounded />,
+  audit: <HistoryRounded />,
+  outbox: <OutboxRounded />,
   schedule: <CalendarMonthRounded />,
   patients: <PeopleAltRounded />,
-  cashier: <PaymentsRounded />,
-  analytics: <InsightsRounded />,
-  audit: <HistoryRounded />,
   registry: <ContactPhoneRounded />,
-  settings: <TuneRounded />,
-  staff: <BadgeRounded />,
   documents: <ArticleRounded />,
-  outbox: <OutboxRounded />,
-  inventory: <Inventory2Rounded />,
-  drive: <FolderSharedRounded />,
+  hours: <EventNoteRounded />,
+  'stock-balances': <Inventory2Rounded />,
+  'stock-items': <ListAltRounded />,
+  'stock-documents': <ReceiptLongRounded />,
+  'stock-marking': <QrCode2Rounded />,
+  'stock-norms': <AssignmentTurnedInRounded />,
+  cashier: <PaymentsRounded />,
+  prices: <SellRounded />,
+  drive: <FolderRounded />,
+  'drive-shared': <FolderSharedRounded />,
+  'drive-trash': <DeleteOutlineRounded />,
 }
 
 function NavItem({ active, icon, label, onClick }: { active: boolean; icon: ReactNode; label: string; onClick: () => void }) {
-  return <button type="button" className={`nav-item ${active ? 'active' : ''}`} onClick={onClick}>{icon}{label}</button>
+  return <button type="button" className={`nav-item ${active ? 'active' : ''}`} aria-current={active ? 'page' : undefined} onClick={onClick}>{icon}{label}</button>
 }
 
 type SidebarProps = {
   className: string
   page: Page
+  /** Сервис верхней панели: в меню — его разделы. */
+  service: Service
   staff: StaffItem
   live: boolean
   /** Открытые приёмы врача: можно вернуться к любому, ни один не закрывается при переходе. */
@@ -38,33 +47,35 @@ type SidebarProps = {
   onVisit: (visit: VisitTarget) => void
 }
 
-export function Sidebar({ className, page, staff, live, visits, activeVisit, onNavigate, onVisit }: SidebarProps) {
+/** Боковое меню: разделы выбранного сервиса и открытые приёмы врача. */
+export function Sidebar({ className, page, service, staff, live, visits, activeVisit, onNavigate, onVisit }: SidebarProps) {
   const profile = profileOf(staff)
   const role = staff.role
-  // «Сегодня» — в своём блоке «Старт»; остальное меню — в прежнем порядке.
-  const workplace = navigationFor(role).filter((item) => item !== 'today')
+  const sections = sectionsFor(service, role)
+  const current = page === 'patient' ? 'patients' : page
   return (
     <Box className={className}>
       {/* Название — кнопка «домой»: тот же переход, что после входа. Открытые приёмы не закрывает. */}
       <button type="button" className="brand brand-button" aria-label="На главную" onClick={() => onNavigate(startPage(role))}>
         <Box component="span" className="brand-mark"><HealthAndSafetyRounded /></Box>
-        <Box component="span"><Typography component="span" className="brand-name">AlphaCRM</Typography><Typography component="span" className="brand-caption">медицинская система</Typography></Box>
+        <Box component="span"><Typography component="span" className="brand-name">AlphaCRM</Typography><Typography component="span" className="brand-caption">{serviceTitles[service]}</Typography></Box>
       </button>
-      {hasTodayPage(role) && <Box component="nav" aria-label="Старт" className="nav-section">
-        <Typography className="nav-label">СТАРТ</Typography>
+      {sections.map((section) => (
+        <Box key={section.label} component="nav" aria-label={section.label.charAt(0) + section.label.slice(1).toLocaleLowerCase('ru-RU')} className="nav-section">
+          <Typography className="nav-label">{section.label}</Typography>
+          <Stack spacing={0.7}>
+            {section.pages.map((item) => <NavItem key={item} active={current === item && serviceOf(item) === service} icon={pageIcons[item] ?? <DescriptionRounded />} label={pageTitles[item]} onClick={() => onNavigate(item)} />)}
+          </Stack>
+        </Box>
+      ))}
+      {canWriteClinical(role) && visits.length > 0 && <Box component="nav" aria-label="Открытые приёмы" className="nav-section">
+        <Typography className="nav-label">ОТКРЫТЫЕ ПРИЁМЫ</Typography>
         <Stack spacing={0.7}>
-          <NavItem active={page === 'today'} icon={icons.today} label={pageTitles.today} onClick={() => onNavigate('today')} />
-        </Stack>
-      </Box>}
-      <Box component="nav" aria-label="Рабочее место" className="nav-section">
-        <Typography className="nav-label">РАБОЧЕЕ МЕСТО</Typography>
-        <Stack spacing={0.7}>
-          {workplace.map((item) => <NavItem key={item} active={page === item || (item === 'patients' && page === 'patient')} icon={icons[item]} label={pageTitles[item]} onClick={() => onNavigate(item)} />)}
-          {canWriteClinical(role) && visits.map((visit) => (
+          {visits.map((visit) => (
             <NavItem key={visit.appointmentId ?? visit.encounter?.encounterId ?? visit.patientId} active={activeVisit === visit} icon={<MedicalServicesRounded />} label={`Приём: ${visit.patientName}${visit.time ? ` · ${visit.time}` : ''}`} onClick={() => onVisit(visit)} />
           ))}
         </Stack>
-      </Box>
+      </Box>}
       <Box className="profile">
         <Avatar sx={{ bgcolor: 'action.selected', color: 'primary.main' }}>{profile.initials}</Avatar>
         <Box sx={{ minWidth: 0, flex: 1 }}><Typography noWrap sx={{ fontWeight: 700, fontSize: 14 }}>{profile.name}</Typography><Typography sx={{ color: 'text.secondary', fontSize: 12 }}>{profile.role}{live ? '' : ' · демо'}</Typography></Box>

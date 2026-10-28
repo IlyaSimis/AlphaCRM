@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { CreateNewFolderRounded, DeleteOutlineRounded, DownloadRounded, EditRounded, FolderRounded, HistoryRounded, InsertDriveFileRounded, LinkRounded, RestoreRounded, ShareRounded, CloudUploadRounded } from '@mui/icons-material'
-import { Alert, Box, Breadcrumbs, Button, Chip, IconButton, LinearProgress, Link, Stack, Tab, Tabs, TextField, Tooltip, Typography } from '@mui/material'
+import { Alert, Box, Breadcrumbs, Button, Chip, IconButton, LinearProgress, Link, Stack, TextField, Tooltip, Typography } from '@mui/material'
 import { createFolder, downloadByLink, downloadFile, loadFolder, loadLink, loadQuota, loadShared, loadTrash, renameNode, restoreNode, setQuota, trashNode, uploadFile, uploadVersion } from '../../api/drive'
 import type { DriveListing, DriveNode, DriveQuota, StaffItem } from '../../api/types'
 import { formatClinicMoment } from '../../shared/clinicTime'
@@ -12,22 +12,35 @@ import { NameDialog } from './NameDialog'
 import { ShareDialog } from './ShareDialog'
 import { VersionsDialog } from './VersionsDialog'
 
+export type DriveSection = 'mine' | 'shared' | 'trash'
+
 type DrivePageProps = {
   role: Role
   apiOnline: boolean
   self: StaffItem
   notify: (message: string) => void
+  /** Раздел из бокового меню: «Мой диск», «Доступные мне», «Корзина». */
+  section: DriveSection
+  /** Переход в другой раздел — например, папка из «Доступных мне» открывается в «Моём диске». */
+  onSection: (section: DriveSection) => void
 }
 
-type View = 'mine' | 'shared' | 'trash' | 'link'
+type View = DriveSection | 'link'
 
 /**
  * Корпоративный диск (раздел H): регламенты, договоры, шаблоны, отчёты. Права наследуются от папки к
  * содержимому; ссылка открывается только сотрудником клиники после входа. Медицинские документы
  * пациента сюда не загружаются — они в карточке пациента.
  */
-export function DrivePage({ role, apiOnline, self, notify }: DrivePageProps) {
-  const [view, setView] = useState<View>(() => (linkFromAddress() ? 'link' : 'mine'))
+export function DrivePage({ role, apiOnline, self, notify, section, onSection }: DrivePageProps) {
+  // Ссылка из адреса открывается поверх раздела; выбор раздела в меню её закрывает.
+  const [linkMode, setLinkMode] = useState(() => Boolean(linkFromAddress()))
+  const [shownSection, setShownSection] = useState(section)
+  if (shownSection !== section) {
+    setShownSection(section)
+    setLinkMode(false)
+  }
+  const view: View = linkMode ? 'link' : section
   const [folder, setFolder] = useState<string | null>(null)
   const [listing, setListing] = useState<DriveListing | null>(null)
   const [nodes, setNodes] = useState<DriveNode[]>([])
@@ -81,7 +94,7 @@ export function DrivePage({ role, apiOnline, self, notify }: DrivePageProps) {
       setLinkFolder(node.id)
       return
     }
-    setView('mine')
+    if (section !== 'mine') onSection('mine')
     setFolder(node.id)
   }
 
@@ -109,7 +122,7 @@ export function DrivePage({ role, apiOnline, self, notify }: DrivePageProps) {
     if (!token) return
     setLink(token)
     setLinkFolder(null)
-    setView('link')
+    setLinkMode(true)
   }
 
   return (
@@ -123,12 +136,7 @@ export function DrivePage({ role, apiOnline, self, notify }: DrivePageProps) {
       </Box>
       <Alert severity="warning" sx={{ mb: 2 }}>Медицинские документы пациента загружайте в карточку пациента, а не на диск: там они шифруются и открываются только врачу по связи с лечением.</Alert>
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
-      <Tabs value={view} onChange={(_event: unknown, next: View) => { setView(next); setError('') }} sx={{ mb: 2 }} aria-label="Разделы диска">
-        <Tab value="mine" label="Мой диск" />
-        <Tab value="shared" label="Доступные мне" />
-        <Tab value="trash" label="Корзина" />
-        {link && <Tab value="link" label="По ссылке" />}
-      </Tabs>
+      {link && !linkMode && <Button size="small" startIcon={<LinkRounded />} sx={{ mb: 2 }} onClick={() => { setLinkMode(true); setError('') }}>Вернуться к файлу по ссылке</Button>}
       <Box className="panel">
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ mb: 2, alignItems: { md: 'center' } }}>
           {view === 'mine' && <Breadcrumbs sx={{ flex: 1 }} aria-label="Путь">

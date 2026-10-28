@@ -26,10 +26,22 @@ export function loadItems(filter: ItemFilter = {}) {
   return json<InventoryItem[]>(`/inventory/items${suffix}`, 'Номенклатура недоступна')
 }
 
-export type ItemInput = { categoryId: string; name: string; unit: string; gtin: string | null; marked: boolean; markingSystem: MarkingSystem; rxOnly: boolean; active?: boolean }
+/** categoryId null — основная категория вида kind (сервер заведёт её сам). */
+export type ItemInput = { categoryId: string | null; kind?: ItemKind; name: string; unit: string; gtin: string | null; marked: boolean; markingSystem: MarkingSystem; rxOnly: boolean; active?: boolean }
 
 export function saveItem(id: string | null, input: ItemInput) {
   return json<InventoryItem>(id ? `/inventory/items/${id}` : '/inventory/items', 'Не удалось сохранить позицию', { method: id ? 'PUT' : 'POST', body: JSON.stringify(input) })
+}
+
+export type ReceiptLine =
+  | { itemId: string; quantity: number; batch?: string | null; expiresOn?: string | null; codes?: string[] }
+  | { name: string; kind?: ItemKind; unit?: string | null; gtin?: string | null; quantity: number; batch?: string | null; expiresOn?: string | null }
+
+export type ReceiptResult = { document: StockDocument; posted: boolean; itemsCreated: number; waitingCodes: string[] }
+
+/** Приход в одно действие: новые позиции заводятся, накладная сразу проводится. */
+export function receiveStock(input: { warehouseId?: string | null; supplier?: string | null; documentDate?: string | null; idempotencyKey: string; lines: ReceiptLine[] }) {
+  return json<ReceiptResult>('/inventory/receipts', 'Не удалось провести поступление', { method: 'POST', body: JSON.stringify(input) })
 }
 
 export const loadWarehouses = () => json<Warehouse[]>('/inventory/warehouses', 'Склады недоступны')

@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Alert, Box, Chip, CircularProgress, MenuItem, Stack, TextField, Typography } from '@mui/material'
+import { AddRounded } from '@mui/icons-material'
+import { Alert, Box, Button, Chip, CircularProgress, MenuItem, Stack, TextField, Typography } from '@mui/material'
 import { loadBalances, loadCategories, loadWarehouses } from '../../api/inventory'
 import type { InventoryCategory, StockBalance, Warehouse } from '../../api/types'
 import { localToday, shortDate } from '../../shared/dates'
 import { balanceAlert, formatQuantity, kindLabels } from './inventory'
 
 /** Остатки по складам и партиям; минус и истекающий срок — с пометкой. */
-export function BalancesTab() {
+export function BalancesTab({ onReceive }: { onReceive?: () => void }) {
   const [rows, setRows] = useState<StockBalance[] | null>(null)
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
   const [categories, setCategories] = useState<InventoryCategory[]>([])
@@ -47,7 +48,10 @@ export function BalancesTab() {
       {rows === null && !error
         ? <Box className="empty" sx={{ minHeight: 120 }}><CircularProgress aria-label="Загрузка остатков" /></Box>
         : rows && rows.length === 0
-          ? <Typography sx={{ color: 'text.secondary' }}>Остатков нет. Оформите приход на вкладке «Накладные».</Typography>
+          ? <Box className="empty" sx={{ minHeight: 160, flexDirection: 'column', gap: 1.5 }}>
+            <Typography sx={{ color: 'text.secondary' }}>{query || warehouse || category ? 'Ничего не нашлось.' : 'На складе пока пусто.'}</Typography>
+            {onReceive && !query && !warehouse && !category && <Button variant="contained" startIcon={<AddRounded />} onClick={onReceive}>Добавить первое поступление</Button>}
+          </Box>
           : <table className="audit-table">
             <thead><tr><th>Позиция</th><th>Категория</th><th>Склад</th><th>Партия</th><th>Годен до</th><th>Остаток</th><th>Марок</th></tr></thead>
             <tbody>

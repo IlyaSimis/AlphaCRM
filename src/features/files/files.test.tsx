@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { PatientFileItem } from '../../api/types'
-import { anna, jsonResponse, renderApp, withAuth } from '../../test/helpers'
+import { anna, jsonResponse, renderApp, withAuth, openPage } from '../../test/helpers'
 import { fileRights, SIGN_NOTICE } from './fileRules'
 
 const file = (patch: Partial<PatientFileItem> = {}): PatientFileItem => ({
@@ -14,7 +14,7 @@ const signed = file({ id: '00000000-0000-0000-0000-0000000f0002', originalName: 
 
 async function openAnna(user: ReturnType<typeof userEvent.setup>) {
   expect(await screen.findByText('API подключён')).toBeInTheDocument()
-  await user.click(screen.getByRole('button', { name: 'Пациенты' }))
+  await openPage(user, 'Пациенты')
   await user.click(screen.getByText('Анна Михайлова'))
   return screen.findByRole('region', { name: 'Документы PDF' })
 }
@@ -97,7 +97,7 @@ describe('PDF пациента', () => {
     expect(within(block).queryByRole('button', { name: 'Загрузить' })).not.toBeInTheDocument()
     expect(within(block).queryByRole('button', { name: /^Подписать/ })).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Подписанные документы' }))
+    await openPage(user, 'Подписанные документы')
     const archive = await screen.findByRole('region', { name: 'Подписанные PDF' })
     expect(await within(archive).findByText('Анна Михайлова · выписка.pdf')).toBeInTheDocument()
     expect(within(archive).getByText('Все подписанные файлы клиники.')).toBeInTheDocument()
@@ -155,7 +155,7 @@ describe('PDF пациента', () => {
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Пациенты' }))
+    await openPage(user, 'Пациенты')
     await user.click(screen.getByText('Анна Михайлова'))
     expect(screen.getByRole('heading', { name: 'Анна Михайлова' })).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: 'Документы PDF' })).not.toBeInTheDocument()

@@ -1,7 +1,7 @@
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-import { anna, chooseRole, enterDemo, goOffline, jsonResponse, menu, renderApp, TEST_CSRF, withAuth } from '../../test/helpers'
+import { anna, chooseRole, enterDemo, goOffline, jsonResponse, renderApp, TEST_CSRF, withAuth, openPage, menuHas } from '../../test/helpers'
 
 describe('cashier', () => {
   it('visible to cashier, administrator and (read-only) manager, not to doctor', async () => {
@@ -9,17 +9,17 @@ describe('cashier', () => {
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user)
-    expect(menu().queryByRole('button', { name: 'Касса' })).not.toBeInTheDocument()
+    expect(await menuHas(user, 'Касса')).toBe(false)
     await chooseRole(user, 'MANAGER')
     // Менеджер видит счета только на чтение (раздел C: finance — R).
-    await user.click(menu().getByRole('button', { name: 'Касса' }))
+    await openPage(user, 'Касса')
     expect(screen.queryByRole('button', { name: /выставить счёт/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /принять оплату/i })).not.toBeInTheDocument()
     await chooseRole(user, 'CASHIER')
-    expect(menu().getByRole('button', { name: 'Касса' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Аналитика' })).not.toBeInTheDocument()
+    expect(await menuHas(user, 'Касса')).toBe(true)
+    expect(await menuHas(user, 'Аналитика')).toBe(false)
     await chooseRole(user, 'ADMINISTRATOR')
-    expect(menu().getByRole('button', { name: 'Касса' })).toBeInTheDocument()
+    expect(await menuHas(user, 'Касса')).toBe(true)
   })
 
   it('the administrator issues a charge, the cashier takes the payment', async () => {
@@ -27,14 +27,14 @@ describe('cashier', () => {
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user, 'ADMINISTRATOR')
-    await user.click(menu().getByRole('button', { name: 'Касса' }))
+    await openPage(user, 'Касса')
     expect(screen.getAllByText('Счёт не выставлен').length).toBeGreaterThan(0)
     expect(screen.queryByText(/Диагноз/)).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Выставить счёт Мария Соколова 09:00' }))
     expect(await screen.findByText('Ожидает оплаты')).toBeInTheDocument()
 
     await chooseRole(user, 'CASHIER')
-    await user.click(menu().getByRole('button', { name: 'Касса' }))
+    await openPage(user, 'Касса')
     await user.click(screen.getByRole('button', { name: 'Принять оплату Мария Соколова 09:00' }))
     expect(await screen.findByText('Оплачен')).toBeInTheDocument()
   })
@@ -44,7 +44,7 @@ describe('cashier', () => {
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user, 'ADMINISTRATOR')
-    await user.click(menu().getByRole('button', { name: 'Касса' }))
+    await openPage(user, 'Касса')
     await user.click(screen.getByRole('button', { name: /^Выставить все счета/ }))
     expect(await screen.findByText(/выставлено счетов/i)).toBeInTheDocument()
     expect(screen.queryByText('Счёт не выставлен')).not.toBeInTheDocument()
@@ -65,7 +65,7 @@ describe('cashier', () => {
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
-    await user.click(menu().getByRole('button', { name: 'Касса' }))
+    await openPage(user, 'Касса')
     expect(await screen.findByText('Ожидает оплаты')).toBeInTheDocument()
     expect(screen.getByText('Анна Михайлова')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Принять оплату Анна Михайлова 10:10' }))
@@ -98,7 +98,7 @@ describe('cashier', () => {
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
-    await user.click(menu().getByRole('button', { name: 'Касса' }))
+    await openPage(user, 'Касса')
     expect(await screen.findByText('Ждёт суммы')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /принять оплату/i })).not.toBeInTheDocument()
     await user.type(screen.getByLabelText('Сумма Анна Михайлова 10:10, рублей'), '9000')

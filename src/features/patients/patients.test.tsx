@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-import { anna, enterDemo, goOffline, jsonResponse, renderApp, withAuth } from '../../test/helpers'
+import { anna, enterDemo, goOffline, jsonResponse, renderApp, withAuth, openPage } from '../../test/helpers'
 
 describe('patients', () => {
   it('opens the patient list and the selected person card', async () => {
@@ -9,7 +9,7 @@ describe('patients', () => {
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user)
-    await user.click(screen.getByRole('button', { name: 'Пациенты' }))
+    await openPage(user, 'Пациенты')
     expect(screen.getByRole('heading', { name: 'Поиск пациента' })).toBeInTheDocument()
     await user.click(screen.getByText('Дмитрий Волков'))
     expect(screen.getByRole('heading', { name: 'Дмитрий Волков' })).toBeInTheDocument()
@@ -21,7 +21,7 @@ describe('patients', () => {
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user)
-    await user.click(screen.getByRole('button', { name: 'Пациенты' }))
+    await openPage(user, 'Пациенты')
     await user.click(screen.getByRole('button', { name: /новый пациент/i }))
     // Новая карточка открывается пустой: без чужого имени, даты и телефона.
     expect(screen.getByLabelText('ФИО')).toHaveValue('')
@@ -42,7 +42,7 @@ describe('patients', () => {
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user, 'ADMINISTRATOR')
-    await user.click(screen.getByRole('button', { name: 'Пациенты' }))
+    await openPage(user, 'Пациенты')
     await user.click(screen.getByText('Дмитрий Волков'))
     await user.click(screen.getByRole('button', { name: 'Редактировать' }))
     // Правка открывается с данными карточки.
@@ -81,7 +81,7 @@ describe('patients', () => {
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Пациенты' }))
+    await openPage(user, 'Пациенты')
     await user.click(screen.getByText('Анна Михайлова'))
     expect(screen.getByText('Бывший администратор · учётная запись отключена')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Редактировать' }))
@@ -97,7 +97,7 @@ describe('patients', () => {
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user, 'ADMINISTRATOR')
-    await user.click(screen.getByRole('button', { name: 'Пациенты' }))
+    await openPage(user, 'Пациенты')
     await user.click(screen.getByText('Дмитрий Волков'))
     await user.click(screen.getByRole('button', { name: 'Редактировать' }))
     await user.clear(screen.getByLabelText('Телефон'))
@@ -112,7 +112,7 @@ describe('patients', () => {
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user)
-    await user.click(screen.getByRole('button', { name: 'Пациенты' }))
+    await openPage(user, 'Пациенты')
     await user.click(screen.getByText('Дмитрий Волков'))
     expect(screen.getByText('Ближайшие записи')).toBeInTheDocument()
     expect(screen.getByText('Прошедшие записи')).toBeInTheDocument()
@@ -127,7 +127,7 @@ describe('patients', () => {
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user, 'ADMINISTRATOR')
-    await user.click(screen.getByRole('button', { name: 'Пациенты' }))
+    await openPage(user, 'Пациенты')
     await user.click(screen.getByText('Мария Соколова'))
     expect(screen.getByText('Требует обновления')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Обновить согласие' }))
@@ -149,7 +149,7 @@ describe('patients', () => {
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Пациенты' }))
+    await openPage(user, 'Пациенты')
     await user.click(screen.getByText('Анна Михайлова'))
     expect(await screen.findByText('Нет активной связи с лечением пациента')).toBeInTheDocument()
     expect(screen.queryByText('История приёмов')).not.toBeInTheDocument()
@@ -174,7 +174,7 @@ describe('patients', () => {
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Пациенты' }))
+    await openPage(user, 'Пациенты')
     await user.click(screen.getByText('Анна Михайлова'))
     expect(await screen.findByText('История приёмов')).toBeInTheDocument()
     expect(screen.getByText(/Документ приёма · подписан/)).toBeInTheDocument()
@@ -189,7 +189,7 @@ describe('patients', () => {
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user, 'MANAGER')
-    await user.click(screen.getByRole('button', { name: 'Пациенты' }))
+    await openPage(user, 'Пациенты')
     await user.click(screen.getByText('Анна Михайлова'))
     expect(screen.getByText(/Роль «Менеджер» не имеет доступа/)).toBeInTheDocument()
   })
@@ -199,7 +199,7 @@ describe('patients', () => {
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user, 'ADMINISTRATOR')
-    await user.click(screen.getByRole('button', { name: 'Пациенты' }))
+    await openPage(user, 'Пациенты')
     await user.click(screen.getByText('Анна Михайлова'))
     expect(screen.getByText('Клинические данные недоступны')).toBeInTheDocument()
     expect(screen.getByText(/Роль «Администратор» не имеет доступа/)).toBeInTheDocument()

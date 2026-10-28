@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-import { anna, enterDemo, goOffline, jsonResponse, openSchedule, renderApp, withAuth } from '../../test/helpers'
+import { anna, enterDemo, goOffline, jsonResponse, openSchedule, renderApp, withAuth, openPage, menuHas } from '../../test/helpers'
 
 const PETROV = '00000000-0000-0000-0000-000000000201'
 const REPEAT = '00000000-0000-0000-0000-000000000602'
@@ -12,7 +12,7 @@ describe('registry', () => {
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user, 'ADMINISTRATOR')
-    await user.click(screen.getByRole('button', { name: 'Регистратура' }))
+    await openPage(user, 'Регистратура')
     expect(screen.getByText('Обновить согласие · Мария Соколова')).toBeInTheDocument()
     expect(screen.getByText('Перезвонить · Дмитрий Волков')).toBeInTheDocument()
     expect(screen.getByText(/Пациентам ничего не отправляется/)).toBeInTheDocument()
@@ -57,7 +57,7 @@ describe('registry', () => {
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Регистратура' }))
+    await openPage(user, 'Регистратура')
     await user.click(screen.getByRole('button', { name: 'Новая задача' }))
     await user.type(screen.getByLabelText('Что сделать'), '  Заказать воду в холл  ')
     await user.click(screen.getByRole('button', { name: 'Создать задачу' }))
@@ -72,10 +72,10 @@ describe('registry', () => {
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user)
-    expect(screen.queryByRole('button', { name: 'Регистратура' })).not.toBeInTheDocument()
+    expect(await menuHas(user, 'Регистратура')).toBe(false)
     await user.click(screen.getByRole('button', { name: 'Выйти' }))
     await enterDemo(user, 'CASHIER')
-    await user.click(screen.getByRole('button', { name: 'Регистратура' }))
+    await openPage(user, 'Регистратура')
     expect(screen.getByText('ЗАДАЧИ НА СЕГОДНЯ')).toBeInTheDocument()
     expect(screen.queryByText('ЛИСТ ОЖИДАНИЯ')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Новая задача' })).not.toBeInTheDocument()
@@ -100,7 +100,7 @@ describe('registry', () => {
     expect(screen.getByRole('button', { name: 'Отменить запись 10:10 Мария Соколова' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Лист ожидания на слот/ })).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Регистратура' }))
+    await openPage(user, 'Регистратура')
     expect(screen.getByText('Никто не ждёт')).toBeInTheDocument()
   })
 

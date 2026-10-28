@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
 import { LEBEDEVA_ID, PETROV_ID } from '../api/client'
 import App from '../app/App'
+import { pageTitles, serviceOf, serviceTitles, type Page } from '../app/pages'
 import { ClinicThemeProvider } from '../app/theme'
 import type { ServiceItem, StaffItem, StaffRole } from '../api/types'
 import { roleLabels } from '../shared/roles'
@@ -12,6 +13,29 @@ import { roleLabels } from '../shared/roles'
  * («Касса»), поэтому переходы по меню ищутся здесь.
  */
 export const menu = () => within(document.querySelector('.desktop-sidebar') as HTMLElement)
+
+type User = ReturnType<typeof userEvent.setup>
+
+function pageByTitle(title: string): Page {
+  const page = (Object.keys(pageTitles) as Page[]).find((item) => pageTitles[item] === title)
+  if (!page) throw new Error(`Нет страницы «${title}»`)
+  return page
+}
+
+/** Открыть страницу как сотрудник: вкладка сервиса в верхней панели, затем раздел в боковом меню. */
+export async function openPage(user: User, title: string) {
+  const tab = screen.getByRole('tab', { name: serviceTitles[serviceOf(pageByTitle(title))] })
+  if (tab.getAttribute('aria-selected') !== 'true') await user.click(tab)
+  await user.click(menu().getByRole('button', { name: title }))
+}
+
+/** Есть ли страница в меню сотрудника: вкладка её сервиса и раздел в нём. Переключает вкладку. */
+export async function menuHas(user: User, title: string) {
+  const tab = screen.queryByRole('tab', { name: serviceTitles[serviceOf(pageByTitle(title))] })
+  if (!tab) return false
+  if (tab.getAttribute('aria-selected') !== 'true') await user.click(tab)
+  return menu().queryByRole('button', { name: title }) !== null
+}
 
 export const renderApp = () => render(<ClinicThemeProvider><App /></ClinicThemeProvider>)
 
@@ -123,8 +147,6 @@ export function withAuth(handler: Handler, initial: string | null = 'admin', opt
   vi.stubGlobal('fetch', mock)
   return mock
 }
-
-type User = ReturnType<typeof userEvent.setup>
 
 /** Песочница без сервера: войти с ролью. Врач песочницы ведёт записи первого демо-врача. */
 export async function enterDemo(user: User, role: StaffRole = 'DOCTOR') {

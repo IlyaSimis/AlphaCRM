@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import css from '../index.css?raw'
-import { enterDemo, goOffline, menu, renderApp } from '../test/helpers'
+import { enterDemo, goOffline, menu, renderApp, openPage } from '../test/helpers'
 import { Landscape, MOUNTAINS } from './Landscape'
 
 const content = () => document.querySelector('.content') as HTMLElement
@@ -29,7 +29,7 @@ describe('workspace background and greeting', () => {
     expect(document.querySelector('.landscape')).toBe(scenes[0])
 
     // Смена вкладки не создаёт вторую сцену и не проигрывает выезд заново.
-    await user.click(menu().getByRole('button', { name: 'Пациенты' }))
+    await openPage(user, 'Пациенты')
     expect(document.querySelectorAll('.landscape')).toHaveLength(1)
     expect(document.querySelector('.landscape')).toBe(scenes[0])
   })
@@ -66,7 +66,7 @@ describe('workspace background and greeting', () => {
     await user.click(screen.getByRole('button', { name: 'Выйти' }))
     await enterDemo(user, 'ADMINISTRATOR')
     expect(within(content()).getByText('Доброе утро, Администратор')).toBeInTheDocument()
-    await user.click(menu().getByRole('button', { name: 'Расписание' }))
+    await openPage(user, 'Расписание')
     expect(within(content()).queryByText(/^(Доброе утро|Добрый день|Добрый вечер)/)).not.toBeInTheDocument()
   })
 })

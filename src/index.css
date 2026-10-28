@@ -135,7 +135,16 @@ button, input, textarea { font: inherit; }
   .landscape .ls-sky, .landscape .ls-light, .landscape .ls-far, .landscape .ls-trees, .landscape .ls-near { animation: none; opacity: 1; transform: none; }
   .landscape .ls-body, .landscape stop, .landscape path, .landscape rect, .landscape circle { transition: none; }
 }
-.topbar { height: 88px; padding: 16px 36px; border-bottom: 1px solid var(--border); background: var(--paper-translucent); display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 5; backdrop-filter: blur(8px); }
+.topbar { padding: 0 36px 14px; border-bottom: 1px solid var(--border); background: var(--paper-translucent); display: flex; flex-direction: column; position: sticky; top: 0; z-index: 5; backdrop-filter: blur(8px); }
+/* Верхний ряд: вкладки сервисов и действия; под ним — заголовок страницы. */
+.topbar-row { display: flex; align-items: center; gap: 12px; min-height: 60px; border-bottom: 1px solid var(--border-soft); margin-bottom: 12px; }
+.service-tabs { flex: 1; min-width: 0; min-height: 60px !important; }
+.service-tabs .MuiTab-root { min-height: 60px; text-transform: none; font-weight: 700; font-size: 14px; gap: 6px; }
+.service-tabs .MuiTab-root svg { width: 20px; }
+.topbar-title { min-height: 44px; display: flex; flex-direction: column; justify-content: center; }
+.receipt-grid { display: flex; flex-direction: column; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
+.receipt-row { display: grid; grid-template-columns: minmax(220px, 2.4fr) 110px 80px 160px 120px 150px 36px; gap: 8px; align-items: start; min-width: 900px; }
+.receipt-head span { font-size: 10px; font-weight: 800; letter-spacing: .08em; color: var(--label); text-transform: uppercase; padding: 0 4px; }
 .eyebrow { font-size: 10px !important; font-weight: 800 !important; letter-spacing: .08em !important; color: var(--muted); margin-bottom: 2px !important; }
 .role-switch { display: flex; align-items: center; gap: 12px; }
 .role-switch .MuiSelect-select { min-width: 148px; }
@@ -270,13 +279,13 @@ button, input, textarea { font: inherit; }
 .form-section:last-child { border-bottom: 0; }
 .form-section-title { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
 .form-section-title > :first-child { color: var(--active-text); font-size: 12px; font-weight: 800; }
-.sticky-summary { position: sticky; top: 108px; }
+.sticky-summary { position: sticky; top: 150px; }
 .MuiInputBase-root { background: var(--paper); }
 
 @media (max-width: 900px) {
   .desktop-sidebar { display: none; }
   .mobile-menu { display: inline-flex !important; margin-right: 8px !important; }
-  .topbar { justify-content: flex-start; padding: 14px 20px; }
+  .topbar { padding: 0 20px 12px; }
   .role-switch { margin-left: auto; }
   .content { padding: 24px 20px 50px; }
   .visit-layout { grid-template-columns: 1fr; }
@@ -288,7 +297,7 @@ button, input, textarea { font: inherit; }
 @media (max-width: 650px) {
   .section-intro.today-intro { margin-bottom: 28px; }
   .greeting.greeting--large { font-size: 20px !important; }
-  .topbar { height: 76px; }
+  .topbar-clinic { display: none; }
   .topbar h5 { font-size: 18px; }
   .role-switch > p { display: none; }
   .role-switch .MuiSelect-select { min-width: 80px; }

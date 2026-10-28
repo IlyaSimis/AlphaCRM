@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { LEBEDEVA_ID, PETROV_ID } from '../../api/client'
 import type { SignedDocumentItem } from '../../api/types'
-import { anna, enterDemo, goOffline, jsonResponse, renderApp, withAuth } from '../../test/helpers'
+import { anna, enterDemo, goOffline, jsonResponse, renderApp, withAuth, openPage, menuHas } from '../../test/helpers'
 
 const original: SignedDocumentItem = {
   id: '00000000-0000-0000-0000-00000000d001', encounterId: 'e1', appointmentId: 'a1', patientId: anna.id, patientName: 'Анна Михайлова',
@@ -34,7 +34,7 @@ describe('signed documents', () => {
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Подписанные документы' }))
+    await openPage(user, 'Подписанные документы')
     expect(await screen.findByText(/Уточнённый диагноз/)).toBeInTheDocument()
     expect(screen.getByText(/Диагноз: Диагноз из снимка/)).toBeInTheDocument()
     expect(screen.getByText(/Диагноз Лебедевой/)).toBeInTheDocument()
@@ -68,7 +68,7 @@ describe('signed documents', () => {
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Подписанные документы' }))
+    await openPage(user, 'Подписанные документы')
     expect(await screen.findByText(/Документы, которые вы подписали/)).toBeInTheDocument()
     expect(screen.queryByRole('combobox', { name: 'Врач' })).not.toBeInTheDocument()
   })
@@ -78,13 +78,13 @@ describe('signed documents', () => {
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user, 'ADMINISTRATOR')
-    expect(screen.queryByRole('button', { name: 'Подписанные документы' })).not.toBeInTheDocument()
+    expect(await menuHas(user, 'Подписанные документы')).toBe(false)
     await user.click(screen.getByRole('button', { name: 'Выйти' }))
     await enterDemo(user, 'CASHIER')
-    expect(screen.queryByRole('button', { name: 'Подписанные документы' })).not.toBeInTheDocument()
+    expect(await menuHas(user, 'Подписанные документы')).toBe(false)
     await user.click(screen.getByRole('button', { name: 'Выйти' }))
     await enterDemo(user, 'MANAGER')
-    await user.click(screen.getByRole('button', { name: 'Подписанные документы' }))
+    await openPage(user, 'Подписанные документы')
     expect(screen.getByText(/доступны только при подключённом API/)).toBeInTheDocument()
   })
 })

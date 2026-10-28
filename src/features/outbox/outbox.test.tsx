@@ -2,7 +2,7 @@ import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import type { OutboxItem } from '../../api/types'
-import { anna, enterDemo, goOffline, jsonResponse, renderApp, withAuth } from '../../test/helpers'
+import { anna, enterDemo, goOffline, jsonResponse, renderApp, withAuth, openPage, menuHas } from '../../test/helpers'
 import { reasonText } from './outboxLabels'
 
 const row = (patch: Partial<OutboxItem>): OutboxItem => ({
@@ -28,7 +28,7 @@ describe('outbound deliveries', () => {
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Внешние выводы' }))
+    await openPage(user, 'Внешние выводы')
     expect(await screen.findByText('Подтверждение записи')).toBeInTheDocument()
     expect(screen.getByText('03.11.2026 09:00 · 0301')).toBeInTheDocument()
     expect(screen.getByText('Telegram')).toBeInTheDocument()
@@ -44,10 +44,10 @@ describe('outbound deliveries', () => {
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user, 'DOCTOR')
-    expect(screen.queryByRole('button', { name: 'Внешние выводы' })).not.toBeInTheDocument()
+    expect(await menuHas(user, 'Внешние выводы')).toBe(false)
     await user.click(screen.getByRole('button', { name: 'Выйти' }))
     await enterDemo(user, 'CASHIER')
-    expect(screen.queryByRole('button', { name: 'Внешние выводы' })).not.toBeInTheDocument()
+    expect(await menuHas(user, 'Внешние выводы')).toBe(false)
   })
 
   it('labels HTTP and unknown reasons', () => {

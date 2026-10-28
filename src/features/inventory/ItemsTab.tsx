@@ -65,14 +65,13 @@ export function ItemsTab({ role, notify }: ItemsTabProps) {
           {sorts.map((item) => <MenuItem key={item.value} value={item.value}>{item.label}</MenuItem>)}
         </TextField>
         {editable && <Button variant="outlined" onClick={() => setNewCategory(true)}>Новая категория</Button>}
-        {editable && <Button variant="contained" startIcon={<AddRounded />} disabled={categories.length === 0} onClick={() => setEditing('new')}>Новая позиция</Button>}
+        {editable && <Button variant="contained" startIcon={<AddRounded />} onClick={() => setEditing('new')}>Новая позиция</Button>}
       </Stack>
-      {editable && categories.length === 0 && <Alert severity="info" sx={{ mb: 2 }}>Сначала заведите категорию: лекарства, медизделия, расходники или товары.</Alert>}
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {items === null && !error
         ? <Box className="empty" sx={{ minHeight: 120 }}><CircularProgress aria-label="Загрузка номенклатуры" /></Box>
         : items && items.length === 0
-          ? <Typography sx={{ color: 'text.secondary' }}>Позиций нет.</Typography>
+          ? <Typography sx={{ color: 'text.secondary' }}>{query || category || kind || marked ? 'Ничего не нашлось.' : 'Позиций пока нет. Заведите позицию кнопкой «Новая позиция» или сразу оформите «Поступление» — новые позиции из него попадут сюда сами.'}</Typography>
           : <table className="audit-table">
             <thead><tr><th>Название</th><th>Категория</th><th>Вид</th><th>Ед.</th><th>GTIN</th><th>Маркировка</th><th>Остаток</th>{editable && <th />}</tr></thead>
             <tbody>
@@ -99,11 +98,11 @@ export function ItemsTab({ role, notify }: ItemsTabProps) {
 function ItemDialog({ item, categories, onClose, onSaved }: { item: InventoryItem | null; categories: InventoryCategory[]; onClose: () => void; onSaved: (item: InventoryItem) => void }) {
   const [draft, setDraft] = useState<ItemInput>(() => item
     ? { categoryId: item.categoryId, name: item.name, unit: item.unit, gtin: item.gtin, marked: item.marked, markingSystem: item.markingSystem, rxOnly: item.rxOnly, active: item.active }
-    : { categoryId: categories[0]?.id ?? '', name: '', unit: 'шт', gtin: null, marked: false, markingSystem: 'NONE', rxOnly: false })
+    : { categoryId: null, kind: 'CONSUMABLE', name: '', unit: 'шт', gtin: null, marked: false, markingSystem: 'NONE', rxOnly: false })
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const set = (patch: Partial<ItemInput>) => setDraft((current) => ({ ...current, ...patch }))
-  const kind = categories.find((category) => category.id === draft.categoryId)?.kind
+  const kind = categories.find((category) => category.id === draft.categoryId)?.kind ?? draft.kind
 
   const save = async () => {
     if (!draft.name.trim() || !draft.unit.trim()) {
@@ -134,10 +133,16 @@ function ItemDialog({ item, categories, onClose, onSaved }: { item: InventoryIte
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
           {error && <Alert severity="error">{error}</Alert>}
-          <TextField select label="Категория" value={draft.categoryId} onChange={(event) => set({ categoryId: event.target.value })}>
-            {categories.map((category) => <MenuItem key={category.id} value={category.id}>{category.name} · {kindLabels[category.kind]}</MenuItem>)}
-          </TextField>
-          <TextField label="Название" value={draft.name} onChange={(event) => set({ name: event.target.value })} />
+          <TextField label="Название" value={draft.name} onChange={(event) => set({ name: event.target.value })} autoFocus />
+          <Stack direction="row" spacing={2}>
+            <TextField select label="Категория" value={draft.categoryId ?? ''} onChange={(event) => set({ categoryId: event.target.value || null })} sx={{ flex: 1 }} helperText={draft.categoryId ? undefined : 'Позиция попадёт в основную категорию вида'}>
+              <MenuItem value="">Основная категория вида</MenuItem>
+              {categories.map((category) => <MenuItem key={category.id} value={category.id}>{category.name} · {kindLabels[category.kind]}</MenuItem>)}
+            </TextField>
+            {!draft.categoryId && <TextField select label="Вид" value={draft.kind ?? 'CONSUMABLE'} onChange={(event) => set({ kind: event.target.value as ItemKind })} sx={{ width: 180 }}>
+              {(Object.keys(kindLabels) as ItemKind[]).map((value) => <MenuItem key={value} value={value}>{kindLabels[value]}</MenuItem>)}
+            </TextField>}
+          </Stack>
           <Stack direction="row" spacing={2}>
             <TextField label="Единица" value={draft.unit} onChange={(event) => set({ unit: event.target.value })} sx={{ width: 140 }} />
             <TextField label="GTIN (14 цифр)" value={draft.gtin ?? ''} onChange={(event) => set({ gtin: event.target.value.trim() || null })} fullWidth />

@@ -1,7 +1,7 @@
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { anna, enterDemo, jsonResponse, menu, renderApp, signIn, TEST_CSRF, withAuth } from '../../test/helpers'
+import { anna, enterDemo, jsonResponse, renderApp, signIn, TEST_CSRF, withAuth, openPage, menuHas } from '../../test/helpers'
 
 const api = (address: string) => {
   if (address.includes('/patients')) return jsonResponse([anna])
@@ -70,9 +70,9 @@ describe('staff sign-in', () => {
     await enterDemo(user, 'CASHIER')
     expect(screen.getByText('Кассир песочницы')).toBeInTheDocument()
     expect(screen.getByText('Демо-песочница: данные не сохраняются')).toBeInTheDocument()
-    expect(menu().getByRole('button', { name: 'Касса' })).toBeInTheDocument()
+    expect(await menuHas(user, 'Касса')).toBe(true)
     expect(screen.queryByRole('button', { name: 'Сменить пароль' })).not.toBeInTheDocument()
-    await user.click(menu().getByRole('button', { name: 'Касса' }))
+    await openPage(user, 'Касса')
     expect(fetchMock.mock.calls.every(([url]) => String(url).endsWith('/auth/me'))).toBe(true)
   })
 

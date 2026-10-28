@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-import { anna, enterDemo, goOffline, jsonResponse, menu, renderApp, withAuth } from '../../test/helpers'
+import { anna, enterDemo, goOffline, jsonResponse, renderApp, withAuth, openPage, menuHas } from '../../test/helpers'
 
 describe('working hours and prices', () => {
   it('the administrator makes Wednesday a working day and the week stops showing it as a day off', async () => {
@@ -9,12 +9,12 @@ describe('working hours and prices', () => {
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user, 'ADMINISTRATOR')
-    await user.click(screen.getByRole('button', { name: 'График и цены' }))
+    await openPage(user, 'График врачей')
     await user.click(screen.getAllByRole('checkbox', { name: 'Среда' })[0])
     await user.click(screen.getByRole('button', { name: 'Сохранить график Александр Петров' }))
     expect(await screen.findByText('Демо-режим: график виден только до обновления страницы')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Расписание' }))
+    await openPage(user, 'Расписание')
     await user.click(screen.getByRole('button', { name: 'Неделя' }))
     const wednesday = screen.getByRole('group', { name: 'Александр Петров, Ср 21.10' })
     expect(within(wednesday).getByText('09:00–18:00')).toBeInTheDocument()
@@ -26,7 +26,7 @@ describe('working hours and prices', () => {
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user, 'ADMINISTRATOR')
-    await user.click(screen.getByRole('button', { name: 'График и цены' }))
+    await openPage(user, 'Услуги и цены')
     const price = screen.getByLabelText('Цена Повторный приём, рублей')
     await user.clear(price)
     await user.type(price, '3500')
@@ -34,7 +34,7 @@ describe('working hours and prices', () => {
     expect(await screen.findByText(/сейчас 3\s?500,00/)).toBeInTheDocument()
 
     // Завершённый ранее повторный приём в кассе остаётся по старой цене 3 000 ₽.
-    await user.click(menu().getByRole('button', { name: 'Касса' }))
+    await openPage(user, 'Касса')
     expect(screen.getAllByText(/3\s000,00/).length).toBeGreaterThan(0)
     expect(screen.queryByText(/3\s500,00/)).not.toBeInTheDocument()
   })
@@ -51,13 +51,14 @@ describe('working hours and prices', () => {
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'График и цены' }))
+    await openPage(user, 'График врачей')
     await user.click(screen.getAllByRole('checkbox', { name: 'Вторник' })[0])
     await user.click(screen.getByRole('button', { name: 'Сохранить график Александр Петров' }))
     await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/working-hours'))).toBe(true))
     const hours = fetchMock.mock.calls.find(([url]) => String(url).includes('/working-hours'))
     expect(JSON.parse(String(hours?.[1]?.body))).toEqual({ shifts: [{ dayOfWeek: 4, startsAt: '09:00', endsAt: '18:00' }] })
 
+    await openPage(user, 'Услуги и цены')
     const price = screen.getByLabelText('Цена Повторный приём, рублей')
     await user.clear(price)
     await user.type(price, '3200,50')
@@ -72,14 +73,14 @@ describe('working hours and prices', () => {
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user, 'ADMINISTRATOR')
-    await user.click(screen.getByRole('button', { name: 'График и цены' }))
+    await openPage(user, 'График врачей')
     expect(screen.getByRole('button', { name: 'Сохранить карточку Александр Петров' })).toBeDisabled()
     await user.type(screen.getByLabelText('Александр Петров, кабинет'), '204')
     await user.click(screen.getByRole('button', { name: 'Сохранить карточку Александр Петров' }))
     expect(await screen.findByText('Демо-режим: карточка видна только до обновления страницы')).toBeInTheDocument()
     expect(screen.getByText(/Психиатр · кабинет 204 · время клиники/)).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Расписание' }))
+    await openPage(user, 'Расписание')
     expect(screen.getByText(/Психиатр · кабинет 204 · /)).toBeInTheDocument()
     // Без кабинета подписи нет.
     expect(screen.queryByText(/Психотерапевт · кабинет/)).not.toBeInTheDocument()
@@ -96,7 +97,7 @@ describe('working hours and prices', () => {
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'График и цены' }))
+    await openPage(user, 'График врачей')
     const specialty = screen.getByLabelText('Александр Петров, специальность')
     await user.clear(specialty)
     await user.type(specialty, 'Психиатр-нарколог')
@@ -113,15 +114,18 @@ describe('working hours and prices', () => {
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user, 'CASHIER')
-    expect(screen.queryByRole('button', { name: 'График и цены' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Сотрудники' })).not.toBeInTheDocument()
+    expect(await menuHas(user, 'График врачей')).toBe(false)
+    expect(await menuHas(user, 'Услуги и цены')).toBe(false)
+    expect(await menuHas(user, 'Сотрудники')).toBe(false)
     await user.click(screen.getByRole('button', { name: 'Выйти' }))
     await enterDemo(user, 'MANAGER')
     // Менеджер ведёт врачей и смены (schedule.practitioner.manage), цены — только администраторы.
-    await user.click(screen.getByRole('button', { name: 'График и цены' }))
+    await openPage(user, 'График врачей')
+    expect(screen.getAllByRole('button', { name: /^Сохранить график / }).length).toBeGreaterThan(0)
+    await openPage(user, 'Услуги и цены')
     expect(screen.queryByRole('button', { name: 'Добавить услугу' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^Сохранить цену / })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Сотрудники' })).toBeInTheDocument()
+    expect(await menuHas(user, 'Сотрудники')).toBe(true)
   })
 
   it('the administrator adds a service, it is bookable at once; a switched-off one is not offered', async () => {
@@ -129,7 +133,7 @@ describe('working hours and prices', () => {
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user, 'ADMINISTRATOR')
-    await user.click(screen.getByRole('button', { name: 'График и цены' }))
+    await openPage(user, 'Услуги и цены')
     await user.click(screen.getByRole('button', { name: 'Добавить услугу' }))
     expect(screen.getByText('Укажите название услуги')).toBeInTheDocument()
     await user.type(screen.getByLabelText('Название услуги'), 'Семейная консультация')
@@ -141,7 +145,7 @@ describe('working hours and prices', () => {
     await user.click(screen.getByRole('button', { name: 'Выключить услугу Повторный приём' }))
     expect(await screen.findByText('Выключена: не предлагается в новой записи')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Расписание' }))
+    await openPage(user, 'Расписание')
     await user.click(screen.getByRole('button', { name: 'Новая запись' }))
     await user.click(screen.getByRole('combobox', { name: 'Услуга' }))
     const options = screen.getAllByRole('option').map((option) => option.textContent ?? '')
@@ -167,7 +171,7 @@ describe('working hours and prices', () => {
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/services?all=true'))).toBe(true)
-    await user.click(screen.getByRole('button', { name: 'График и цены' }))
+    await openPage(user, 'Услуги и цены')
     // Первичного приёма на этом сервере нет: зашитого списка услуг в интерфейсе нет.
     expect(screen.queryByText('Первичный приём')).not.toBeInTheDocument()
     await user.type(screen.getByLabelText('Название услуги'), ' Семейная консультация ')
@@ -193,7 +197,7 @@ describe('working hours and prices', () => {
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'График и цены' }))
+    await openPage(user, 'Услуги и цены')
     expect(screen.getByText(/Услуг пока нет/)).toBeInTheDocument()
     await user.type(screen.getByLabelText('Название услуги'), 'Тест')
     await user.type(screen.getByLabelText('Длительность, мин'), '30')
