@@ -51,7 +51,7 @@ describe('interface roles', () => {
     expect(can('NURSE', 'inventory.document.write')).toBe(true)
     expect(can('DOCTOR', 'inventory.document.write')).toBe(false)
     expect(canSeeDrive('CASHIER')).toBe(true)
-    expect(can('SUPPORT', 'drive.admin')).toBe(true)
+    expect(can('SUPPORT', 'drive.clinic.admin')).toBe(true)
   })
 
   it('nobody assigns a role above their own', () => {

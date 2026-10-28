@@ -9,6 +9,11 @@ import java.util.UUID;
 public interface FiscalPort {
   FiscalResult sendReceipt(UUID paymentId, String idempotencyKey);
 
-  /** Чек возврата прихода по строке возврата. */
-  FiscalResult sendRefund(UUID refundId, String idempotencyKey);
+  /**
+   * Чек возврата прихода по строке возврата. По умолчанию касса не подключена: порт остаётся
+   * функциональным интерфейсом (в тестах — лямбда для чека оплаты).
+   */
+  default FiscalResult sendRefund(UUID refundId, String idempotencyKey) {
+    return FiscalResult.notConfigured();
+  }
 }

@@ -433,7 +433,7 @@ Frontend запускается так же, как в варианте 1. Не 
 
 ### Диск (`drive`)
 
-Корпоративный диск клиники (раздел H): папки и файлы с версиями, права и ссылки. Не путать с PDF пациента — клинические файлы остаются в карточке. Все роли пользуются диском (`drive.file.use`), администраторы и техподдержка ещё и управляют квотой и корзиной всей клиники (`drive.admin`).
+Корпоративный диск клиники (раздел H): папки и файлы с версиями, права и ссылки. Не путать с PDF пациента — клинические файлы остаются в карточке. Все роли пользуются диском (`drive.file.use`), администраторы и техподдержка ещё и управляют квотой и корзиной всей клиники (`drive.clinic.admin`).
 
 | Маршрут | Что |
 |---|---|
@@ -446,7 +446,7 @@ Frontend запускается так же, как в варианте 1. Не 
 | `DELETE /api/v1/drive/nodes/{id}`, `POST /api/v1/drive/nodes/{id}/restore`, `GET /api/v1/drive/trash` | корзина; через 30 дней (`CLINIC_DRIVE_TRASH_DAYS`) — окончательное удаление |
 | `GET/POST /api/v1/drive/nodes/{id}/shares`, `DELETE /api/v1/drive/nodes/{id}/shares/{shareId}`, `GET /api/v1/drive/principals` | доступ сотруднику (`USER`), роли (`ROLE`), всей клинике (`CLINIC`) или по ссылке (`LINK`): `VIEW`, `EDIT`, `MANAGE`; наследуется вниз по дереву |
 | `GET /api/v1/drive/links/{token}[?node=]`, `GET /api/v1/drive/links/{token}/content` | ссылка — только просмотр, срок до 30 дней, открывается после входа сотрудника этой клиники; в базе — хеш токена |
-| `GET /api/v1/drive/quota`, `PUT /api/v1/drive/quota` | занято и квота клиники; менять — `drive.admin` |
+| `GET /api/v1/drive/quota`, `PUT /api/v1/drive/quota` | занято и квота клиники; менять — `drive.clinic.admin` |
 
 Файл больше `CLINIC_DRIVE_MAX_FILE_BYTES` — `413 DRIVE_FILE_TOO_LARGE`, превышение квоты — `409 DRIVE_QUOTA_EXCEEDED`. Содержимое шифруется тем же ключом, что PDF пациента (`CLINIC_ENCRYPTION_KEY`), и лежит в каталоге `CLINIC_DRIVE_STORAGE_DIR` (в Docker — том `quiet-clinic-drive`; добавьте его в резервное копирование). Действия с диском пишутся в аудит без имён файлов.
 

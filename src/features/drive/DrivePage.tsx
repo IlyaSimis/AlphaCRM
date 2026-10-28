@@ -57,7 +57,7 @@ export function DrivePage({ role, apiOnline, self, notify, section, onSection }:
   const upload = useRef<HTMLInputElement | null>(null)
   const versionUpload = useRef<HTMLInputElement | null>(null)
   const [versionTarget, setVersionTarget] = useState<DriveNode | null>(null)
-  const admin = can(role, 'drive.admin')
+  const admin = can(role, 'drive.clinic.admin')
 
   useEffect(() => {
     if (!apiOnline) return

@@ -86,7 +86,7 @@ public enum Permission {
 
   // drive
   DRIVE_USE("drive.file.use"),
-  DRIVE_ADMIN("drive.admin"),
+  DRIVE_ADMIN("drive.clinic.admin"),
 
   // insights
   DASHBOARD_READ("insights.dashboard.read"),
