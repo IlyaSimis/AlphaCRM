@@ -181,6 +181,7 @@ button, input, textarea { font: inherit; }
 /* «Сегодня»: приветствие крупно рядом с датой, списки ниже шапки страницы. */
 .greeting.greeting--large { font-size: 26px !important; font-weight: 700 !important; line-height: 1.2 !important; }
 .section-intro.today-intro { margin-bottom: 56px; }
+.dashboard-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
 .today-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; align-items: start; }
 .today-column { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .today-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 4px; border: 0; border-bottom: 1px solid var(--border-soft); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }

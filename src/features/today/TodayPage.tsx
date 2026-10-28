@@ -13,6 +13,7 @@ import { buildCashierRows, stateLabels, type CashierRow } from '../cashier/cashi
 import { channelLabels, reasonText, templateLabels } from '../outbox/outboxLabels'
 import { formatMoney } from '../schedule/booking'
 import { overdueTasks, rowAmount, todayActions, todayBlocks, unpaidRows, upcomingAppointments, UNPAID_PERIOD_DAYS } from './today'
+import { DashboardWidgets } from './DashboardWidgets'
 import { TodayBlock } from './TodayBlock'
 
 type TodayPageProps = {
@@ -40,7 +41,7 @@ type Loaded<T> = { items: T[] | null; error: string }
 const pending = <T,>(): Loaded<T> => ({ items: null, error: '' })
 
 /**
- * Рабочий день администратора, кассира и менеджера: ближайшие записи, просроченные задачи,
+ * Рабочий день: персональный дашборд (виджеты по роли), ближайшие записи, просроченные задачи,
  * неоплаченные приёмы и ошибки доставки. Каждый блок — только роли с доступом к этим данным.
  */
 export function TodayPage(props: TodayPageProps) {
@@ -99,6 +100,7 @@ export function TodayPage(props: TodayPageProps) {
           </Stack>}
         </Box>
       </Box>
+      <DashboardWidgets apiOnline={apiOnline} />
       <Box className="today-grid">
         {/* Колонки складываются сверху вниз: короткие списки не ждут высокий список соседа. */}
         {(blocks.appointments || blocks.failed) && <Box className="today-column">

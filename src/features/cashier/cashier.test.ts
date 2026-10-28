@@ -14,11 +14,19 @@ describe('cashier', () => {
       [charge('a', 'PAID'), charge('b', 'PENDING', 450000)],
     )
     expect(rows.map((row) => [row.appointment.id, row.state])).toEqual([['c', 'NO_CHARGE'], ['b', 'PENDING'], ['a', 'PAID']])
-    expect(totals(rows)).toEqual({ pending: 450000, paid: 300000, withoutCharge: 1 })
+    expect(totals(rows)).toEqual({ pending: 450000, paid: 300000, withoutCharge: 1, awaitingAmount: 0 })
   })
 
   it('a local charge takes the appointment price snapshot', () => {
     expect(localCharge(visit('a', '2026-10-06'))).toMatchObject({ appointmentId: 'a', amountMinor: 300000, status: 'PENDING' })
     expect(localCharge(visit('a', '2026-10-06', 'COMPLETED', null))).toBeNull()
+  })
+
+  it('an open-price visit gets a charge that waits for the amount and sorts before pending ones', () => {
+    const open = { ...visit('o', '2026-10-20', 'COMPLETED', null), priceMode: 'OPEN' as const, estimateMinor: 200000 }
+    expect(localCharge(open)).toMatchObject({ appointmentId: 'o', amountMinor: null, status: 'AWAITING_AMOUNT', estimateMinor: 200000 })
+    const rows = buildCashierRows([visit('b', '2026-10-13'), open], [charge('b', 'PENDING'), { ...charge('o', 'AWAITING_AMOUNT'), amountMinor: null }])
+    expect(rows.map((row) => row.state)).toEqual(['AWAITING_AMOUNT', 'PENDING'])
+    expect(totals(rows).awaitingAmount).toBe(1)
   })
 })

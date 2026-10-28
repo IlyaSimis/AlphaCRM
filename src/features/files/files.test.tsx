@@ -27,6 +27,10 @@ describe('PDF пациента', () => {
     expect(fileRights('MANAGER').sign(file())).toBe(false)
     expect(fileRights('DOCTOR').sign(file())).toBe(true)
     expect(fileRights('ADMINISTRATOR').sign(signed)).toBe(false)
+    // Медперсонал и техподдержка PDF пациента не видят (раздел C).
+    expect(fileRights('NURSE').visible).toBe(false)
+    expect(fileRights('SUPPORT').visible).toBe(false)
+    expect(fileRights('OWNER')).toMatchObject({ visible: true, upload: true, download: true })
   })
 
   it('the administrator uploads only a PDF and signs it after the notice', async () => {

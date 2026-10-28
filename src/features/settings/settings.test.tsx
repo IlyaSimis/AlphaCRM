@@ -108,13 +108,20 @@ describe('working hours and prices', () => {
     expect(await screen.findByText(/Психиатр-нарколог · кабинет 12/)).toBeInTheDocument()
   })
 
-  it('manager and cashier see neither hours, prices nor staff', async () => {
+  it('the cashier sees neither hours, prices nor staff; the manager edits hours but not prices', async () => {
     goOffline()
     const user = userEvent.setup()
     renderApp()
-    await enterDemo(user, 'MANAGER')
+    await enterDemo(user, 'CASHIER')
     expect(screen.queryByRole('button', { name: 'График и цены' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Сотрудники' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Выйти' }))
+    await enterDemo(user, 'MANAGER')
+    // Менеджер ведёт врачей и смены (schedule.practitioner.manage), цены — только администраторы.
+    await user.click(screen.getByRole('button', { name: 'График и цены' }))
+    expect(screen.queryByRole('button', { name: 'Добавить услугу' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Сохранить цену / })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Сотрудники' })).toBeInTheDocument()
   })
 
   it('the administrator adds a service, it is bookable at once; a switched-off one is not offered', async () => {

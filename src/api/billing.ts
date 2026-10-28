@@ -13,7 +13,14 @@ export async function createCharge(input: { appointmentId: string; amountMinor: 
   return response.json()
 }
 
-/** Оплата только кассиром. Ключ идемпотентности защищает от двойного списания при повторе. */
+/** Сумма свободной цены: в пределах услуги; после неё счёт можно оплатить. */
+export async function setChargeAmount(chargeId: string, amountMinor: number): Promise<ChargeItem> {
+  const response = await apiFetch(`/billing/charges/${chargeId}/amount`, { method: 'PUT', body: JSON.stringify({ amountMinor }) })
+  if (!response.ok) throw await failure(response, 'Не удалось сохранить сумму')
+  return response.json()
+}
+
+/** Оплата — кассир и администраторы. Ключ идемпотентности защищает от двойного списания при повторе. */
 export async function payCharge(chargeId: string, idempotencyKey: string) {
   const response = await apiFetch(`/billing/charges/${chargeId}/payments`, { method: 'POST', body: JSON.stringify({ idempotencyKey }) })
   if (!response.ok) throw await failure(response, 'Не удалось провести оплату')

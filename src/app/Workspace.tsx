@@ -24,12 +24,15 @@ import { RescheduleDialog } from '../features/schedule/RescheduleDialog'
 import { Schedule } from '../features/schedule/Schedule'
 import { SettingsPage } from '../features/settings/SettingsPage'
 import { StaffPage } from '../features/staff/StaffPage'
+import { DashboardWidgets } from '../features/today/DashboardWidgets'
 import { TodayPage } from '../features/today/TodayPage'
+import { InventoryPage } from '../features/inventory/InventoryPage'
+import { DrivePage } from '../features/drive/DrivePage'
 import { Visit } from '../features/visit/Visit'
 import type { VisitTarget } from '../features/visit/visit'
 import { formatDay, localToday } from '../shared/dates'
 import { greeting } from '../shared/greeting'
-import { canManageClinic, canSeeRegistry } from '../shared/roles'
+import { administratorRoles, canManagePrices, canManageRegistry, canSeeRegistry, canWriteClinical } from '../shared/roles'
 import { Landscape } from './Landscape'
 import { canOpen, pageTitles, startPage, type Page } from './pages'
 import { Sidebar } from './Sidebar'
@@ -50,7 +53,8 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
   const doctorId = staff.practitionerId ?? ''
   const clinic = useClinicData(doctorId, live)
   const registry = useRegistry(staff, live, clinic.apiOnline, clinic.notify)
-  const [page, setPage] = useState<Page>(() => startPage(role))
+  // Ссылка на файл диска (…?drive-link=…) открывает диск сразу после входа.
+  const [page, setPage] = useState<Page>(() => (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('drive-link') && canOpen('drive', role) ? 'drive' : startPage(role)))
   const [query, setQuery] = useState('')
   const [drawer, setDrawer] = useState(false)
   const [doctorFilter, setDoctorFilter] = useState('all')
@@ -161,7 +165,7 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
   }
 
   // Постоянный администратор выбирается из активных администраторов клиники.
-  const administrators = registry.staffList.filter((item) => item.role === 'ADMINISTRATOR')
+  const administrators = registry.staffList.filter((item) => administratorRoles.includes(item.role))
   const assignedOf = (id: string | null, current?: AssignedStaff | null): AssignedStaff | null => {
     if (!id) return null
     if (current?.id === id) return current
@@ -175,7 +179,7 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
     ? `РАБОЧИЙ ДЕНЬ · ${formatDay(localToday()).toLocaleUpperCase('ru-RU')}`
     : page === 'visit'
     ? 'КЛИНИЧЕСКИЙ КОНТУР · ДОСТУП ПО СВЯЗИ С ЛЕЧЕНИЕМ'
-    : page === 'documents' ? 'КЛИНИЧЕСКИЙ АРХИВ · ТОЛЬКО ЧТЕНИЕ' : page === 'analytics' || page === 'audit' || page === 'cashier' || page === 'settings' || page === 'staff' || page === 'outbox'
+    : page === 'documents' ? 'КЛИНИЧЕСКИЙ АРХИВ · ТОЛЬКО ЧТЕНИЕ' : page === 'inventory' ? 'СКЛАД И МАРКИРОВКА' : page === 'drive' ? 'КОРПОРАТИВНЫЙ ДИСК' : page === 'analytics' || page === 'audit' || page === 'cashier' || page === 'settings' || page === 'staff' || page === 'outbox'
       ? 'УПРАВЛЕНИЕ КЛИНИКОЙ'
       : page === 'registry' ? 'АДМИНИСТРАТИВНЫЙ КОНТУР' : page === 'patients' || page === 'patient' ? 'КАРТОТЕКА ПАЦИЕНТОВ' : formatDay(scheduleDate).toLocaleUpperCase('ru-RU')
 
@@ -189,20 +193,23 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
         <Box className="content">
           {page === 'today' && <TodayPage role={role} selfName={staff.fullName} onNewAppointment={() => openBooking(localToday())} onNewPatient={() => { setCreateError(''); setPatientDialog(true) }} apiOnline={clinic.apiOnline} practitioners={practitioners} patients={patientItems} localAppointments={scheduleItems} localCharges={clinic.localCharges} dueTasks={registry.todayTasks} tasksError={registry.error} staffName={registry.staffName} onPatient={openPatientOf} onOpen={navigate} />}
           {/* Врача встречают на расписании; остальных — на «Сегодня». */}
-          {page === 'schedule' && role === 'DOCTOR' && <Typography className="greeting" sx={{ mb: 1.5 }}>{greeting(staff.fullName)}</Typography>}
+          {page === 'schedule' && canWriteClinical(role) && <Typography className="greeting" sx={{ mb: 1.5 }}>{greeting(staff.fullName)}</Typography>}
+          {page === 'schedule' && canWriteClinical(role) && <DashboardWidgets apiOnline={clinic.apiOnline} />}
           {page === 'schedule' && <Schedule role={role} doctorId={doctorId} date={scheduleDate} view={clinic.scheduleView} appointments={scheduleItems} practitioners={practitioners} doctorFilter={doctorFilter} onDoctorFilter={setDoctorFilter} apiOnline={clinic.apiOnline} onDate={clinic.setScheduleDate} onView={clinic.setScheduleView} onBooking={openBooking} onStatus={(item, to) => clinic.changeStatus(item, to, role)} onPatient={openPatientOf} onStartVisit={startVisit} onReschedule={(item) => { setMoveError(''); setMoving(item) }} onCancel={(item) => clinic.cancelBooking(item, role)} waitlistCount={(item) => registry.matches(item.practitionerId, item.date).length} onWaitlist={(item) => { setWaitError(''); setWaitSlot(item) }} />}
           {page === 'patients' && <PatientsList query={query} setQuery={setQuery} patients={visiblePatients} onPatient={openPatient} onCreate={() => setPatientDialog(true)} />}
           {page === 'patient' && selectedPatient && <PatientCard key={selectedPatient.id} patient={selectedPatient} role={role} doctorId={doctorId} apiOnline={clinic.apiOnline} appointments={scheduleItems} practitioners={practitioners} revision={clinic.revision}
             files={<PatientFiles key={selectedPatient.id} patientId={selectedPatient.id} role={role} apiOnline={clinic.apiOnline} notify={clinic.notify} />}
-            registry={canSeeRegistry(role) ? <RegistryPanel patient={selectedPatient} sharedWith={sharedPhone(selectedPatient)} admin={canManageClinic(role)} selfId={staff.id} registry={registry} onOpenPatient={openPatientById} onSave={(input) => clinic.updateRegistry(selectedPatient, input)} /> : undefined}
+            registry={canSeeRegistry(role) ? <RegistryPanel patient={selectedPatient} sharedWith={sharedPhone(selectedPatient)} admin={canManageRegistry(role)} selfId={staff.id} registry={registry} onOpenPatient={openPatientById} onSave={(input) => clinic.updateRegistry(selectedPatient, input)} /> : undefined}
             onEdit={() => { setEditError(''); setEditPatient(selectedPatient) }} onBack={() => navigate('patients')} onCancel={(item) => clinic.cancelBooking(item, role)} onReschedule={(item) => { setMoveError(''); setMoving(item) }} onOpenEncounter={(encounter) => openEncounter(selectedPatient, encounter)} onGrantConsent={(input) => clinic.grantConsent(selectedPatient, input)} onRevokeConsent={(consentId) => clinic.revokeConsent(selectedPatient, consentId)} />}
           {page === 'documents' && <SignedDocuments role={role} apiOnline={clinic.apiOnline} practitioners={practitioners} />}
           {page === 'registry' && <RegistryPage staff={staff} registry={registry} patients={patientItems} practitioners={practitioners} services={clinic.services} />}
           {page === 'analytics' && <Analytics apiOnline={clinic.apiOnline} anchor={scheduleDate} practitioners={practitioners} scheduleItems={scheduleItems} />}
           {page === 'audit' && <AuditLog apiOnline={clinic.apiOnline} />}
-          {page === 'cashier' && <Cashier role={role} apiOnline={clinic.apiOnline} practitioners={practitioners} localAppointments={scheduleItems} localCharges={clinic.localCharges} onLocalCharge={clinic.addLocalCharge} onLocalPay={clinic.payLocalCharge} notify={clinic.notify} />}
-          {page === 'settings' && <SettingsPage practitioners={practitioners} services={clinic.services} onSaveHours={clinic.saveHours} onSaveCard={clinic.saveCard} onSavePrice={clinic.savePrice} onCreateService={clinic.addService} onToggleService={clinic.toggleService} />}
+          {page === 'cashier' && <Cashier role={role} apiOnline={clinic.apiOnline} practitioners={practitioners} localAppointments={scheduleItems} localCharges={clinic.localCharges} onLocalCharge={clinic.addLocalCharge} onLocalPay={clinic.payLocalCharge} onLocalAmount={clinic.setLocalChargeAmount} notify={clinic.notify} />}
+          {page === 'settings' && <SettingsPage practitioners={practitioners} services={clinic.services} onSaveHours={clinic.saveHours} onSaveCard={clinic.saveCard} onSavePrice={clinic.savePrice} onCreateService={clinic.addService} onToggleService={clinic.toggleService} canEditPrices={canManagePrices(role)} />}
           {page === 'outbox' && <OutboxPage apiOnline={clinic.apiOnline} />}
+          {page === 'inventory' && <InventoryPage role={role} apiOnline={clinic.apiOnline} services={clinic.services} notify={clinic.notify} />}
+          {page === 'drive' && <DrivePage role={role} apiOnline={clinic.apiOnline} self={staff} notify={clinic.notify} />}
           {page === 'staff' && <StaffPage self={staff} live={live} practitioners={practitioners} notify={clinic.notify} onPractitionerAdded={clinic.practitionerAdded} />}
           {page === 'visit' && visit && <Visit key={visitKey} target={visit} doctorName={doctorName} apiOnline={clinic.apiOnline} notify={clinic.notify} appointmentStatus={visitAppointment?.statusCode} onStarted={() => { if (visitAppointment) void clinic.visitStarted(visitAppointment) }} onComplete={() => { if (visitAppointment) void clinic.changeStatus(visitAppointment, 'COMPLETED', role) }} onBack={() => navigate('schedule')} />}
         </Box>

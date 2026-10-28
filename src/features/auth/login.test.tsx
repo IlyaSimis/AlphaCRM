@@ -66,7 +66,7 @@ describe('staff sign-in', () => {
     renderApp()
     expect(await screen.findByText(/Сервер недоступен/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^Демо: / })).not.toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: /^Песочница: / }).map((button) => button.textContent)).toEqual(['Песочница: Администратор', 'Песочница: Врач', 'Песочница: Менеджер', 'Песочница: Кассир'])
+    expect(screen.getAllByRole('button', { name: /^Песочница: / }).map((button) => button.textContent)).toEqual(['Песочница: Администратор', 'Песочница: Врач', 'Песочница: Менеджер', 'Песочница: Кассир', 'Песочница: Медперсонал', 'Песочница: Техподдержка'])
     await enterDemo(user, 'CASHIER')
     expect(screen.getByText('Кассир песочницы')).toBeInTheDocument()
     expect(screen.getByText('Демо-песочница: данные не сохраняются')).toBeInTheDocument()

@@ -5,6 +5,7 @@ import { createStaff, loadStaff, resetStaffPassword, setStaffActive } from '../.
 import type { Practitioner, StaffItem } from '../../api/types'
 import { sandboxStaff as initialSandboxStaff } from '../../app/demoData'
 import { specialtyAndRoom } from '../../shared/practitioners'
+import { assignableRoles, can } from '../../shared/permissions'
 import { roleLabels } from '../../shared/roles'
 import { useSandboxState } from '../../shared/sandbox'
 import { PasswordDialog } from '../auth/PasswordDialog'
@@ -21,7 +22,11 @@ type StaffPageProps = {
   onPractitionerAdded: (local?: Practitioner) => void
 }
 
-/** Учётные записи сотрудников. Только администратор; хеши паролей сюда не приходят. */
+/**
+ * Учётные записи сотрудников. Заводят и отключают администраторы и менеджер — роли не выше своих:
+ * владельца и старшего администратора назначает только владелец. Техподдержка видит список и
+ * сбрасывает пароли (кроме владельца). Хеши паролей сюда не приходят.
+ */
 export function StaffPage({ self, live, practitioners, notify, onPractitionerAdded }: StaffPageProps) {
   const [sandboxStaff, setSandboxStaff] = useSandboxState<StaffItem[]>('staff', initialSandboxStaff, !live)
   const [remote, setRemote] = useState<StaffItem[] | null>(null)
@@ -34,6 +39,10 @@ export function StaffPage({ self, live, practitioners, notify, onPractitionerAdd
   // Временный пароль показывается один раз — сразу после того, как администратор его ввёл.
   const [issued, setIssued] = useState<{ username: string; password: string } | null>(null)
   const items = live ? remote ?? [] : sandboxStaff
+  const roles = assignableRoles(self.role)
+  const manage = can(self.role, 'identity.staff.manage')
+  /** Сбросить пароль: свою роль не выше — или техподдержка любому, кроме владельца. */
+  const mayReset = (item: StaffItem) => (can(self.role, 'identity.staff.reset-password') && roles.includes(item.role)) || (can(self.role, 'identity.staff.reset-password-platform') && item.role !== 'OWNER')
   const cardOf = (item: StaffItem) => item.practitionerId ? practitioners.find((card) => card.id === item.practitionerId) : undefined
 
   useEffect(() => {
@@ -113,7 +122,7 @@ export function StaffPage({ self, live, practitioners, notify, onPractitionerAdd
     <>
       <Box className="section-intro">
         <Box><Typography variant="h4" sx={{ fontWeight: 750 }}>Сотрудники</Typography><Typography sx={{ color: 'text.secondary' }}>Учётные записи для входа. Роль задаётся при создании и дальше не меняется.</Typography></Box>
-        <Button variant="contained" startIcon={<AddRounded />} onClick={() => { setCreateError(''); setCreating(true) }}>Новый сотрудник</Button>
+        {manage && <Button variant="contained" startIcon={<AddRounded />} onClick={() => { setCreateError(''); setCreating(true) }}>Новый сотрудник</Button>}
       </Box>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {issued && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setIssued(null)}>
@@ -129,15 +138,15 @@ export function StaffPage({ self, live, practitioners, notify, onPractitionerAdd
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
               <Chip size="small" variant="outlined" label={item.active ? 'Активен' : 'Отключён'} color={item.active ? 'success' : 'default'} />
               {item.mustChangePassword && <Chip size="small" variant="outlined" color="warning" label="Сменит пароль при входе" />}
-              <Button size="small" aria-label={`Задать пароль ${item.fullName}`} onClick={() => { setResetError(''); setResetting(item) }}>Задать пароль</Button>
-              {item.active
+              {mayReset(item) && <Button size="small" aria-label={`Задать пароль ${item.fullName}`} onClick={() => { setResetError(''); setResetting(item) }}>Задать пароль</Button>}
+              {manage && roles.includes(item.role) && (item.active
                 ? <Button size="small" color="warning" disabled={!canDeactivate(item, self.id)} aria-label={`Отключить ${item.fullName}`} onClick={() => void toggle(item)}>Отключить</Button>
-                : <Button size="small" aria-label={`Включить ${item.fullName}`} onClick={() => void toggle(item)}>Включить</Button>}
+                : <Button size="small" aria-label={`Включить ${item.fullName}`} onClick={() => void toggle(item)}>Включить</Button>)}
             </Box>
           </Box>
         ))}
       </Box>
-      {creating && <StaffDialog practitioners={freePractitioners(practitioners, items)} error={createError} onClose={() => setCreating(false)} onSave={(draft) => void create(draft)} />}
+      {creating && <StaffDialog practitioners={freePractitioners(practitioners, items)} error={createError} roles={roles} onClose={() => setCreating(false)} onSave={(draft) => void create(draft)} />}
       {resetting && <PasswordDialog requireCurrent={false} title={`Временный пароль: ${resetting.fullName}`} error={resetError} onClose={() => setResetting(null)} onSave={(input) => void reset(input.newPassword)} />}
     </>
   )

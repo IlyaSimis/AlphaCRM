@@ -26,7 +26,8 @@ import {
   loadServices,
   rescheduleAppointment,
   savePractitionerCard,
-  saveServicePrice,
+  saveServicePricing,
+  type ServicePricing,
   saveWorkingHours,
   setServiceActive,
   statusLabel,
@@ -34,17 +35,21 @@ import {
 } from '../api/schedule'
 import type { AppointmentStatus, AssignedStaff, ChargeItem, PatientItem, Practitioner, RegistryInput, ScheduleItem, ServiceItem } from '../api/types'
 import { localCharge } from '../features/cashier/cashier'
-import { localBooking, validateBooking, type BookingDraft } from '../features/schedule/booking'
+import { estimateOf, localBooking, validateBooking, type BookingDraft } from '../features/schedule/booking'
 import type { RescheduleDraft } from '../features/schedule/RescheduleDialog'
 import type { ScheduleView } from '../features/schedule/scheduleView'
 import { availableActions } from '../features/schedule/statusActions'
 import { OUTSIDE_WORKING_HOURS, fitsWorkingHours } from '../features/schedule/workingHours'
+import { can } from '../shared/permissions'
 import type { Role } from '../shared/roles'
 import { localToday, weekOf } from '../shared/dates'
 import { useSandboxState } from '../shared/sandbox'
 import { readStored, storageKeys, writeStored } from '../shared/storage'
 import { isUuid } from '../shared/text'
 import { clinicDay, demoAppointments, demoPatients } from './demoData'
+
+/** Новая услуга: фиксированная цена или свободная с пределами. */
+export type NewService = { name: string; durationMinutes: number } & ({ priceMode?: 'FIXED'; priceMinor: number } | { priceMode: 'OPEN'; minMinor: number; maxMinor: number })
 
 const scheduleDateKey = storageKeys.scheduleDate
 
@@ -187,8 +192,15 @@ export function useClinicData(doctorId: string, live: boolean) {
   const payLocalCharge = (chargeId: string) =>
     setLocalCharges((charges) => charges.map((charge) => charge.chargeId === chargeId ? { ...charge, status: 'PAID', paymentStatus: 'CONFIRMED' } : charge))
 
+  /** Демо-режим: сумма свободной цены — счёт становится обычным, к оплате. */
+  const setLocalChargeAmount = (chargeId: string, amountMinor: number) =>
+    setLocalCharges((charges) => charges.map((charge) => charge.chargeId === chargeId ? { ...charge, amountMinor, status: 'PENDING' } : charge))
+
+  /** Отменяют записи сотрудники с schedule.appointment.write; врач — только свои. */
+  const mayChange = (item: ScheduleItem, role: Role) => can(role, 'schedule.appointment.write') || (can(role, 'schedule.appointment.write-own') && item.practitionerId === doctorId)
+
   const cancelBooking = async (item: ScheduleItem, role: Role) => {
-    if (role !== 'ADMINISTRATOR' || item.statusCode === 'CANCELLED' || !item.id) return
+    if (!mayChange(item, role) || item.statusCode === 'CANCELLED' || !item.id) return
     const id = item.id
     notifyError(await mutateAppointment({ ...item, id }, () => cancelAppointment(id), () => updateLocally(id, (row) => withStatus(row, 'CANCELLED')), {
       done: 'Запись отменена',
@@ -268,7 +280,7 @@ export function useClinicData(doctorId: string, live: boolean) {
     const generation = ++loadGeneration.current
     try {
       const created = await createAppointment(
-        { patientId: patient.id, patientName: patient.name, practitionerId: draft.practitionerId, date: draft.date, time: draft.time, minutes: service.durationMinutes, serviceName: service.name },
+        { patientId: patient.id, patientName: patient.name, practitionerId: draft.practitionerId, date: draft.date, time: draft.time, minutes: service.durationMinutes, serviceName: service.name, estimateMinor: service.priceMode === 'OPEN' ? estimateOf(draft) : null },
       )
       const day = await loadSchedule(draft.date)
       if (generation !== loadGeneration.current) return { status: 'stale' }
@@ -412,25 +424,31 @@ export function useClinicData(doctorId: string, live: boolean) {
       .catch(() => notify('Не удалось обновить список врачей'))
   }
 
-  /** Новая цена — только для новых записей: снимок цены в уже созданных записях не трогаем. */
-  const savePrice = async (service: ServiceItem, priceMinor: number): Promise<string | null> => {
+  /**
+   * Новая цена или режим цены — только для новых записей: снимок цены в уже созданных записях не
+   * трогаем. Число — фиксированная цена (как раньше), объект — режим со своей суммой или пределами.
+   */
+  const savePrice = async (service: ServiceItem, price: number | ServicePricing): Promise<string | null> => {
+    const pricing: ServicePricing = typeof price === 'number' ? { priceMode: 'FIXED', priceMinor: price } : price
     const replace = (updated: ServiceItem) => setServices((items) => items.map((item) => item.id === updated.id ? updated : item))
     if (apiOnline && isUuid(service.id)) {
       try {
-        replace(await saveServicePrice(service.id, priceMinor))
+        replace(await saveServicePricing(service.id, pricing))
         notify('Цена сохранена')
         return null
       } catch (error) {
         return (error as Error).message
       }
     }
-    replace({ ...service, priceMinor })
+    replace(pricing.priceMode === 'FIXED'
+      ? { ...service, priceMode: 'FIXED', priceMinor: pricing.priceMinor, minMinor: null, maxMinor: null }
+      : { ...service, priceMode: 'OPEN', priceMinor: null, minMinor: pricing.minMinor, maxMinor: pricing.maxMinor })
     notify('Демо-режим: цена видна только до обновления страницы')
     return null
   }
 
   /** Новая услуга сразу доступна в записи на приём. Возвращает текст ошибки или null. */
-  const addService = async (input: { name: string; durationMinutes: number; priceMinor: number }): Promise<string | null> => {
+  const addService = async (input: NewService): Promise<string | null> => {
     const name = input.name.trim()
     if (apiOnline) {
       try {
@@ -443,7 +461,10 @@ export function useClinicData(doctorId: string, live: boolean) {
       }
     }
     if (services.some((item) => item.name.toLowerCase() === name.toLowerCase())) return 'Услуга с таким названием уже есть'
-    setServices((items) => [...items, { id: crypto.randomUUID(), name, durationMinutes: input.durationMinutes, priceMinor: input.priceMinor, currency: 'RUB', active: true }])
+    const pricing = input.priceMode === 'OPEN'
+      ? { priceMode: 'OPEN' as const, priceMinor: null, minMinor: input.minMinor, maxMinor: input.maxMinor }
+      : { priceMode: 'FIXED' as const, priceMinor: input.priceMinor, minMinor: null, maxMinor: null }
+    setServices((items) => [...items, { id: crypto.randomUUID(), name, durationMinutes: input.durationMinutes, currency: 'RUB', active: true, ...pricing }])
     notify('Демо-режим: услуга видна только до обновления страницы')
     return null
   }
@@ -518,5 +539,6 @@ export function useClinicData(doctorId: string, live: boolean) {
     revokeConsent,
     addLocalCharge,
     payLocalCharge,
+    setLocalChargeAmount,
   }
 }

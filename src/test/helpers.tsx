@@ -55,6 +55,8 @@ export function testAccounts(): Record<string, StaffItem> {
     't.cashier': account('00000000-0000-0000-0000-0000000a0003', 'Тестовый кассир', 't.cashier', 'CASHIER'),
     't.petrov': account('00000000-0000-0000-0000-0000000a0004', 'Александр Петров', 't.petrov', 'DOCTOR', PETROV_ID),
     't.lebedeva': account('00000000-0000-0000-0000-0000000a0005', 'Ольга Лебедева', 't.lebedeva', 'DOCTOR', LEBEDEVA_ID),
+    't.nurse': account('00000000-0000-0000-0000-0000000a0006', 'Тестовая медсестра', 't.nurse', 'NURSE'),
+    't.support': account('00000000-0000-0000-0000-0000000a0007', 'Тестовая техподдержка', 't.support', 'SUPPORT'),
   }
 }
 
@@ -71,6 +73,8 @@ type AuthOptions = {
   mustChange?: string[]
   /** Справочник услуг на GET /services; null — запрос уходит в handler. */
   services?: ServiceItem[] | null
+  /** Ответ GET /me/dashboard; по умолчанию — без виджетов. */
+  dashboard?: unknown
 }
 
 /**
@@ -110,6 +114,8 @@ export function withAuth(handler: Handler, initial: string | null = 'admin', opt
       return jsonResponse(null, 204)
     }
     if (accounts[current].mustChangePassword) return jsonResponse({ code: 'PASSWORD_CHANGE_REQUIRED', message: 'Change the temporary password first' }, 403)
+    // Дашборд по умолчанию пустой: тесты экранов, которым он не нужен, его не описывают.
+    if (method === 'GET' && /\/me\/dashboard$/.test(address)) return jsonResponse(options.dashboard ?? { role: null, monthStart: '', today: '', generatedAt: '', widgets: [] })
     const services = options.services === undefined ? seedServices : options.services
     if (services && method === 'GET' && /\/services(\?|$)/.test(address)) return jsonResponse(services)
     return handler(address, init)
@@ -139,7 +145,7 @@ export async function signIn(user: User, username: string, password = username =
   await user.click(screen.getByRole('button', { name: 'Войти' }))
 }
 
-const loginsByRole: Record<StaffRole, string> = { ADMINISTRATOR: 'admin', DOCTOR: 't.petrov', MANAGER: 't.manager', CASHIER: 't.cashier' }
+const loginsByRole: Record<StaffRole, string> = { OWNER: 'admin', SENIOR_ADMINISTRATOR: 'admin', ADMINISTRATOR: 'admin', DOCTOR: 't.petrov', MANAGER: 't.manager', CASHIER: 't.cashier', NURSE: 't.nurse', SUPPORT: 't.support' }
 
 /** Сменить сотрудника: выйти и войти другим — в песочнице кнопкой роли, на сервере через форму. */
 export async function chooseRole(user: User, role: StaffRole, username = loginsByRole[role]) {

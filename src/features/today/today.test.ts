@@ -24,20 +24,25 @@ describe('today', () => {
     expect(upcomingAppointments(items, '2026-10-20', '2026-10-21').map((item) => item.id)).toEqual(['first', 'later', 'tomorrow'])
   })
 
-  it('unpaid means completed without a charge or with a pending one', () => {
+  it('unpaid means completed without a charge, with a pending one or waiting for an open-price amount', () => {
     const appointment = visit('done', '2026-10-15', '09:00', 'COMPLETED')
     const rows = [
       { appointment, state: 'NO_CHARGE' as const },
+      { appointment, state: 'AWAITING_AMOUNT' as const },
       { appointment, state: 'PENDING' as const },
       { appointment, state: 'PAID' as const },
     ]
-    expect(unpaidRows(rows).map((row) => row.state)).toEqual(['NO_CHARGE', 'PENDING'])
+    expect(unpaidRows(rows).map((row) => row.state)).toEqual(['NO_CHARGE', 'AWAITING_AMOUNT', 'PENDING'])
   })
 
   it('each block only for roles with access to its data', () => {
     expect(todayBlocks('ADMINISTRATOR')).toEqual({ appointments: true, tasks: true, unpaid: true, failed: true })
     expect(todayBlocks('CASHIER')).toEqual({ appointments: true, tasks: true, unpaid: true, failed: false })
-    expect(todayBlocks('MANAGER')).toEqual({ appointments: true, tasks: true, unpaid: false, failed: false })
+    // Менеджер видит счета на чтение (раздел C: finance — R).
+    expect(todayBlocks('MANAGER')).toEqual({ appointments: true, tasks: true, unpaid: true, failed: false })
     expect(todayBlocks('DOCTOR')).toEqual({ appointments: false, tasks: false, unpaid: false, failed: false })
+    expect(todayBlocks('NURSE')).toEqual({ appointments: true, tasks: false, unpaid: false, failed: false })
+    // Техподдержка: ошибки доставки без текста и адресата, без пациентов.
+    expect(todayBlocks('SUPPORT')).toEqual({ appointments: false, tasks: false, unpaid: false, failed: true })
   })
 })

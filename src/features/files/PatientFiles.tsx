@@ -111,7 +111,7 @@ export function PatientFiles({ patientId, appointmentId, role, apiOnline, notify
       {live && error && <Alert severity="warning" sx={{ mt: 1 }}>{error}</Alert>}
       {actionError && <Alert severity="error" sx={{ mt: 1 }}>{actionError}</Alert>}
       {live && !error && items === null && <CircularProgress size={22} sx={{ mt: 1 }} aria-label="Загрузка файлов" />}
-      {live && !error && items?.length === 0 && <Typography sx={{ color: 'text.secondary', mt: 1 }}>{visit ? 'К этому приёму файлов нет.' : role === 'MANAGER' ? 'Подписанных файлов нет' : 'Файлов нет. Не больше 10 МБ, только PDF.'}</Typography>}
+      {live && !error && items?.length === 0 && <Typography sx={{ color: 'text.secondary', mt: 1 }}>{visit ? 'К этому приёму файлов нет.' : rights.signedOnly ? 'Подписанных файлов нет' : 'Файлов нет. Не больше 10 МБ, только PDF.'}</Typography>}
       {items?.map((file) => (
         <Box className="history-item" key={file.id}>
           <Box sx={{ minWidth: 0, flex: 1 }}>

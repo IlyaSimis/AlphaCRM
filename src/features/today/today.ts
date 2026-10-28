@@ -1,6 +1,7 @@
 import type { ScheduleItem, TaskItem } from '../../api/types'
 import type { Role } from '../../shared/roles'
-import { canManageClinic, canSeeCashier, canSeeRegistry } from '../../shared/roles'
+import { can } from '../../shared/permissions'
+import { canEditPatients, canSeeCashier, canSeeOutbox, canSeeRegistry, canWriteAppointments } from '../../shared/roles'
 import type { CashierRow } from '../cashier/cashier'
 
 /** Сколько дней назад касса и «Сегодня» ищут завершённые неоплаченные приёмы. */
@@ -9,23 +10,25 @@ export const UNPAID_PERIOD_DAYS = 90
 /** Какие блоки «Сегодня» видит роль: каждый — только тем, у кого есть доступ к этим данным. */
 export function todayBlocks(role: Role) {
   return {
-    appointments: role !== 'DOCTOR',
+    // Записи с именами пациентов — тем, кто видит всех пациентов клиники (врач — на расписании).
+    appointments: can(role, 'schedule.appointment.read') && can(role, 'clinical.patient.read'),
     tasks: canSeeRegistry(role),
     unpaid: canSeeCashier(role),
-    failed: canManageClinic(role),
+    failed: canSeeOutbox(role),
   }
 }
 
 export type TodayBlocks = ReturnType<typeof todayBlocks>
 
 /**
- * Быстрые действия в шапке «Сегодня» — только там, где роль может довести их до конца:
- * запись и пациента создаёт администратор (врач на этот экран не попадает), касса — у кассы.
+ * Быстрые действия в шапке «Сегодня» — только там, где роль может довести их до конца: запись —
+ * у тех, кто записывает (schedule.appointment.write), пациента — у тех, кто регистрирует
+ * (clinical.patient.write), касса — у кассы.
  */
 export function todayActions(role: Role) {
   return {
-    booking: canManageClinic(role),
-    patient: canManageClinic(role),
+    booking: canWriteAppointments(role) && can(role, 'clinical.patient.read'),
+    patient: canEditPatients(role),
     cashier: canSeeCashier(role),
   }
 }
@@ -47,9 +50,9 @@ export function overdueTasks(tasks: TaskItem[], today: string) {
     .sort((left, right) => left.dueDate.localeCompare(right.dueDate))
 }
 
-/** Завершённые приёмы без счёта или с неоплаченным счётом. */
+/** Завершённые приёмы без счёта, с неоплаченным счётом или со счётом, который ждёт суммы. */
 export function unpaidRows(rows: CashierRow[]) {
-  return rows.filter((row) => row.state === 'NO_CHARGE' || row.state === 'PENDING')
+  return rows.filter((row) => row.state === 'NO_CHARGE' || row.state === 'PENDING' || row.state === 'AWAITING_AMOUNT')
 }
 
 /** Сумма строки: счёт, если выставлен, иначе снимок цены записи. */

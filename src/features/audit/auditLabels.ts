@@ -47,11 +47,36 @@ export const actionLabels: Record<string, string> = {
   SIGNED_DOCUMENT_READ: 'Просмотр подписанного документа',
   NOTIFICATION_DELIVERED: 'Сообщение пациенту доставлено',
   FISCAL_RECEIPT_SENT: 'Чек передан в кассу',
+  CHARGE_AMOUNT_SET: 'Сумма свободной цены',
+  SERVICE_NORMS_CHANGED: 'Нормы расхода услуги',
+  OUTBOX_RETRY_REQUESTED: 'Повтор внешнего вывода',
+  ITEM_CATEGORY_CREATED: 'Новая категория склада',
+  ITEM_CATEGORY_UPDATED: 'Изменение категории склада',
+  ITEM_CREATED: 'Новая позиция склада',
+  ITEM_UPDATED: 'Изменение позиции склада',
+  WAREHOUSE_CREATED: 'Новый склад',
+  STOCK_DOCUMENT_CREATED: 'Новая накладная',
+  STOCK_DOCUMENT_UPDATED: 'Изменение накладной',
+  STOCK_DOCUMENT_POSTED: 'Проведение накладной',
+  STOCK_DOCUMENT_CANCELLED: 'Отмена накладной',
+  MARKING_RETRY_REQUESTED: 'Повтор операции маркировки',
+  DRIVE_FOLDER_CREATED: 'Новая папка на диске',
+  DRIVE_FILE_UPLOADED: 'Загрузка файла на диск',
+  DRIVE_FILE_READ: 'Скачивание файла с диска',
+  DRIVE_NODE_RENAMED: 'Переименование на диске',
+  DRIVE_NODE_MOVED: 'Перенос на диске',
+  DRIVE_NODE_TRASHED: 'Удаление в корзину',
+  DRIVE_NODE_RESTORED: 'Восстановление из корзины',
+  DRIVE_SHARE_CHANGED: 'Изменение доступа на диске',
+  DRIVE_ACCESS: 'Доступ к файлу на диске',
+  DRIVE_QUOTA_CHANGED: 'Изменение квоты диска',
 }
 
 export const objectLabels: Record<string, string> = {
   PATIENT: 'Пациент', APPOINTMENT: 'Запись', ENCOUNTER: 'Приём', DOCUMENT: 'Документ', CHARGE: 'Счёт', PAYMENT: 'Платёж', CONSENT: 'Согласие',
   TASK: 'Задача', WAITLIST: 'Лист ожидания', PRACTITIONER: 'Врач', SERVICE: 'Услуга', STAFF: 'Сотрудник', OUTBOX: 'Внешний вывод', CLINIC: 'Клиника', PATIENT_FILE: 'Файл PDF',
+  ITEM: 'Позиция склада', ITEM_CATEGORY: 'Категория склада', WAREHOUSE: 'Склад', STOCK_DOCUMENT: 'Накладная', MARKING_OPERATION: 'Операция маркировки',
+  DRIVE_NODE: 'Файл или папка диска', CLINIC_DRIVE: 'Диск клиники',
 }
 
 /** Коды, которые только повторяют колонку «Действие». */
@@ -66,6 +91,13 @@ const fixed: Record<string, string> = {
   granted: 'выдано',
   revoked: 'отозвано',
   'appointment-completed': 'после завершения приёма',
+  'appointment-completed:open': 'после завершения приёма, свободная цена',
+  'open-price': 'свободная цена',
+  'stock-shortage': 'нехватка на складе',
+  FIXED: 'фиксированная цена',
+  OPEN: 'свободная цена',
+  direct: 'напрямую',
+  link: 'по ссылке',
   // Старые события: до свободного текста задача выбиралась из двух видов.
   'call-back': 'перезвонить',
   'update-consent': 'обновить согласие',
@@ -77,7 +109,9 @@ const fixed: Record<string, string> = {
   'telegram-bot': 'через Telegram-бота',
 }
 
-const roleNames: Record<string, string> = { ADMINISTRATOR: 'администратор', DOCTOR: 'врач', MANAGER: 'менеджер', CASHIER: 'кассир' }
+const roleNames: Record<string, string> = {
+  OWNER: 'владелец', SENIOR_ADMINISTRATOR: 'старший администратор', ADMINISTRATOR: 'администратор', DOCTOR: 'врач', MANAGER: 'менеджер', CASHIER: 'кассир', NURSE: 'медперсонал', SUPPORT: 'техподдержка',
+}
 
 const dayNames = ['', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс']
 
@@ -106,7 +140,7 @@ export function reasonLabel(code: string | null | undefined): string {
   if (repeatsAction.has(code)) return '—'
   if (fixed[code]) return fixed[code]
 
-  const role = /^role:([A-Z]+)$/.exec(code)
+  const role = /^role:([A-Z_]+)$/.exec(code)
   if (role && roleNames[role[1]]) return `роль: ${roleNames[role[1]]}`
 
   const days = /^days:([1-7](,[1-7])*)?$/.exec(code)

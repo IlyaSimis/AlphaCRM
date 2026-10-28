@@ -4,6 +4,7 @@ import { Alert, Box, Button, Typography } from '@mui/material'
 import { downloadPatientFile, fileSize, loadSignedFiles, printPatientFile } from '../../api/files'
 import type { PatientFileItem } from '../../api/types'
 import { formatClinicMoment } from '../../shared/clinicTime'
+import { can } from '../../shared/permissions'
 import type { Role } from '../../shared/roles'
 
 type SignedPdfListProps = { role: Role; apiOnline: boolean }
@@ -12,7 +13,8 @@ type SignedPdfListProps = { role: Role; apiOnline: boolean }
 export function SignedPdfList({ role, apiOnline }: SignedPdfListProps) {
   const [items, setItems] = useState<PatientFileItem[]>([])
   const [error, setError] = useState('')
-  const manager = role === 'MANAGER'
+  // Все файлы клиники — менеджеру (read-signed); врачу — подписанные им самим.
+  const manager = can(role, 'clinical.patient-file.read-signed', 'clinical.patient-file.read')
 
   useEffect(() => {
     if (!apiOnline) return

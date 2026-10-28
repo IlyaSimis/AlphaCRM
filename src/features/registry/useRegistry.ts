@@ -4,7 +4,7 @@ import { loadStaff } from '../../api/staff'
 import type { StaffItem, TaskItem, WaitlistItem } from '../../api/types'
 import { demoTasks, demoWaitlist, sandboxStaff as initialSandboxStaff } from '../../app/demoData'
 import { localToday } from '../../shared/dates'
-import { canManageClinic, canSeeRegistry, canSeeWaitlist } from '../../shared/roles'
+import { canManageRegistry, canSeeRegistry, canSeeStaff, canSeeWaitlist } from '../../shared/roles'
 import { useSandboxState } from '../../shared/sandbox'
 import { dueTasks, matchingWaitlist } from './registry'
 
@@ -40,7 +40,8 @@ export function useRegistry(staff: StaffItem, live: boolean, apiOnline: boolean,
         .then((items) => { if (!cancelled) setWaitlist(items) })
         .catch((reason: Error) => { if (!cancelled) setError(reason.message) })
     }
-    if (canManageClinic(role)) {
+    // Исполнители задач — из списка сотрудников, если он доступен роли.
+    if (canManageRegistry(role) && canSeeStaff(role)) {
       loadStaff()
         .then((items) => { if (!cancelled) setRemoteStaff(items) })
         .catch(() => { /* исполнителей подставим из известных учётных записей */ })
@@ -76,7 +77,7 @@ export function useRegistry(staff: StaffItem, live: boolean, apiOnline: boolean,
   }
 
   /** Закрыть задачу может её исполнитель или администратор — как на сервере. */
-  const canClose = (task: TaskItem) => role === 'ADMINISTRATOR' || task.assigneeId === staff.id
+  const canClose = (task: TaskItem) => canManageRegistry(role) || task.assigneeId === staff.id
 
   const toggleTask = async (task: TaskItem) => {
     const done = task.status === 'OPEN'

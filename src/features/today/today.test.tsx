@@ -78,7 +78,7 @@ describe('«Сегодня»', () => {
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/outbox'))).toBe(false)
   })
 
-  it('a manager sees appointments and tasks, but neither money nor deliveries; a doctor has no such page', async () => {
+  it('a manager sees appointments, tasks and unpaid visits, but not deliveries; a doctor has no such page', async () => {
     goOffline()
     const user = userEvent.setup()
     renderApp()
@@ -88,7 +88,7 @@ describe('«Сегодня»', () => {
     const overdue = screen.getByRole('region', { name: 'Просроченные задачи' })
     expect(within(overdue).getByText(/Перезвонить/)).toBeInTheDocument()
     expect(within(overdue).queryByText(/Обновить согласие/)).not.toBeInTheDocument()
-    expect(screen.queryByRole('region', { name: 'Завершены и не оплачены' })).not.toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Завершены и не оплачены' })).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: 'Ошибки доставки' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Выйти' }))
@@ -154,7 +154,7 @@ describe('«Сегодня» — домашняя страница', () => {
     expect(screen.getByLabelText('День расписания')).toBeInTheDocument()
   })
 
-  it('quick actions by role: administrator — three, cashier — only the cashier, manager — none', async () => {
+  it('quick actions by role: administrator and manager — three, cashier — only the cashier, nurse — booking', async () => {
     goOffline()
     const user = userEvent.setup()
     renderApp()
@@ -170,8 +170,10 @@ describe('«Сегодня» — домашняя страница', () => {
     expect(screen.getAllByText('Счёт не выставлен').length).toBeGreaterThan(0)
     await user.click(screen.getByRole('button', { name: 'Выйти' }))
     await enterDemo(user, 'MANAGER')
-    expect(visible()).toEqual([])
-    expect(actions()).not.toBeInTheDocument()
+    expect(visible()).toEqual(names)
+    await user.click(screen.getByRole('button', { name: 'Выйти' }))
+    await enterDemo(user, 'NURSE')
+    expect(visible()).toEqual(['Новая запись'])
   })
 
   it('«Новая запись» and «Новый пациент» open the same dialogs as the schedule and the patient list', async () => {

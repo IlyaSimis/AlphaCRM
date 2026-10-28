@@ -3,7 +3,7 @@ import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, 
 import type { Practitioner, StaffRole } from '../../api/types'
 import { clinicTimeZone } from '../../shared/clinicTime'
 import { specialtyAndRoom } from '../../shared/practitioners'
-import { roleLabels, staffRoles } from '../../shared/roles'
+import { roleLabels } from '../../shared/roles'
 import { ShiftRows } from '../settings/ShiftRows'
 import { toRows, type ShiftRow } from '../settings/shifts'
 import { noShiftsYet, type StaffDraft } from './staffRules'
@@ -12,17 +12,19 @@ type StaffDialogProps = {
   /** Карточки врачей без учётной записи — только их можно привязать. */
   practitioners: Practitioner[]
   error: string
+  /** Роли, которые может назначить тот, кто заводит сотрудника (не выше своих прав). */
+  roles: StaffRole[]
   onClose: () => void
   onSave: (draft: StaffDraft) => void
 }
 
 type CardMode = 'new' | 'existing'
 
-export function StaffDialog({ practitioners, error, onClose, onSave }: StaffDialogProps) {
+export function StaffDialog({ practitioners, error, roles, onClose, onSave }: StaffDialogProps) {
   const [fullName, setFullName] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
-  const [role, setRole] = useState<StaffRole>('CASHIER')
+  const [role, setRole] = useState<StaffRole>(roles.includes('CASHIER') ? 'CASHIER' : roles[0] ?? 'CASHIER')
   const [mode, setMode] = useState<CardMode>('new')
   const [practitionerId, setPractitionerId] = useState('')
   const [specialty, setSpecialty] = useState('')
@@ -47,7 +49,7 @@ export function StaffDialog({ practitioners, error, onClose, onSave }: StaffDial
         {error && <Alert severity="error">{error}</Alert>}
         <TextField label="ФИО" value={fullName} onChange={(event) => setFullName(event.target.value)} helperText={doctor && mode === 'new' ? 'Одно ФИО для учётной записи и карточки врача' : undefined} />
         <TextField select label="Роль" value={role} onChange={(event) => setRole(event.target.value as StaffRole)}>
-          {staffRoles.map((item) => <MenuItem key={item} value={item}>{roleLabels[item]}</MenuItem>)}
+          {roles.map((item) => <MenuItem key={item} value={item}>{roleLabels[item]}</MenuItem>)}
         </TextField>
         {doctor && <ToggleButtonGroup exclusive size="small" value={mode} onChange={(_, next: CardMode | null) => { if (next) setMode(next) }} aria-label="Карточка врача">
           <ToggleButton value="new">Новая карточка</ToggleButton>

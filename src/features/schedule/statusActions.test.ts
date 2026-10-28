@@ -22,13 +22,16 @@ describe('appointment status transitions', () => {
     expect(targets('BOOKED', 'DOCTOR')).toEqual([])
   })
 
-  it('no transitions from final statuses; manager and cashier do not change statuses', () => {
+  it('no transitions from final statuses; the cashier does not change statuses', () => {
     for (const status of ['COMPLETED', 'NO_SHOW', 'CANCELLED'] as const) {
       expect(targets(status, 'ADMINISTRATOR')).toEqual([])
       expect(targets(status, 'DOCTOR')).toEqual([])
     }
-    expect(targets('BOOKED', 'MANAGER')).toEqual([])
+    // Менеджер и медперсонал записывают и отмечают приход (schedule.appointment.write).
+    expect(targets('BOOKED', 'MANAGER')).toEqual(['CONFIRMED', 'ARRIVED', 'NO_SHOW'])
+    expect(targets('BOOKED', 'NURSE')).toEqual(['CONFIRMED', 'ARRIVED', 'NO_SHOW'])
     expect(targets('BOOKED', 'CASHIER')).toEqual([])
+    expect(targets('BOOKED', 'SUPPORT')).toEqual([])
   })
 
   it('a visit can start from any own appointment except cancelled, no-show and completed', () => {

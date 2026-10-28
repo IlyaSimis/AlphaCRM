@@ -1,9 +1,9 @@
-import { ArticleRounded, BadgeRounded, CalendarMonthRounded, ContactPhoneRounded, HealthAndSafetyRounded, HistoryRounded, InsightsRounded, MedicalServicesRounded, OutboxRounded, PaymentsRounded, PeopleAltRounded, TodayRounded, TuneRounded } from '@mui/icons-material'
+import { ArticleRounded, BadgeRounded, CalendarMonthRounded, ContactPhoneRounded, FolderSharedRounded, HealthAndSafetyRounded, HistoryRounded, InsightsRounded, Inventory2Rounded, MedicalServicesRounded, OutboxRounded, PaymentsRounded, PeopleAltRounded, TodayRounded, TuneRounded } from '@mui/icons-material'
 import { Avatar, Box, Stack, Typography } from '@mui/material'
 import type { ReactNode } from 'react'
 import type { StaffItem } from '../api/types'
 import type { VisitTarget } from '../features/visit/visit'
-import { profileOf } from '../shared/roles'
+import { canWriteClinical, profileOf } from '../shared/roles'
 import { hasTodayPage, navigationFor, pageTitles, startPage, type Page } from './pages'
 
 const icons: Partial<Record<Page, ReactNode>> = {
@@ -18,6 +18,8 @@ const icons: Partial<Record<Page, ReactNode>> = {
   staff: <BadgeRounded />,
   documents: <ArticleRounded />,
   outbox: <OutboxRounded />,
+  inventory: <Inventory2Rounded />,
+  drive: <FolderSharedRounded />,
 }
 
 function NavItem({ active, icon, label, onClick }: { active: boolean; icon: ReactNode; label: string; onClick: () => void }) {
@@ -58,7 +60,7 @@ export function Sidebar({ className, page, staff, live, visits, activeVisit, onN
         <Typography className="nav-label">РАБОЧЕЕ МЕСТО</Typography>
         <Stack spacing={0.7}>
           {workplace.map((item) => <NavItem key={item} active={page === item || (item === 'patients' && page === 'patient')} icon={icons[item]} label={pageTitles[item]} onClick={() => onNavigate(item)} />)}
-          {role === 'DOCTOR' && visits.map((visit) => (
+          {canWriteClinical(role) && visits.map((visit) => (
             <NavItem key={visit.appointmentId ?? visit.encounter?.encounterId ?? visit.patientId} active={activeVisit === visit} icon={<MedicalServicesRounded />} label={`Приём: ${visit.patientName}${visit.time ? ` · ${visit.time}` : ''}`} onClick={() => onVisit(visit)} />
           ))}
         </Stack>
