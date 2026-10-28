@@ -119,6 +119,10 @@ docker compose exec postgres pg_restore -U quiet_clinic -d quiet_clinic --clean 
 | `CLINIC_CASHBOX_URL`, `CLINIC_CASHBOX_SECRET` | пусто | Онлайн-касса для чеков и секрет подписи (минимум 32 символа). Пусто — чек остаётся `QUEUED` |
 | `CLINIC_TIME_ZONE` | `UTC` | Часовой пояс клиники (IANA, например `Europe/Moscow`). В нём расписание, смены врачей, «сегодня», журнал и сообщения пациентам; в базе — моменты UTC. Записи, сделанные при другом поясе, после смены сдвинутся на экране на разницу поясов |
 | `CLINIC_OUTBOX_ENABLED`, `CLINIC_OUTBOX_POLL_INTERVAL` | `true`, `PT30S` | Доставщик outbox и пауза между проходами |
+| `CLINIC_EVENTS_ENABLED`, `CLINIC_EVENTS_POLL_INTERVAL` | `true`, `PT30S` | Фоновый повтор доменных событий (`domain_event_outbox`), которые не раздались сразу после фиксации |
+| `CLINIC_MARKING_ADAPTER` | `none` | Честный знак: `none` — интеграция не настроена (операции маркировки ждут в очереди с причиной `MARKING_NOT_CONFIGURED`), `mock` — заглушка MVP, отвечает «принято» и ничего не отправляет |
+| `CLINIC_DRIVE_QUOTA_BYTES` | `10737418240` | Квота корпоративного диска на клинику (10 ГБ); меняют администраторы и техподдержка в разделе «Диск» |
+| `CLINIC_DRIVE_MAX_FILE_BYTES` | `104857600` | Предел одного файла диска (100 МБ); nginx пропускает в `/api/` до 101 МБ |
 
 После изменения `.env` выполните `docker compose up -d`.
 
@@ -126,7 +130,7 @@ docker compose exec postgres pg_restore -U quiet_clinic -d quiet_clinic --clean 
 
 Учётные записи хранятся в базе (`staff_user`): клиника, ФИО, логин, bcrypt-хеш пароля, роль, карточка врача (только у врача), признак «активен» и «сменить пароль при входе». Внешний OIDC/Keycloak не используется. Зашитых сотрудников нет: ни паролей, ни хешей в коде и миграциях.
 
-**Первый запуск.** Если в базе нет ни одного сотрудника, приложение создаёт клинику (название из `CLINIC_NAME`) и одного администратора с логином **`admin`** и паролем из `CLINIC_ADMIN_PASSWORD`; хеш считается при старте bcrypt со своей солью.
+**Первый запуск.** Если в базе нет ни одного сотрудника, приложение создаёт клинику (название из `CLINIC_NAME`) и её **владельца** (`OWNER`) с логином **`admin`** и паролем из `CLINIC_ADMIN_PASSWORD`; хеш считается при старте bcrypt со своей солью. На уже работающей базе миграция `quietclinic:029` делает владельцем начальную учётную запись `admin`, если владельца в клинике ещё нет: только владелец назначает старших администраторов и владельцев.
 
 | Профиль | Вход | Смена пароля |
 |---|---|---|
@@ -146,7 +150,7 @@ docker compose exec postgres pg_restore -U quiet_clinic -d quiet_clinic --clean 
 - Роль и автор действия сервер берёт из сессии. Для врача автор (`actorId`) — id его карточки врача, поэтому записи журнала аудита и связь с лечением остались прежними. Заголовки `X-Demo-Role` / `X-Actor-Id` больше ничего не решают.
 - CSRF включён: сервер кладёт токен в cookie `XSRF-TOKEN`, интерфейс отправляет его заголовком `X-XSRF-TOKEN` на изменяющих запросах. Все запросы идут с `credentials: 'include'`. Интерфейс и API работают на одном origin (nginx в Docker, прокси Vite при разработке); CORS для локальной разработки разрешает cookie только с явных адресов из `CLINIC_CORS_ORIGINS`, не `*`.
 - Без входа видна только страница входа; `401` от API возвращает на неё. Если сервер недоступен, на странице входа можно открыть **песочницу** с одной из ролей («Песочница: Врач» и т. п.): без людей и логинов, помечена в шапке, работает на встроенных данных в памяти вкладки и ничего не отправляет на сервер.
-- Раздел «Сотрудники» (только администратор своей клиники): создать сотрудника с временным паролем, отключить или включить, задать новый временный пароль. Себя отключить нельзя; врачу нужна существующая карточка врача этой клиники, остальным ролям — никакой; роль после создания не меняется; хеши паролей наружу не отдаются.
+- Раздел «Сотрудники» (администраторы и менеджер своей клиники; техподдержка — список и сброс пароля): создать сотрудника с временным паролем, отключить или включить, задать новый временный пароль — только для ролей не выше своих (`403 ROLE_NOT_ASSIGNABLE`). Себя отключить нельзя; врачу нужна существующая карточка врача этой клиники, остальным ролям — никакой; роль после создания не меняется; хеши паролей наружу не отдаются. `GET /auth/me` возвращает и `permissions` — коды разрешений роли.
 
 Вход из командной строки:
 
@@ -242,19 +246,21 @@ Frontend запускается так же, как в варианте 1. Не 
 
 ## Возможности и API
 
-Роли: «Врач», «Администратор», «Менеджер», «Кассир» (в API — `DOCTOR`, `ADMINISTRATOR`, `MANAGER`, `CASHIER`). Роль и врач определяются учётной записью, под которой выполнен вход, — переключателей в шапке нет. Все маршруты, кроме входа, требуют сессии (`401 UNAUTHORIZED` без неё).
+Роли (раздел C [целевой архитектуры](docs/target-architecture.md#c-матрица-rbac)): «Владелец клиники» `OWNER`, «Старший администратор» `SENIOR_ADMINISTRATOR`, «Администратор» `ADMINISTRATOR`, «Менеджер» `MANAGER`, «Врач» `DOCTOR`, «Медперсонал» `NURSE`, «Кассир» `CASHIER`, «Техподдержка» `SUPPORT`. Роль и врач определяются учётной записью, под которой выполнен вход, — переключателей в шапке нет. Все маршруты, кроме входа, требуют сессии (`401 UNAUTHORIZED` без неё).
 
-**«Сегодня»** — домашняя страница администратора, кассира и менеджера (врач начинает с расписания). В меню она стоит отдельным блоком «Старт» над блоком «Рабочее место»; название AlphaCRM в меню — кнопка «На главную» (врача возвращает в расписание, открытые приёмы остаются). В шапке — дата, имя сотрудника и быстрые действия: «Новая запись» и «Новый пациент» (только администратор, те же диалоги, что в расписании и списке пациентов), «Касса» (кассир и администратор). Блоки, каждый — только ролям с доступом к этим данным: записи на сегодня и завтра без отмен и неявок (`GET /appointments?from=&to=`); просроченные задачи — открытые со сроком раньше сегодняшнего дня (`GET /registry/tasks?dueTo=`, сегодняшние отбрасываются на клиенте); завершённые и не оплаченные приёмы за 90 дней (как в кассе, только кассиру и администратору); ошибки доставки (`GET /outbox?status=FAILED`, только администратору). Новых маршрутов страница не добавляет.
+**Права.** Роль — набор разрешений вида `<сервис>.<ресурс>.<действие>` (`finance.invoice.write`, `clinical.note.write`); набор зашит в коде (`platform/RolePermissions.java`, версия — `permissionsVersion` в `/auth/me`) и в интерфейсе не редактируется. Сервис проверяет разрешение (`requirePermission`) и затем атрибуты: своя клиника, своя запись, связь с лечением. Клинический текст (заметки, диагнозы, документы приёма) — только у врача со связью с лечением, у владельца и администраторов его нет. Матрица проверяется тестом `RbacMatrixTest` по файлу `backend/app/src/test/resources/rbac-matrix.csv` (роль, метод, путь, ожидаемый статус). Ниже «администраторы» — `OWNER`, `SENIOR_ADMINISTRATOR` и `ADMINISTRATOR`; назначать роли можно не выше своих: владельца и старшего администратора — только владелец, администратора и техподдержку — администраторы.
+
+**«Сегодня»** — домашняя страница всех ролей, кроме врача: врач начинает с расписания, и его персональный дашборд стоит над расписанием. Сверху — **персональный дашборд** (`GET /api/v1/me/dashboard`): виджеты по разрешениям роли, только числа и агрегаты — приёмы за календарный месяц (у врача — свои), приёмы сегодня, неподписанные документы (врач), счета к оплате и ждущие суммы, выручка за месяц, задачи на сегодня, нехватка и истекающие партии на складе, очередь маркировки, ошибки доставки, повторы событий и квота диска. В меню «Сегодня» стоит отдельным блоком «Старт» над блоком «Рабочее место»; название AlphaCRM в меню — кнопка «На главную» (врача возвращает в расписание, открытые приёмы остаются). В шапке — дата, имя сотрудника и быстрые действия: «Новая запись» (кто записывает), «Новый пациент» (кто регистрирует), «Касса» (кто видит счета). Блоки, каждый — только ролям с доступом к этим данным: записи на сегодня и завтра без отмен и неявок; просроченные задачи; завершённые и не оплаченные приёмы за 90 дней (включая счета свободной цены, ждущие суммы); ошибки доставки.
 
 **Ошибки.** Ответ с ошибкой — `{timestamp, status, code, message[, fields]}`. `code` — машинный код на английском (`SLOT_ALREADY_BOOKED`, `SERVICE_INACTIVE`, `NO_CARE_RELATIONSHIP`…), `message` — английское пояснение для разработчика. Русскую фразу выбирает интерфейс по коду (`src/api/errorMessages.ts`); если кода там ещё нет, показывается `message` сервера, но не сам код. Неверный логин или пароль — `401 INVALID_CREDENTIALS`, одинаково для обоих случаев.
 
 | Маршрут | Кто | Что делает |
 |---|---|---|
 | `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me`, `POST /api/v1/auth/password`, `GET /api/v1/auth/csrf` | все | вход, выход, текущий сотрудник, смена своего пароля, выдача CSRF-cookie |
-| `GET /api/v1/staff` | `ADMINISTRATOR` | сотрудники без хешей паролей |
-| `POST /api/v1/staff` | `ADMINISTRATOR` | `{fullName, username, password, role, practitionerId, newPractitioner}`. Врачу — либо `practitionerId` карточки своей клиники без учётной записи, либо `newPractitioner: {specialty, room, shifts}`: карточка с тем же ФИО создаётся в той же транзакции (занятый логин или неверная смена — карточки не остаётся), id учётной записи = id карточки. `409 USERNAME_TAKEN`, `PRACTITIONER_REQUIRED`, `PRACTITIONER_TAKEN`, `PRACTITIONER_NOT_ALLOWED`, `PRACTITIONER_AMBIGUOUS` (указаны оба), `INVALID_SHIFT`, `404` для неизвестного или чужого врача |
-| `POST /api/v1/staff/{id}/deactivate`, `…/activate` | `ADMINISTRATOR` | отключить (себя — `409 CANNOT_DEACTIVATE_SELF`) или включить; сессии отключённого перестают действовать |
-| `POST /api/v1/staff/{id}/password` | `ADMINISTRATOR` | новый пароль `{newPassword}`, от 8 символов |
+| `GET /api/v1/staff` | администраторы, `MANAGER`, `SUPPORT` | сотрудники без хешей паролей |
+| `POST /api/v1/staff` | администраторы, `MANAGER` — роли не выше своих | `{fullName, username, password, role, practitionerId, newPractitioner}`. Врачу — либо `practitionerId` карточки своей клиники без учётной записи, либо `newPractitioner: {specialty, room, shifts}`: карточка с тем же ФИО создаётся в той же транзакции (занятый логин или неверная смена — карточки не остаётся), id учётной записи = id карточки. `409 USERNAME_TAKEN`, `PRACTITIONER_REQUIRED`, `PRACTITIONER_TAKEN`, `PRACTITIONER_NOT_ALLOWED`, `PRACTITIONER_AMBIGUOUS` (указаны оба), `INVALID_SHIFT`, `404` для неизвестного или чужого врача |
+| `POST /api/v1/staff/{id}/deactivate`, `…/activate` | администраторы, `MANAGER` — роли не выше своих | отключить (себя — `409 CANNOT_DEACTIVATE_SELF`) или включить; сессии отключённого перестают действовать |
+| `POST /api/v1/staff/{id}/password` | администраторы, `MANAGER` — роли не выше своих; `SUPPORT` — всем, кроме `OWNER` | новый пароль `{newPassword}`, от 8 символов |
 
 Время во всех запросах — UTC (`2026-10-20T09:00:00Z`); дни недели в рабочих часах — ISO (понедельник = 1).
 
@@ -264,18 +270,18 @@ Frontend запускается так же, как в варианте 1. Не 
 |---|---|---|
 | `GET /api/v1/practitioners` | все роли | врачи своей клиники: ФИО, специальность, кабинет `room` (может отсутствовать), рабочие часы |
 | `GET /api/v1/services[?all=true]` | все роли | справочник услуг своей клиники: название, длительность, цена в копейках, валюта, `active`. Выключенные — только администратору с `all=true` |
-| `GET /api/v1/appointments?date=` | все роли | записи за день; фильтры `practitionerId`, `patientId`, `status` |
-| `GET /api/v1/appointments?from=&to=` | все роли | записи за период (до трёх лет): история пациента (`patientId`), завершённые приёмы для кассы (`status=COMPLETED`) |
-| `POST /api/v1/appointments` | `ADMINISTRATOR`, `DOCTOR` | новая запись; `serviceName` — включённая услуга своей клиники (`409 UNKNOWN_SERVICE`, выключенная — `409 SERVICE_INACTIVE`), на запись сохраняется снимок названия и цены (`serviceName`, `amountMinor`, `currency`) |
-| `POST /api/v1/appointments/{id}/reschedule` | `ADMINISTRATOR` | перенос `{startsAt, endsAt, practitionerId}` из `BOOKED`/`CONFIRMED`, статус не меняется, в outbox ничего не уходит |
-| `POST /api/v1/appointments/{id}/status` | `ADMINISTRATOR`, `DOCTOR` | смена статуса |
-| `POST /api/v1/appointments/{id}/cancel` | `ADMINISTRATOR` | отмена активной записи |
-| `POST /api/v1/practitioners` | `ADMINISTRATOR` | карточка врача без учётной записи `{fullName, specialty, room, shifts}` (`shifts` — как в `working-hours`, может быть пустым: тогда записать к врачу нельзя). Пустой кабинет хранится как `NULL`, кабинет не уникален. Аудит `PRACTITIONER_CREATED` с именами полей |
-| `PUT /api/v1/practitioners/{id}` | `ADMINISTRATOR` | специальность и кабинет `{specialty, room}`; график не трогает. Аудит `PRACTITIONER_UPDATED` с именами изменённых полей (`fields:specialty,room`), без значений |
-| `PUT /api/v1/practitioners/{id}/working-hours` | `ADMINISTRATOR` | недельный график целиком `{shifts: [{dayOfWeek, startsAt, endsAt}]}`; дня нет в списке — выходной. `409 INVALID_SHIFT` при повторе дня или конце не позже начала |
-| `POST /api/v1/services` | `ADMINISTRATOR` | новая услуга `{name, durationMinutes, priceMinor, currency: "RUB"}`: название до 255 символов, длительность 1–720 минут, цена в копейках ≥ 0. Сразу доступна в записи. Повтор названия в клинике — `409 SERVICE_NAME_TAKEN` |
-| `PUT /api/v1/services/{id}/price` | `ADMINISTRATOR` | новая цена `{priceMinor}` в копейках. Действует для новых записей; `amountMinor` уже созданных записей не меняется |
-| `POST /api/v1/services/{id}/deactivate`, `…/activate` | `ADMINISTRATOR` | выключить или снова включить услугу. Выключенная не предлагается в новой записи и в листе ожидания, но не удаляется: старые записи хранят свой снимок |
+| `GET /api/v1/appointments?date=` | все роли; у `SUPPORT` — без `patientId` (маска) | записи за день; фильтры `practitionerId`, `patientId`, `status` |
+| `GET /api/v1/appointments?from=&to=` | все роли; у `SUPPORT` — без `patientId` (маска) | записи за период (до трёх лет): история пациента (`patientId`), завершённые приёмы для кассы (`status=COMPLETED`) |
+| `POST /api/v1/appointments` | администраторы, `MANAGER`, `NURSE`; `DOCTOR` — только к себе | новая запись; `serviceName` — включённая услуга своей клиники (`409 UNKNOWN_SERVICE`, выключенная — `409 SERVICE_INACTIVE`), на запись сохраняется снимок названия и цены (`serviceName`, `amountMinor`, `currency`) |
+| `POST /api/v1/appointments/{id}/reschedule` | администраторы, `MANAGER`, `NURSE`; `DOCTOR` — только свои записи | перенос `{startsAt, endsAt, practitionerId}` из `BOOKED`/`CONFIRMED`, статус не меняется, в outbox ничего не уходит |
+| `POST /api/v1/appointments/{id}/status` | администраторы, `MANAGER`, `NURSE`; `DOCTOR` — свои записи | смена статуса |
+| `POST /api/v1/appointments/{id}/cancel` | администраторы, `MANAGER`, `NURSE`; `DOCTOR` — только свои записи | отмена активной записи |
+| `POST /api/v1/practitioners` | администраторы, `MANAGER` | карточка врача без учётной записи `{fullName, specialty, room, shifts}` (`shifts` — как в `working-hours`, может быть пустым: тогда записать к врачу нельзя). Пустой кабинет хранится как `NULL`, кабинет не уникален. Аудит `PRACTITIONER_CREATED` с именами полей |
+| `PUT /api/v1/practitioners/{id}` | администраторы, `MANAGER` | специальность и кабинет `{specialty, room}`; график не трогает. Аудит `PRACTITIONER_UPDATED` с именами изменённых полей (`fields:specialty,room`), без значений |
+| `PUT /api/v1/practitioners/{id}/working-hours` | администраторы, `MANAGER` | недельный график целиком `{shifts: [{dayOfWeek, startsAt, endsAt}]}`; дня нет в списке — выходной. `409 INVALID_SHIFT` при повторе дня или конце не позже начала |
+| `POST /api/v1/services` | администраторы | новая услуга `{name, durationMinutes, priceMinor, currency: "RUB"}`: название до 255 символов, длительность 1–720 минут, цена в копейках ≥ 0. Сразу доступна в записи. Повтор названия в клинике — `409 SERVICE_NAME_TAKEN` |
+| `PUT /api/v1/services/{id}/price` | администраторы | новая цена `{priceMinor}` в копейках. Действует для новых записей; `amountMinor` уже созданных записей не меняется |
+| `POST /api/v1/services/{id}/deactivate`, `…/activate` | администраторы | выключить или снова включить услугу. Выключенная не предлагается в новой записи и в листе ожидания, но не удаляется: старые записи хранят свой снимок |
 
 Расписание открывается на сегодняшнем дне (или на дне, выбранном в прошлый раз) и показывается по дням или по неделе (с понедельника): в неделе те же записи и те же действия, что в дне, неделя загружается одним запросом `?from=&to=`. День без смены врача помечен «Выходной», запись на него недоступна. График, цены и справочник услуг ведёт администратор на странице «График и цены»: добавить услугу, сменить цену, выключить или включить. Форма записи берёт список услуг только с сервера; две начальные услуги («Первичный приём», «Повторный приём») — данные миграции, а не массив в коде. Демо-песочница без сервера показывает те же две услуги из `demoServices`.
 
@@ -289,14 +295,14 @@ Frontend запускается так же, как в варианте 1. Не 
 
 | Маршрут | Кто | Что делает |
 |---|---|---|
-| `GET /api/v1/patients[?query=]` | все роли | поиск по ФИО |
-| `POST /api/v1/patients` | `ADMINISTRATOR` | регистрация с первым согласием `{fullName, birthDate, phone, email?, secondPhone?, assignedStaffId?, consentVersion, consentBasis}` |
-| `GET /api/v1/patients/{id}` | все роли | карточка |
-| `PUT /api/v1/patients/{id}` | `ADMINISTRATOR` | карточка целиком `{fullName, birthDate, phone, email, secondPhone, assignedStaffId}`: пустой или отсутствующий необязательный контакт удаляется. E-mail — простая проверка формата, до 255 символов (`400 VALIDATION_ERROR`). Постоянный администратор — активный `ADMINISTRATOR` своей клиники (`409 INVALID_ASSIGNED_STAFF`, чужой или неизвестный — `404 STAFF_NOT_FOUND`); уже привязанный и потом отключённый остаётся. В аудит — имена изменённых полей (`email,secondPhone,assignedStaff`) без значений |
-| `POST /api/v1/patients/{id}/consents` | `ADMINISTRATOR` | новая действующая версия согласия `{version, basis}`; прежние не удаляются |
-| `POST /api/v1/patients/{id}/consents/{consentId}/revoke` | `ADMINISTRATOR` | отзыв: ставит `revokedAt`, повторный отзыв — `409 ALREADY_REVOKED` |
+| `GET /api/v1/patients[?query=]` | все, кроме `SUPPORT`; `DOCTOR` — только со связью с лечением; `CASHIER` — только ФИО | поиск по ФИО |
+| `POST /api/v1/patients` | администраторы, `MANAGER` | регистрация с первым согласием `{fullName, birthDate, phone, email?, secondPhone?, assignedStaffId?, consentVersion, consentBasis}` |
+| `GET /api/v1/patients/{id}` | все, кроме `SUPPORT`; `DOCTOR` — только со связью с лечением; `CASHIER` — только ФИО | карточка |
+| `PUT /api/v1/patients/{id}` | администраторы, `MANAGER` | карточка целиком `{fullName, birthDate, phone, email, secondPhone, assignedStaffId}`: пустой или отсутствующий необязательный контакт удаляется. E-mail — простая проверка формата, до 255 символов (`400 VALIDATION_ERROR`). Постоянный администратор — активный `ADMINISTRATOR` своей клиники (`409 INVALID_ASSIGNED_STAFF`, чужой или неизвестный — `404 STAFF_NOT_FOUND`); уже привязанный и потом отключённый остаётся. В аудит — имена изменённых полей (`email,secondPhone,assignedStaff`) без значений |
+| `POST /api/v1/patients/{id}/consents` | администраторы, `MANAGER` | новая действующая версия согласия `{version, basis}`; прежние не удаляются |
+| `POST /api/v1/patients/{id}/consents/{consentId}/revoke` | администраторы, `MANAGER` | отзыв: ставит `revokedAt`, повторный отзыв — `409 ALREADY_REVOKED` |
 
-| `PUT /api/v1/patients/{id}/registry` | `ADMINISTRATOR` | административные поля `{referralSource, registryNote, telegramChatId, removeTelegram}`: chat id Telegram пациента (только цифры; пусто — не менять, `removeTelegram: true` — отключить; в ответе — только `telegramConnected`, сам chat id сервер не отдаёт никому); откуда пришёл (`RECOMMENDATION`, `WEBSITE`, `INSURANCE`, `DOCTOR_REFERRAL`, `OTHER`, иначе `409 INVALID_REFERRAL_SOURCE`) и заметка регистратуры до 1000 символов |
+| `PUT /api/v1/patients/{id}/registry` | администраторы, `MANAGER` | административные поля `{referralSource, registryNote, telegramChatId, removeTelegram}`: chat id Telegram пациента (только цифры; пусто — не менять, `removeTelegram: true` — отключить; в ответе — только `telegramConnected`, сам chat id сервер не отдаёт никому); откуда пришёл (`RECOMMENDATION`, `WEBSITE`, `INSURANCE`, `DOCTOR_REFERRAL`, `OTHER`, иначе `409 INVALID_REFERRAL_SOURCE`) и заметка регистратуры до 1000 символов |
 
 Согласие «действует», если есть хотя бы одно без `revokedAt`. В аудит — факт и id согласия, без текста основания.
 
@@ -308,14 +314,14 @@ Frontend запускается так же, как в варианте 1. Не 
 
 | Маршрут | Кто | Что делает |
 |---|---|---|
-| `GET /api/v1/registry/tasks?dueTo=` | `ADMINISTRATOR`, `MANAGER`, `CASHIER` | открытые задачи клиники со сроком до даты включительно — список «на сегодня», с пациентом и без |
+| `GET /api/v1/registry/tasks?dueTo=` | администраторы, `MANAGER`, `CASHIER` | открытые задачи клиники со сроком до даты включительно — список «на сегодня», с пациентом и без |
 | `GET /api/v1/registry/tasks?patientId=` | те же | все задачи пациента — в карточке; задачи без пациента сюда не попадают |
-| `POST /api/v1/registry/tasks` | `ADMINISTRATOR` | `{title, dueDate, assigneeId, patientId?}`: `title` — свободный текст до 200 символов, исполнитель — активный сотрудник своей клиники (`409 INVALID_ASSIGNEE`), пациент необязателен (`404 PATIENT_NOT_FOUND` для чужого или неизвестного) |
-| `POST /api/v1/registry/tasks/{id}/done`, `…/reopen` | исполнитель или `ADMINISTRATOR` | статус `OPEN` ↔ `DONE` |
-| `GET /api/v1/registry/waitlist[?practitionerId=&date=]` | `ADMINISTRATOR`, `MANAGER` | активный лист ожидания; с фильтром — кто подходит под свободный слот |
-| `POST /api/v1/registry/waitlist` | `ADMINISTRATOR` | `{patientId, practitionerId, serviceId, wishFrom, wishTo}` |
-| `POST /api/v1/registry/waitlist/{id}/book` | `ADMINISTRATOR` | закрыть ожидание ссылкой `{appointmentId}` на запись, уже созданную обычным `POST /appointments` |
-| `POST /api/v1/registry/waitlist/{id}/cancel` | `ADMINISTRATOR` | убрать из листа |
+| `POST /api/v1/registry/tasks` | администраторы | `{title, dueDate, assigneeId, patientId?}`: `title` — свободный текст до 200 символов, исполнитель — активный сотрудник своей клиники (`409 INVALID_ASSIGNEE`), пациент необязателен (`404 PATIENT_NOT_FOUND` для чужого или неизвестного) |
+| `POST /api/v1/registry/tasks/{id}/done`, `…/reopen` | исполнитель или администраторы | статус `OPEN` ↔ `DONE` |
+| `GET /api/v1/registry/waitlist[?practitionerId=&date=]` | администраторы, `MANAGER` | активный лист ожидания; с фильтром — кто подходит под свободный слот |
+| `POST /api/v1/registry/waitlist` | администраторы | `{patientId, practitionerId, serviceId, wishFrom, wishTo}` |
+| `POST /api/v1/registry/waitlist/{id}/book` | администраторы | закрыть ожидание ссылкой `{appointmentId}` на запись, уже созданную обычным `POST /appointments` |
+| `POST /api/v1/registry/waitlist/{id}/cancel` | администраторы | убрать из листа |
 
 Задача — текст администратора, а не выбор из списка. Задачи, созданные до этого, сохранились: прежние виды стали названием («Перезвонить», «Обновить согласие»). В аудит пишется только `with-patient` или `without-patient`, без текста задачи.
 
@@ -351,33 +357,80 @@ Frontend запускается так же, как в варианте 1. Не 
 
 | Маршрут | Кто | Что делает |
 |---|---|---|
-| `GET /api/v1/patients/{patientId}/files` | `ADMINISTRATOR`, `DOCTOR` со связью с лечением, `MANAGER` (только подписанные) | имя, размер, состояние, кто загрузил, кто и когда подписал; без байтов |
-| `POST /api/v1/patients/{patientId}/files` | `ADMINISTRATOR`, `DOCTOR` со связью | multipart `file` (+ необязательный `appointmentId` записи этого пациента): только PDF (начинается с `%PDF-`, иначе `409 NOT_A_PDF`), до 10 МБ (`413 FILE_TOO_LARGE`), путь из имени отбрасывается. Состояние `DRAFT` |
-| `POST /api/v1/patient-files/{id}/sign` | `ADMINISTRATOR` — любой файл клиники, `DOCTOR` — со связью | `SIGNED_LOCKED`: SHA-256 открытых байтов, кто и когда подписал. Повторно — `409 ALREADY_SIGNED` |
-| `GET /api/v1/patient-files/{id}/content` | черновик — `ADMINISTRATOR` и `DOCTOR` со связью; подписанный — ещё `MANAGER` и подписавший врач | расшифрованные байты, `Content-Disposition: attachment`; менеджеру черновик — `403 FILE_NOT_SIGNED` |
+| `GET /api/v1/patients/{patientId}/files` | администраторы, `DOCTOR` со связью с лечением, `MANAGER` (только подписанные) | имя, размер, состояние, кто загрузил, кто и когда подписал; без байтов |
+| `POST /api/v1/patients/{patientId}/files` | администраторы, `DOCTOR` со связью | multipart `file` (+ необязательный `appointmentId` записи этого пациента): только PDF (начинается с `%PDF-`, иначе `409 NOT_A_PDF`), до 10 МБ (`413 FILE_TOO_LARGE`), путь из имени отбрасывается. Состояние `DRAFT` |
+| `POST /api/v1/patient-files/{id}/sign` | администраторы — любой файл клиники, `DOCTOR` — со связью | `SIGNED_LOCKED`: SHA-256 открытых байтов, кто и когда подписал. Повторно — `409 ALREADY_SIGNED` |
+| `GET /api/v1/patient-files/{id}/content` | черновик — администраторы и `DOCTOR` со связью; подписанный — ещё `MANAGER` и подписавший врач | расшифрованные байты, `Content-Disposition: attachment`; менеджеру черновик — `403 FILE_NOT_SIGNED` |
 | `GET /api/v1/patient-files/{id}/inline` | те же, что у `content` | те же байты с `Content-Disposition: inline` — для кнопки «Печать»: интерфейс открывает файл в новой вкладке встроенным просмотрщиком браузера с сессией сотрудника и вызывает печать. nginx отдаёт этот маршрут со своей узкой CSP (`object-src 'self'`), иначе просмотрщик PDF не открывается |
 | `GET /api/v1/patient-files/signed` | `DOCTOR` — подписанные им, `MANAGER` — все клиники | список подписанных PDF для архива «Подписанные документы» |
 
 Где загружать: в карточке пациента — блок «Документы PDF» со всеми файлами; на странице приёма — блок «Заключения и файлы приёма»: файл сразу привязывается к этой записи (`appointmentId`), там же «Подписать», «Печать» и «Скачать». «Печать» есть и в архиве подписанных PDF.
 
-Файл шифруется тем же AES-GCM и ключом `KmsPort`, что и заметки приёма; в `patient_file.ciphertext` нет открытых байтов. После подписи байты, имя, хеш и подписант не меняются: отказ в коде и триггер `patient_file_immutable` в PostgreSQL. Замена — новый файл, удаления нет. Без связи с лечением врач получает тот же `403 NO_CARE_RELATIONSHIP`, что при чтении клинических данных. В аудит — `PDF_UPLOADED`, `PDF_SIGNED`, `PDF_READ` только с id файла. Лимит multipart — 10 МБ на файл; nginx пропускает в `/api/` до 11 МБ.
+Файл шифруется тем же AES-GCM и ключом `KmsPort`, что и заметки приёма; в `patient_file.ciphertext` нет открытых байтов. После подписи байты, имя, хеш и подписант не меняются: отказ в коде и триггер `patient_file_immutable` в PostgreSQL. Замена — новый файл, удаления нет. Без связи с лечением врач получает тот же `403 NO_CARE_RELATIONSHIP`, что при чтении клинических данных. В аудит — `PDF_UPLOADED`, `PDF_SIGNED`, `PDF_READ` только с id файла. Предел PDF пациента — 10 МБ (проверяет сервис); multipart принимает до 100 МБ ради диска, nginx пропускает в `/api/` до 101 МБ.
 
 ### Касса (`billing`)
 
 | Маршрут | Кто | Что делает |
 |---|---|---|
-| `GET /api/v1/billing/charges` | `CASHIER`, `ADMINISTRATOR` | счета с оплатой: `appointmentId`, сумма, статус, `paymentStatus` |
-| `POST /api/v1/billing/charges` | `CASHIER`, `ADMINISTRATOR` | счёт по приёму, если его ещё нет (`409 CHARGE_ALREADY_EXISTS`) |
-| `POST /api/v1/billing/charges/{id}/payments` | `CASHIER` | оплата `{idempotencyKey}`; повтор с тем же ключом не списывает второй раз |
+| `GET /api/v1/billing/charges` | администраторы, `CASHIER`; `MANAGER` — чтение | счета с оплатой: `appointmentId`, сумма, статус, `paymentStatus` |
+| `POST /api/v1/billing/charges` | администраторы, `CASHIER` | счёт по приёму, если его ещё нет (`409 CHARGE_ALREADY_EXISTS`) |
+| `POST /api/v1/billing/charges/{id}/payments` | администраторы, `CASHIER` | оплата `{idempotencyKey}`; повтор с тем же ключом не списывает второй раз; счёт без суммы (свободная цена) — `409 AMOUNT_REQUIRED` |
+| `PUT /api/v1/billing/charges/{id}/amount` | администраторы, `CASHIER` | сумма свободной цены `{amountMinor}` в пределах услуги (`409 AMOUNT_OUT_OF_RANGE`); счёт `AWAITING_AMOUNT` → `PENDING` |
+
+**Свободная цена** (сценарий D5). Услуга с `priceMode: OPEN` не имеет цены, только пределы `minMinor`–`maxMinor`. При записи суммы нет (можно указать оценку `estimateMinor` в пределах — иначе `409 ESTIMATE_OUT_OF_RANGE`). Завершение приёма публикует событие `AppointmentCompleted`, и касса создаёт счёт `AWAITING_AMOUNT` со снимком пределов; сумму вводят кассир или администратор, после этого счёт оплачивается как обычный. В выручке дашборда — фактическая сумма.
 
 Платёжный шлюз не подключён: оплата только отмечается в кассе со статусом `paymentStatus: MOCK_NO_PROVIDER` — это не настоящий платёж, деньги через систему не проводятся. Чек ставится в outbox (`FISCALIZATION`) и уходит в онлайн-кассу, только когда задан `CLINIC_CASHBOX_URL`; до этого `fiscalStatus` остаётся `QUEUED`, после передачи — `SENT_TO_CASHBOX`.
 
-Один счёт на приём — уникальный индекс по `appointment_id`. Экран «Касса» (кассир и администратор): завершённые приёмы за 90 дней — пациент, врач, услуга, сумма, статус счёта; без диагнозов и текста приёма. Администратор выставляет недостающий счёт, кассир принимает оплату. На экран аналитики деньги не выводятся.
+Один счёт на приём — уникальный индекс по `appointment_id`. Счёт за завершённый приём создаёт касса из события `AppointmentCompleted` (outbox → inbox, повтор безопасен), а не прямым вызовом из расписания. Экран «Касса» (администраторы, кассир; менеджер — только чтение): завершённые приёмы за 90 дней — пациент, врач, услуга, сумма, статус счёта; без диагнозов и текста приёма. Администраторы и кассир выставляют недостающий счёт, вводят сумму свободной цены и принимают оплату. На экран аналитики деньги не выводятся.
 
 ### Аналитика и аудит
 
-- **Аналитика**: `GET /api/v1/analytics/appointments?from=&to=[&practitionerId=]` для `MANAGER`/`ADMINISTRATOR` — агрегаты «дата × врач × статус» без персональных данных.
-- **Журнал аудита**: `GET /api/v1/audit[?result=DENIED&objectType=PATIENT]` для `MANAGER`/`ADMINISTRATOR` — последние 100 событий; экран читает журнал постранично: `GET /api/v1/audit/page?page=0&size=20[&result=DENIED]` → `{items, page, size, total}`, страница с нуля, `size` 1–100, новые события сверху. Колонка «Основание» — короткий машинный код без клинического текста, телефонов, ФИО, текста заметок и значений полей; интерфейс переводит его на русский (`list:12` → «весь список, 12» и `search:3` → «поиск, найдено 3» — одно событие `PATIENT_LIST_READ` на просмотр списка пациентов, а не по событию на каждого; `card` → «из карточки», `fullName,phone` → «изменены: ФИО, телефон», `BOOKED->CONFIRMED` → «Ожидает → Подтверждён», перенос → «20.10.2026 09:00 → 22.10.2026 10:30», `with-patient` → «по пациенту», `without-patient` → «без пациента», `call-back` → «перезвонить» (старые события), `days:1,4` → «рабочие дни: пн, чт», `role:CASHIER` → «роль: кассир», `self` → «сам сотрудник»). Коды, которые повторяют действие, показываются как «—», неизвестные — как есть.
+- **Аналитика**: `GET /api/v1/analytics/appointments?from=&to=[&practitionerId=]` для администраторов, `MANAGER` и `SUPPORT` — агрегаты «дата × врач × статус» без персональных данных; врачу — только свои приёмы.
+- **Журнал аудита**: `GET /api/v1/audit[?result=DENIED&objectType=PATIENT]` для администраторов и `MANAGER`; `SUPPORT` видит журнал без объектов клинического контура (пациенты, согласия, приёмы, документы, PDF) — последние 100 событий; экран читает журнал постранично: `GET /api/v1/audit/page?page=0&size=20[&result=DENIED]` → `{items, page, size, total}`, страница с нуля, `size` 1–100, новые события сверху. Колонка «Основание» — короткий машинный код без клинического текста, телефонов, ФИО, текста заметок и значений полей; интерфейс переводит его на русский (`list:12` → «весь список, 12» и `search:3` → «поиск, найдено 3» — одно событие `PATIENT_LIST_READ` на просмотр списка пациентов, а не по событию на каждого; `card` → «из карточки», `fullName,phone` → «изменены: ФИО, телефон», `BOOKED->CONFIRMED` → «Ожидает → Подтверждён», перенос → «20.10.2026 09:00 → 22.10.2026 10:30», `with-patient` → «по пациенту», `without-patient` → «без пациента», `call-back` → «перезвонить» (старые события), `days:1,4` → «рабочие дни: пн, чт», `role:CASHIER` → «роль: кассир», `self` → «сам сотрудник»). Коды, которые повторяют действие, показываются как «—», неизвестные — как есть.
+
+### Склад (`inventory`) и Честный знак
+
+Номенклатура, склады, документы движения, остатки по партиям и маркировка (раздел G целевой архитектуры). Остаток меняется только проведённым документом: черновик можно править или отменить, проведённый — нет (`409 DOCUMENT_NOT_DRAFT`). Расход идёт по партиям FIFO; не хватает остатка — `409 INSUFFICIENT_STOCK`. Провести расход сверх остатка (`{"allowNegative": true}`) могут только администраторы и только для `CONSUMPTION`.
+
+| Маршрут | Кто | Что |
+|---|---|---|
+| `GET /api/v1/inventory/categories`, `GET /api/v1/inventory/items`, `GET /api/v1/inventory/warehouses` | все, кроме кассира | категории, номенклатура (`marked`, `rxOnly`, единица, GTIN), склады; основной склад создаётся сам (`clinic.inventory.default-warehouse-name`) |
+| `POST`/`PUT` тех же маршрутов | администраторы, `MANAGER`, `NURSE` | завести и изменить; маркируемому товару нужен GTIN (`409 MARKING_REQUIRES_GTIN`) |
+| `GET/POST /api/v1/inventory/documents`, `GET/PUT /api/v1/inventory/documents/{id}` | администраторы, `MANAGER`, `NURSE` | документы: приход `RECEIPT`, расход `CONSUMPTION`, списание `WRITE_OFF`, перемещение `TRANSFER`, возврат поставщику `RETURN_TO_SUPPLIER` |
+| `POST /api/v1/inventory/documents/{id}/post`, `POST …/{id}/cancel` | так же | провести (`{allowNegative}`) или отменить черновик |
+| `GET /api/v1/inventory/balances` | все, кроме кассира | остатки по товару, складу и партии со сроком годности |
+| `POST /api/v1/inventory/marking/scan` | администраторы, `MANAGER`, `NURSE` | разбор скана GS1 DataMatrix: GTIN, серийный номер, партия, срок; код, уже лежащий на складе, — `409 MARKING_CODE_DUPLICATE` при проведении |
+| `GET /api/v1/inventory/marking/codes` | все, кроме кассира | коды маркировки и их статус |
+| `GET /api/v1/inventory/marking/status`, `GET /api/v1/inventory/marking/operations` | администраторы, `MANAGER`, `NURSE`, `SUPPORT` | очередь операций Честного знака и их статусы |
+| `POST /api/v1/inventory/marking/operations/{id}/retry` | администраторы, `MANAGER`, `SUPPORT` | повтор операции |
+| `GET/PUT /api/v1/services/{id}/consumption-norms` | читают все с доступом к услугам; меняют администраторы, `MANAGER`, `NURSE` | нормы расхода услуги: товар и количество на приём |
+
+**Расход по нормам** (сценарий D7). Завершение приёма (`AppointmentCompleted`) создаёт расход с основного склада по нормам услуги. Немаркируемые позиции проводятся сразу; нехватка приём не блокирует — расход уходит в минус, склад публикует `StockShortage`, и регистратура ставит задачу на сегодня (`clinic.registry.stock-shortage-title`). По маркируемым позициям создаётся черновик: его проводят после сканирования марок. В документе — только id приёма, без пациента и диагноза.
+
+**Честный знак.** Проведение документа с маркированным товаром ставит операцию в очередь `marking_operation`, её отправляет `MarkingRelay`. Без настроенного адаптера (`CLINIC_MARKING_ADAPTER=none`) операции ждут с причиной `MARKING_NOT_CONFIGURED`; `mock` — заглушка, отвечает «принято». Боевая интеграция (УКЭП, API ГИС МТ) в этот инкремент не входит.
+
+### Диск (`drive`)
+
+Корпоративный диск клиники (раздел H): папки и файлы с версиями, права и ссылки. Не путать с PDF пациента — клинические файлы остаются в карточке. Все роли пользуются диском (`drive.file.use`), администраторы и техподдержка ещё и управляют квотой и корзиной всей клиники (`drive.admin`).
+
+| Маршрут | Что |
+|---|---|
+| `GET /api/v1/drive/nodes?parentId=` | содержимое папки (корень — без `parentId`), только то, что сотруднику видно |
+| `POST /api/v1/drive/folders` | папка `{parentId, name}` |
+| `GET /api/v1/drive/nodes/{id}`, `GET /api/v1/drive/shared-with-me` | узел с путём и правами; что открыто сотруднику другими |
+| `POST /api/v1/drive/files` (multipart `file`, `parentId`), `POST /api/v1/drive/files/{id}/versions` | загрузка файла; новая версия |
+| `GET /api/v1/drive/files/{id}/content[?version=]`, `GET /api/v1/drive/files/{id}/versions` | скачать (всегда вложением) файл или версию; список версий |
+| `PUT /api/v1/drive/nodes/{id}` | переименовать, перенести |
+| `DELETE /api/v1/drive/nodes/{id}`, `POST /api/v1/drive/nodes/{id}/restore`, `GET /api/v1/drive/trash` | корзина; через 30 дней (`CLINIC_DRIVE_TRASH_DAYS`) — окончательное удаление |
+| `GET/POST /api/v1/drive/nodes/{id}/shares`, `DELETE /api/v1/drive/nodes/{id}/shares/{shareId}`, `GET /api/v1/drive/principals` | доступ сотруднику (`USER`), роли (`ROLE`), всей клинике (`CLINIC`) или по ссылке (`LINK`): `VIEW`, `EDIT`, `MANAGE`; наследуется вниз по дереву |
+| `GET /api/v1/drive/links/{token}[?node=]`, `GET /api/v1/drive/links/{token}/content` | ссылка — только просмотр, срок до 30 дней, открывается после входа сотрудника этой клиники; в базе — хеш токена |
+| `GET /api/v1/drive/quota`, `PUT /api/v1/drive/quota` | занято и квота клиники; менять — `drive.admin` |
+
+Файл больше `CLINIC_DRIVE_MAX_FILE_BYTES` — `413 DRIVE_FILE_TOO_LARGE`, превышение квоты — `409 DRIVE_QUOTA_EXCEEDED`. Содержимое шифруется тем же ключом, что PDF пациента (`CLINIC_ENCRYPTION_KEY`), и лежит в каталоге `CLINIC_DRIVE_STORAGE_DIR` (в Docker — том `quiet-clinic-drive`; добавьте его в резервное копирование). Действия с диском пишутся в аудит без имён файлов.
+
+### Доменные события
+
+Модули общаются событиями с конвертом `{eventId, type, version, clinicId, occurredAt, payload}` (раздел F): событие пишется в `domain_event_outbox` в той же транзакции, что и изменение, и раздаётся после фиксации; обработчик отмечает `eventId` в `domain_event_inbox`, поэтому повтор не создаёт второй счёт или второе списание. Не раздавшиеся события повторяет `DomainEventScheduler` (`CLINIC_EVENTS_*`). Сейчас: `AppointmentCompleted` → касса (счёт) и склад (списание по нормам); `StockShortage` → регистратура (задача). Количество повторов видно на дашборде администраторов и техподдержки.
 
 ## Внешние выводы: сообщения пациентам и чеки
 
@@ -420,11 +473,11 @@ Frontend запускается так же, как в варианте 1. Не 
 
 **Аудит.** `NOTIFICATION_DELIVERED` и `FISCAL_RECEIPT_SENT` — от имени клиники, объект — id строки outbox, основание — `шаблон:канал` (`appointment-reminder:telegram`). Без текста сообщения и без телефона.
 
-**Экран «Внешние выводы»** (только администратор; врач, кассир и менеджер его не видят): последние 100 строк outbox своей клиники — шаблон, запись (время и короткий id) или платёж, канал, статус с причиной, время создания и попыток. Текста сообщения и контакта на экране нет.
+**Экран «Внешние выводы»** (администраторы и техподдержка; врач, медперсонал, кассир и менеджер его не видят): последние 100 строк outbox своей клиники — шаблон, запись (время и короткий id) или платёж, канал, статус с причиной, время создания и попыток. Строку с ошибкой можно отправить повторно: `POST /api/v1/outbox/{id}/retry`. Текста сообщения и контакта на экране нет.
 
 | Маршрут | Кто | Что делает |
 |---|---|---|
-| `GET /api/v1/outbox[?status=]` | `ADMINISTRATOR` | последние 100 внешних выводов клиники; `status=FAILED` (или другой статус) — только с ним, неизвестный — `409 INVALID_OUTBOX_STATUS` |
+| `GET /api/v1/outbox[?status=]` | администраторы, `SUPPORT` | последние 100 внешних выводов клиники; `status=FAILED` (или другой статус) — только с ним, неизвестный — `409 INVALID_OUTBOX_STATUS` |
 
 Секреты (`CLINIC_OUTBOUND_WEBHOOK_SECRET`, `TELEGRAM_BOT_TOKEN`, `CLINIC_CASHBOX_SECRET`) — только из окружения (`.env`), не из Git и не из Liquibase. Токен Telegram входит в адрес запроса, поэтому адреса запросов наружу не логируются. В профиле `prod` приложение не стартует, если адрес вебхука или кассы задан, а секрет короче 32 символов.
 
@@ -467,12 +520,14 @@ Frontend запускается так же, как в варианте 1. Не 
 Язык в коде: идентификаторы Java, TypeScript и SQL, ключи конфигурации, сообщения логов и `message` в ответах API — на английском; комментарии могут быть русскими; русский текст на экране живёт только в интерфейсе; ФИО, названия услуг и задач — данные и не переводятся.
 
 - Maven reactor с backend-приложением `backend/app`: Spring Boot 4.1.1, Spring Modulith 2.1.1, JPA, Liquibase, PostgreSQL 18;
-- модули: staff (клиники, вход и учётные записи), patients, scheduling (включая аналитику), registry (задачи и лист ожидания), clinical/documents, billing, communications/outbox, audit и platform; границы проверяет `ModularityTest`. `staff` и `registry` не зависят от кода других модулей: существование пациента, врача или сотрудника проверяется запросом к таблице;
+- модули: staff (клиники, вход и учётные записи), patients, scheduling (включая аналитику), registry (задачи и лист ожидания), clinical/documents, billing, inventory (склад и Честный знак), drive (корпоративный диск), insights (дашборд), communications/outbox, audit и platform (права ролей, доменные события); границы проверяет `ModularityTest`. `staff` и `registry` не зависят от кода других модулей: существование пациента, врача или сотрудника проверяется запросом к таблице;
 - сессии Spring Security с cookie `HttpOnly`/`SameSite=Lax`, bcrypt-хеши паролей, CSRF через cookie `XSRF-TOKEN`;
 - запрет пересекающихся записей врача: проверка в приложении плюс PostgreSQL exclusion constraint;
 - клинические тексты и snapshot документа шифруются AES-256-GCM через заменяемый `KmsPort`; dev-адаптер берёт ключ из `CLINIC_DEV_KMS_KEY`;
 - подписанный документ (`SIGNED_LOCKED`) защищён доменным инвариантом и PostgreSQL trigger; исправление — новый связанный документ;
-- платежи и уведомления — порты с безопасными mock-адаптерами;
+- права ролей — разрешения `<сервис>.<ресурс>.<действие>` в `platform/RolePermissions`, проверка в сервисах через `requirePermission`; матрицу держит `RbacMatrixTest`;
+- модули общаются доменными событиями через transactional outbox и inbox (`domain_event_outbox`, `domain_event_inbox`);
+- платежи, уведомления и Честный знак — порты с безопасными mock-адаптерами;
 - аудит фиксирует чтения и изменения без клинического текста.
 
 ### Структура кода
@@ -489,7 +544,7 @@ src/
   api/          client.ts (apiFetch: cookie, CSRF, 401 → вход; ошибки), errorMessages.ts (код ошибки →
                 фраза на экране), auth.ts, staff.ts,
                 registry.ts, schedule.ts, patients.ts, clinical.ts, billing.ts, analytics.ts,
-                audit.ts, types.ts
+                audit.ts, insights.ts (дашборд), inventory.ts, drive.ts, types.ts
   features/
     auth/       LoginPage.tsx, ForcePasswordPage.tsx (смена временного пароля), PasswordDialog.tsx,
                 password.ts
@@ -506,9 +561,14 @@ src/
                 useClinicalHistory.ts, search.ts
     visit/      Visit.tsx, SignDialog.tsx, useVisit.ts, visit.ts
     cashier/    Cashier.tsx, cashier.ts
+    today/      TodayPage.tsx, DashboardWidgets.tsx (виджеты дашборда), today.ts, dashboard.ts
+    inventory/  InventoryPage.tsx, BalancesTab, ItemsTab, DocumentsTab, DocumentDialog, MarkingTab,
+                NormsTab (нормы расхода услуг), inventory.ts
+    drive/      DrivePage.tsx, NameDialog, ShareDialog, VersionsDialog, drive.ts
     analytics/  Analytics.tsx, stats.ts
     audit/      AuditLog.tsx, auditLabels.ts
-  shared/       dates.ts, roles.ts (коды ролей и их названия), sandbox.ts (память демо-песочницы),
+  shared/       dates.ts, roles.ts (коды ролей и их названия), permissions.ts (разрешения ролей —
+                копия матрицы backend, только чтобы прятать кнопки), sandbox.ts (память демо-песочницы),
                 storage.ts (ключи localStorage alphacrm-* с чтением прежних quiet-clinic-*), text.ts,
                 ui.tsx (Metric, Info, FormSection)
   test/         setup.ts (общая подготовка), helpers.tsx (renderApp, withAuth — сервер с сессией,
@@ -532,6 +592,9 @@ src/
 | `AuthControllerTest`, `StaffControllerTest`, `SignedDocumentControllerTest`, `SchedulingControllerTest`, `ServiceCatalogControllerTest`, `AnalyticsControllerTest`, `PatientsControllerTest`, `RegistryControllerTest`, `ClinicalControllerTest`, `BillingControllerTest`, `AuditControllerTest` | HTTP-сценарии на H2: вход через `/auth/login` как `admin` / `admin`, остальных сотрудников помощник `StaffSessions` заводит через API сотрудников; вторая клиника — `SecondClinic`; сессия, CSRF и права ролей | да |
 | `CareRelationshipServiceTest`, `ChargeServiceTest` | публичные методы модулей, которые вызывает расписание | да |
 | `PostgresAppointmentIntegrationTest` | ограничение на пересечение записей в настоящем PostgreSQL | Docker |
+| `RbacMatrixTest` | каждая строка `rbac-matrix.csv`: роль × маршрут → разрешено или `403` | да |
+| `RolePermissionsTest`, `Gs1Test` | набор разрешений ролей и правила назначения; разбор кодов маркировки | нет |
+| `FreePriceFlowTest`, `InventoryControllerTest`, `DriveControllerTest`, `DashboardControllerTest` | свободная цена через событие, склад и маркировка, диск, дашборд | да |
 | `ModularityTest` | границы между модулями | нет |
 
 Файлы запуска:

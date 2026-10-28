@@ -74,6 +74,9 @@ erDiagram
     clinic_service ||--o{ waitlist_entry : "service_id"
     appointment |o--o{ waitlist_entry : "appointment_id после записи"
 
+    clinic_service ||--o{ clinic_service_norm : "нормы расхода"
+    clinic ||--o{ domain_event_outbox : "clinic_id"
+
     audit_event }o--|| staff_user : "actor_id (логически)"
     outbox_message }o--|| appointment : "aggregate_id (логически)"
 ```
@@ -116,7 +119,7 @@ erDiagram
 | `full_name` | VARCHAR(255) | NN | ФИО — данные, как ввёл администратор |
 | `username` | VARCHAR(80) | NN, U | логин, уникален во всей установке, хранится в нижнем регистре |
 | `password_hash` | VARCHAR(100) | NN | bcrypt со своей солью. Пароля в открытом виде нет нигде |
-| `role` | VARCHAR(40) | NN, CHECK | `ADMINISTRATOR`, `DOCTOR`, `MANAGER`, `CASHIER` |
+| `role` | VARCHAR(40) | NN, CHECK | `OWNER`, `SENIOR_ADMINISTRATOR`, `ADMINISTRATOR`, `MANAGER`, `DOCTOR`, `NURSE`, `CASHIER`, `SUPPORT`. Разрешения роли в базе не хранятся — они в коде (`RolePermissions`) |
 | `practitioner_id` | UUID | FK → `practitioner`, U | только у `DOCTOR`, у остальных `NULL` (CHECK) |
 | `active` | BOOLEAN | NN | `false` — войти нельзя, открытые сессии перестают действовать |
 | `must_change_password` | BOOLEAN | NN, default `false` | временный пароль: до смены API отвечает `403 PASSWORD_CHANGE_REQUIRED` |
@@ -194,11 +197,24 @@ erDiagram
 | `clinic_id` | UUID | FK → `clinic`, NN | услуги своей клиники |
 | `name` | VARCHAR(255) | NN | название — данные, как ввёл администратор. В PostgreSQL уникально внутри клиники (`clinic_service_clinic_name_unique`), в H2 — во всей базе |
 | `duration_minutes` | INTEGER | NN, CHECK > 0 | API принимает 1–720 |
-| `price_minor` | BIGINT | NN, CHECK ≥ 0 | цена в копейках |
+| `price_mode` | VARCHAR(10) | NN, CHECK, default `FIXED` | `FIXED` — фиксированная цена, `OPEN` — свободная: сумму вводят в кассе |
+| `price_minor` | BIGINT | CHECK ≥ 0 | цена в копейках; у `OPEN` — `NULL` (CHECK `clinic_service_pricing_valid`) |
+| `min_minor`, `max_minor` | BIGINT | | пределы свободной цены; у `OPEN` обязательны, `0 ≤ min ≤ max` |
 | `currency` | VARCHAR(3) | NN | `RUB` |
 | `active` | BOOLEAN | NN, default `true` | `false` — не предлагается в новой записи и листе ожидания; строка остаётся |
 
-Цена и выключение действуют только на новые записи. Запись не ссылается на услугу по id — она хранит снимок.
+Цена и выключение действуют только на новые записи: запись хранит снимок цены, а `service_id` — только чтобы найти нормы расхода и пределы свободной цены при завершении.
+
+#### `clinic_service_norm` — нормы расхода услуги
+
+| Колонка | Тип | | Смысл |
+|---|---|---|---|
+| `id` | UUID | PK | |
+| `service_id` | UUID | FK → `clinic_service`, NN | |
+| `item_id` | UUID | NN | позиция склада (`inventory.item`) — по id, без внешнего ключа в чужую схему |
+| `quantity` | NUMERIC(14,3) | NN, CHECK > 0 | количество на один приём |
+
+Уникальность `(service_id, item_id)`.
 
 #### `appointment` — запись на приём
 
@@ -209,7 +225,10 @@ erDiagram
 | `practitioner_id` | UUID | FK → `practitioner`, NN | клиника записи — клиника врача |
 | `starts_at`, `ends_at` | TIMESTAMPTZ | NN, CHECK `ends_at > starts_at` | |
 | `service_name` | VARCHAR(255) | NN | **снимок** названия услуги на момент записи |
-| `amount_minor` | BIGINT | | **снимок** цены; `NULL` у записей, сделанных до появления цен |
+| `service_id` | UUID | | услуга записи (логическая ссылка; у старых записей заполнена по названию) |
+| `price_mode` | VARCHAR(10) | | снимок режима цены: `FIXED`, `OPEN` |
+| `amount_minor` | BIGINT | | **снимок** цены; `NULL` у свободной цены и у записей, сделанных до появления цен |
+| `estimate_minor` | BIGINT | | предварительная оценка свободной цены (в пределах услуги), необязательна |
 | `currency` | VARCHAR(3) | | снимок валюты |
 | `status` | VARCHAR(40) | NN | `BOOKED`, `CONFIRMED`, `ARRIVED`, `IN_PROGRESS`, `COMPLETED`, `NO_SHOW`, `CANCELLED` |
 | `created_at` | TIMESTAMPTZ | NN | |
@@ -338,9 +357,11 @@ CHECK `patient_file_signed_complete`: у `SIGNED_LOCKED` заполнены хе
 |---|---|---|---|
 | `id` | UUID | PK | |
 | `appointment_id` | UUID | FK → `appointment`, NN, U (`charge_appointment_unique`) | один счёт на приём |
-| `amount_minor` | BIGINT | NN | из снимка цены записи |
+| `amount_minor` | BIGINT | | из снимка цены записи; у свободной цены — `NULL`, пока сумму не ввели (CHECK `charge_amount_present`) |
+| `price_mode` | VARCHAR(10) | NN, default `FIXED` | снимок режима цены |
+| `min_minor`, `max_minor`, `estimate_minor` | BIGINT | | снимок пределов и оценки свободной цены на момент приёма |
 | `currency` | VARCHAR(3) | NN | |
-| `status` | VARCHAR(40) | NN | `PENDING` → `PAID` |
+| `status` | VARCHAR(40) | NN, CHECK | `AWAITING_AMOUNT` → `PENDING` → `PAID`; фиксированная цена начинает с `PENDING` |
 | `created_at` | TIMESTAMPTZ | NN | |
 
 #### `payment_record` — оплата
@@ -354,6 +375,56 @@ CHECK `patient_file_signed_complete`: у `SIGNED_LOCKED` заполнены хе
 | `payment_status` | VARCHAR(40) | NN | ответ адаптера |
 | `fiscal_status` | VARCHAR(40) | NN | `QUEUED` — чек ждёт онлайн-кассу; `SENT_TO_CASHBOX` — передан в кассу (`CLINIC_CASHBOX_URL`). Сама CRM чек не печатает |
 | `created_at` | TIMESTAMPTZ | NN | |
+
+### platform — доменные события
+
+#### `domain_event_outbox`
+
+Конверт события пишется в той же транзакции, что изменение; после фиксации раздаётся обработчикам, не раздавшееся повторяет `DomainEventScheduler`.
+
+| Колонка | Тип | | Смысл |
+|---|---|---|---|
+| `id` | UUID | PK | `eventId` |
+| `type`, `version` | VARCHAR(80), INTEGER | NN | `AppointmentCompleted`, `StockShortage`; версия схемы полезной нагрузки |
+| `clinic_id` | UUID | FK → `clinic`, NN | |
+| `occurred_at` | TIMESTAMPTZ | NN | |
+| `actor_id` | UUID | NN | кто вызвал изменение |
+| `correlation_id` | VARCHAR(80) | | из заголовка запроса |
+| `payload` | VARCHAR(8000) | NN | JSON: id и числа, без ФИО, телефонов и клинического текста |
+| `status` | VARCHAR(20) | NN, CHECK | `PENDING`, `PUBLISHED`, `FAILED` |
+| `attempts`, `next_attempt_at`, `last_error`, `published_at` | | | повторы; `last_error` — класс ошибки, без текста |
+
+#### `domain_event_inbox`
+
+`(consumer, event_id)` — PK; строка пишется в транзакции обработчика. Есть строка — событие этим потребителем уже обработано, повтор ничего не делает. Потребители: `billing.charge-on-completed`, `inventory.consumption-on-completed`, `registry.stock-shortage-task`.
+
+### inventory — склад (схема `inventory`)
+
+Таблицы склада лежат в своей схеме; пациентов в ней нет — расход по приёму хранит только `appointment_id`. Каждая таблица с данными клиники несёт `clinic_id`.
+
+| Таблица | Что хранит |
+|---|---|
+| `item_category` | категории номенклатуры (`kind`: `DRUG`, `MEDICAL_DEVICE`, `CONSUMABLE`, `GOODS`), вложенность через `parent_id` |
+| `item` | номенклатура: название, единица, `gtin`, `marked` и `marking_system` (`NONE`, `MDLP`, `GIS_MT`; маркируемому нужен GTIN — CHECK), `rx_only`, `active` |
+| `warehouse` | склады клиники, `is_default` — основной (для расхода по нормам) |
+| `stock_document` | документ движения: `type` (`RECEIPT`, `CONSUMPTION`, `WRITE_OFF`, `TRANSFER`, `RETURN_TO_SUPPLIER`), `status` (`DRAFT`, `POSTED`, `CANCELLED`), склады, поставщик, `appointment_id` для расхода по приёму, `idempotency_key` (уникален в клинике — повтор события не создаёт второй документ), кто и когда провёл |
+| `stock_line` | строки: товар, количество (NUMERIC(14,3) > 0), партия, срок годности |
+| `stock_line_code` | марки (SGTIN), отсканированные в строке |
+| `stock_balance` | остаток по `(item_id, warehouse_id, batch)` со сроком годности; меняется только проведением; может уйти в минус только при расходе с разрешением или по нормам приёма |
+| `marking_code` | марка упаковки: SGTIN, GTIN, серийный номер, партия, срок, статус (`PENDING_ACCEPTANCE`, `IN_STOCK`, `WITHDRAWAL_PENDING`, `WITHDRAWN`, `WRITE_OFF_PENDING`, `WRITTEN_OFF`, …), склад. Уникальна в клинике; криптохвост кода не хранится |
+| `marking_operation` | очередь операций к оператору маркировки (`ACCEPTANCE`, `WITHDRAW_MEDICAL_USE`, `WRITE_OFF`, `RETURN_TO_SUPPLIER`): статус `PENDING`/`DONE`/`ERROR`, попытки, ответ оператора, код причины |
+| `marking_operation_code` | марки операции |
+
+### drive — корпоративный диск (схема `drive`)
+
+| Таблица | Что хранит |
+|---|---|
+| `drive_node` | папка или файл (`kind`): клиника, родитель, имя, владелец, размер, текущая версия; `deleted_at`/`deleted_by` — в корзине |
+| `drive_version` | версия файла: номер, `object_key` (шифртекст в `CLINIC_DRIVE_STORAGE_DIR`, ключ `clinicId/uuid`), размер, SHA-256 исходного содержимого, тип, кто и когда загрузил |
+| `drive_share` | право на узел: кому (`USER`, `ROLE`, `CLINIC`, `LINK`), что (`VIEW`, `EDIT`, `MANAGE`), срок; у ссылки — только SHA-256 токена (уникален) и обязательный срок |
+| `drive_quota` | занято и предел байтов клиники |
+
+Имя файла есть только в `drive_node`, в аудит оно не пишется. Клинические PDF пациента сюда не попадают — они в `patient_file`.
 
 ### communications — outbox
 
@@ -473,10 +544,16 @@ CHECK `patient_file_signed_complete`: у `SIGNED_LOCKED` заполнены хе
 | | 026 | `patient.assigned_staff_id` — постоянный администратор; e-mail и второй телефон — контакты `EMAIL`, `SECOND_PHONE` без новых колонок |
 | | 027 | `patient_file` — зашифрованные PDF пациента |
 | | 028 (PostgreSQL) | trigger `patient_file_immutable` |
+| `010-roles-pricing-events.sql` | 029 | роли целевой архитектуры в CHECK `staff_user.role`; начальный `admin` становится владельцем, если владельца нет |
+| | 030 | свободная цена: `clinic_service.price_mode/min/max`, снимок в `appointment` (`service_id`, `price_mode`, `estimate_minor`) и в `charge`; статус `AWAITING_AMOUNT` |
+| | 031 | `domain_event_outbox`, `domain_event_inbox` |
+| `011-inventory.sql` | 032 | `clinic_service_norm` — нормы расхода |
+| | 033 | схема `inventory`: номенклатура, склады, документы, остатки, марки и операции маркировки |
+| `012-drive.sql` | 034 | схема `drive`: узлы, версии, права и ссылки, квота |
 
 Как добавить изменение:
 
-1. Новый changeset в конце последнего файла или новый файл `010-….sql`, подключённый в `db.changelog-master.yaml`.
+1. Новый changeset в конце последнего файла или новый файл `013-….sql`, подключённый в `db.changelog-master.yaml`.
 2. Идентификаторы таблиц, колонок, индексов и ограничений — на английском, `snake_case`. Русский допустим только в значениях данных и в комментариях `--`.
 3. Если колонка становится `NOT NULL`, сначала добавьте её nullable, заполните `UPDATE`, затем `SET NOT NULL` — так миграция пройдёт на базе с данными.
 4. Разницу PostgreSQL/H2 оформляйте отдельными changeset-ами с `dbms:postgresql` / `dbms:h2`.
