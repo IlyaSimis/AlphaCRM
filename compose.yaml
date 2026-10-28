@@ -55,6 +55,13 @@ services:
       CLINIC_BOT_SERVICE: ${CLINIC_BOT_SERVICE:-Первичный приём}
       CLINIC_BOT_TASK_ASSIGNEE: ${CLINIC_BOT_TASK_ASSIGNEE:-}
       TELEGRAM_REMINDER_BUTTONS: ${TELEGRAM_REMINDER_BUTTONS:-true}
+      # Честный знак: none — не настроено (операции ждут в очереди), mock — заглушка MVP.
+      CLINIC_MARKING_ADAPTER: ${CLINIC_MARKING_ADAPTER:-none}
+      # Корпоративный диск: зашифрованные файлы в томе quiet-clinic-drive.
+      CLINIC_DRIVE_STORAGE_DIR: /var/lib/alphacrm/drive
+      CLINIC_DRIVE_QUOTA_BYTES: ${CLINIC_DRIVE_QUOTA_BYTES:-10737418240}
+    volumes:
+      - quiet-clinic-drive:/var/lib/alphacrm/drive
     depends_on:
       postgres:
         condition: service_healthy
@@ -108,3 +115,4 @@ services:
 
 volumes:
   quiet-clinic-postgres:
+  quiet-clinic-drive:
