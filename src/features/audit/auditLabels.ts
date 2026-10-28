@@ -49,6 +49,10 @@ export const actionLabels: Record<string, string> = {
   FISCAL_RECEIPT_SENT: 'Чек передан в кассу',
   CHARGE_AMOUNT_SET: 'Сумма свободной цены',
   CHARGE_VOIDED: 'Аннулирование счёта',
+  HR_CONTRACT_CHANGED: 'Изменение условий работы',
+  HR_CONTRACT_READ: 'Просмотр условий работы',
+  HR_CONTRACT_LIST_READ: 'Просмотр ставок',
+  STAFF_ROLES_CHANGED: 'Изменение ролей',
   CLINICAL_BREAK_GLASS_GRANTED: 'Экстренный доступ к медданным',
   CLINICAL_BREAK_GLASS_LIST_READ: 'Просмотр журнала экстренных доступов',
   PAYMENT_REFUNDED: 'Возврат оплаты',
@@ -159,6 +163,8 @@ export function reasonLabel(code: string | null | undefined): string {
 
   const role = /^role:([A-Z_]+)$/.exec(code)
   if (role && roleNames[role[1]]) return `роль: ${roleNames[role[1]]}`
+  const roles = /^roles:([A-Z_]+(,[A-Z_]+)*)$/.exec(code)
+  if (roles && roles[1].split(',').every((item) => roleNames[item])) return `роли: ${roles[1].split(',').map((item) => roleNames[item]).join(', ')}`
 
   const days = /^days:([1-7](,[1-7])*)?$/.exec(code)
   if (days) return days[1] ? `рабочие дни: ${days[1].split(',').map((day) => dayNames[Number(day)]).join(', ')}` : 'рабочих дней нет'

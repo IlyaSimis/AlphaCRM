@@ -12,6 +12,9 @@ export const errorMessages: Record<string, string> = {
   PASSWORD_CHANGE_REQUIRED: 'Сначала смените временный пароль',
   PASSWORD_NOT_CHANGED: 'Новый пароль должен отличаться от временного',
   WRONG_PASSWORD: 'Пароль указан неверно',
+  CONTRACT_DATE_TOO_EARLY: 'Новые условия должны начинаться позже действующих',
+  CANNOT_CHANGE_OWN_ROLES: 'Свои роли менять нельзя',
+  DOCTOR_ROLE_FIXED: 'Роль врача связана с карточкой врача и здесь не меняется',
   TOO_MANY_ATTEMPTS: 'Слишком много неверных паролей. Подождите 15 минут',
   VALIDATION_ERROR: 'Проверьте заполнение полей',
 

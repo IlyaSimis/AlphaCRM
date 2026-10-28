@@ -14,6 +14,10 @@ public enum Permission {
   /** Назначить и обслуживать роли OWNER и SENIOR_ADMINISTRATOR. */
   ROLE_ASSIGN_PRIVILEGED("identity.role.assign-privileged"),
   STAFF_PASSWORD_RESET("identity.staff.reset-password"),
+  /** Условия работы и ставки всех сотрудников: только владелец (раздел C, hr). */
+  HR_MANAGE("identity.hr.manage"),
+  /** Свои условия работы и ставка: каждый сотрудник. */
+  HR_READ_OWN("identity.hr.read-own"),
   /** Сброс пароля техподдержкой: любому, кроме владельца. */
   STAFF_PASSWORD_RESET_PLATFORM("identity.staff.reset-password-platform"),
 

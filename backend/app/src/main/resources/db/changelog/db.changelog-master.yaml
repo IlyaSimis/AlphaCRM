@@ -29,3 +29,5 @@ databaseChangeLog:
       file: db/changelog/014-break-glass.sql
   - include:
       file: db/changelog/015-staff-roles.sql
+  - include:
+      file: db/changelog/016-hr.sql

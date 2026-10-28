@@ -113,7 +113,7 @@ describe('«Сегодня» — домашняя страница', () => {
     expect(within(tabs).getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Дашборды', 'База данных пациентов', 'Склад', 'Финансы', 'Диск'])
     expect(within(tabs).getByRole('tab', { name: 'Дашборды' })).toHaveAttribute('aria-selected', 'true')
     const overview = within(sidebar()).getByRole('navigation', { name: 'Обзор' })
-    expect(within(overview).getAllByRole('button').map((button) => button.textContent)).toEqual(['Сегодня', 'Аналитика'])
+    expect(within(overview).getAllByRole('button').map((button) => button.textContent)).toEqual(['Сегодня', 'Аналитика', 'Мои условия работы'])
     expect(within(within(sidebar()).getByRole('navigation', { name: 'Управление' })).getAllByRole('button').map((button) => button.textContent)).toEqual(['Сотрудники', 'Журнал аудита', 'Внешние выводы'])
     expect(within(overview).getByRole('button', { name: 'Сегодня' })).toHaveClass('active')
 
@@ -149,12 +149,12 @@ describe('«Сегодня» — домашняя страница', () => {
     expect(within(content()).queryByText('Администратор песочницы')).not.toBeInTheDocument()
   })
 
-  it('the doctor has no «Дашборды» tab; the AlphaCRM button returns to the schedule and keeps open visits', async () => {
+  it('the doctor starts with the schedule; «Дашборды» hold only his own terms; the AlphaCRM button returns to the schedule and keeps open visits', async () => {
     goOffline()
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user, 'DOCTOR')
-    expect(screen.queryByRole('tab', { name: 'Дашборды' })).not.toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'База данных пациентов' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.queryByRole('tab', { name: 'Финансы' })).not.toBeInTheDocument()
     expect(within(sidebar()).queryByRole('button', { name: 'Сегодня' })).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Начать приём 09:00 Анна Михайлова' }))

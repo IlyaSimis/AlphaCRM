@@ -9,6 +9,7 @@ import { PasswordDialog } from '../features/auth/PasswordDialog'
 import { Cashier } from '../features/cashier/Cashier'
 import { SalesPage } from '../features/finance/SalesPage'
 import { BreakGlassLog } from '../features/breakglass/BreakGlassLog'
+import { ContractsPage, MyContractPage } from '../features/hr/HrPages'
 import { SignedDocuments } from '../features/documents/SignedDocuments'
 import { PatientFiles } from '../features/files/PatientFiles'
 import { OutboxPage } from '../features/outbox/OutboxPage'
@@ -229,6 +230,8 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
           {page === 'outbox' && <OutboxPage apiOnline={clinic.apiOnline} />}
           {page === 'sales' && <SalesPage apiOnline={clinic.apiOnline} />}
           {page === 'break-glass' && <BreakGlassLog apiOnline={clinic.apiOnline} />}
+          {page === 'hr' && <ContractsPage apiOnline={clinic.apiOnline} notify={clinic.notify} />}
+          {page === 'hr-me' && <MyContractPage apiOnline={clinic.apiOnline} />}
           {stock && <InventoryPage role={role} apiOnline={clinic.apiOnline} services={clinic.services} notify={clinic.notify} section={stock} onSection={(next) => navigate(`stock-${next}`)} />}
           {drive && <DrivePage role={role} apiOnline={clinic.apiOnline} self={staff} notify={clinic.notify} section={drive} onSection={(next) => navigate(next === 'mine' ? 'drive' : `drive-${next}`)} />}
           {page === 'staff' && <StaffPage self={staff} live={live} practitioners={practitioners} notify={clinic.notify} onPractitionerAdded={clinic.practitionerAdded} />}

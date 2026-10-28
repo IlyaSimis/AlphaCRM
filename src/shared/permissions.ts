@@ -8,6 +8,7 @@ import type { StaffItem, StaffRole } from '../api/types'
 export type Permission =
   | 'identity.staff.read' | 'identity.staff.manage' | 'identity.role.assign-admin' | 'identity.role.assign-privileged'
   | 'identity.staff.reset-password' | 'identity.staff.reset-password-platform'
+  | 'identity.hr.manage' | 'identity.hr.read-own'
   | 'schedule.appointment.read' | 'schedule.appointment.write' | 'schedule.appointment.write-own'
   | 'schedule.practitioner.read' | 'schedule.practitioner.manage' | 'schedule.service.read' | 'schedule.service.manage'
   | 'schedule.registry-task.read' | 'schedule.registry-task.manage' | 'schedule.waitlist.read' | 'schedule.waitlist.manage'
@@ -33,11 +34,11 @@ const OPERATIONS: Permission[] = [
   'inventory.item.read', 'inventory.item.write', 'inventory.document.write', 'inventory.document.allow-negative',
   'inventory.stock.read', 'inventory.marking.read', 'inventory.marking.manage',
   'drive.file.use', 'drive.admin', 'insights.dashboard.read', 'insights.analytics.read', 'audit.event.read',
-  'communications.delivery.read', 'communications.delivery.retry',
+  'communications.delivery.read', 'communications.delivery.retry', 'identity.hr.read-own',
 ]
 
 export const rolePermissions: Record<StaffRole, Permission[]> = {
-  OWNER: [...OPERATIONS, 'identity.role.assign-privileged', 'clinical.record.break-glass', 'clinical.break-glass.review'],
+  OWNER: [...OPERATIONS, 'identity.role.assign-privileged', 'clinical.record.break-glass', 'clinical.break-glass.review', 'identity.hr.manage'],
   SENIOR_ADMINISTRATOR: [...OPERATIONS, 'clinical.break-glass.review'],
   ADMINISTRATOR: OPERATIONS,
   MANAGER: [
@@ -48,30 +49,30 @@ export const rolePermissions: Record<StaffRole, Permission[]> = {
     'clinical.signed-document.read', 'clinical.patient-file.read-signed',
     'finance.invoice.read', 'finance.revenue.read',
     'inventory.item.read', 'inventory.item.write', 'inventory.document.write', 'inventory.stock.read', 'inventory.marking.read', 'inventory.marking.manage',
-    'drive.file.use', 'insights.dashboard.read', 'insights.analytics.read', 'audit.event.read',
+    'drive.file.use', 'insights.dashboard.read', 'insights.analytics.read', 'audit.event.read', 'identity.hr.read-own',
   ],
   DOCTOR: [
     'schedule.appointment.read', 'schedule.appointment.write-own', 'schedule.practitioner.read', 'schedule.service.read',
     'clinical.patient.read-care', 'clinical.patient.contacts-read', 'clinical.note.write', 'clinical.signed-document.read-own',
     'clinical.patient-file.write-care', 'inventory.item.read', 'inventory.stock.read',
-    'drive.file.use', 'insights.dashboard.read', 'insights.analytics.read-own',
+    'drive.file.use', 'insights.dashboard.read', 'insights.analytics.read-own', 'identity.hr.read-own',
   ],
   NURSE: [
     'schedule.appointment.read', 'schedule.appointment.write', 'schedule.practitioner.read', 'schedule.service.read',
     'clinical.patient.read', 'clinical.patient.contacts-read',
     'inventory.item.read', 'inventory.item.write', 'inventory.document.write', 'inventory.stock.read', 'inventory.marking.read',
-    'drive.file.use', 'insights.dashboard.read',
+    'drive.file.use', 'insights.dashboard.read', 'identity.hr.read-own',
   ],
   CASHIER: [
     'schedule.appointment.read', 'schedule.practitioner.read', 'schedule.service.read', 'clinical.patient.read',
     'schedule.registry-task.read', 'finance.invoice.read', 'finance.invoice.write', 'finance.invoice.set-amount',
-    'drive.file.use', 'insights.dashboard.read',
+    'drive.file.use', 'insights.dashboard.read', 'identity.hr.read-own',
   ],
   SUPPORT: [
     'identity.staff.read', 'identity.staff.reset-password-platform', 'schedule.appointment.read', 'schedule.practitioner.read',
     'schedule.service.read', 'inventory.item.read', 'inventory.stock.read', 'inventory.marking.read', 'inventory.marking.manage',
     'drive.file.use', 'drive.admin', 'insights.dashboard.read', 'insights.analytics.read', 'audit.event.read-platform',
-    'communications.delivery.read', 'communications.delivery.retry',
+    'communications.delivery.read', 'communications.delivery.retry', 'identity.hr.read-own',
   ],
 }
 

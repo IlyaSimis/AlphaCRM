@@ -18,24 +18,26 @@ describe('services and pages by role', () => {
 
   it('the administrator sees everything operational, grouped by service', () => {
     expect(navigationFor('ADMINISTRATOR')).toEqual([
-      'today', 'analytics', 'staff', 'audit', 'outbox',
+      'today', 'analytics', 'hr-me', 'staff', 'audit', 'outbox',
       'schedule', 'patients', 'registry', 'hours',
       'stock-balances', 'stock-items', 'stock-documents', 'stock-marking', 'stock-norms',
       'cashier', 'sales', 'prices',
       'drive', 'drive-shared', 'drive-trash',
     ])
-    // Владелец и старший администратор вдобавок видят журнал экстренных доступов (K1).
+    // Владелец и старший администратор вдобавок видят журнал экстренных доступов (K1), владелец — ставки.
     const withLog = navigationFor('ADMINISTRATOR').flatMap((page) => (page === 'audit' ? ['audit', 'break-glass'] : [page]))
-    expect(navigationFor('OWNER')).toEqual(withLog)
     expect(navigationFor('SENIOR_ADMINISTRATOR')).toEqual(withLog)
+    expect(navigationFor('OWNER')).toEqual(withLog.flatMap((page) => (page === 'staff' ? ['staff', 'hr'] : [page])))
+    expect(canOpen('hr', 'SENIOR_ADMINISTRATOR')).toBe(false)
     expect(canOpen('break-glass', 'MANAGER')).toBe(false)
     expect(sectionsFor('dashboards', 'ADMINISTRATOR').map((section) => section.label)).toEqual(['ОБЗОР', 'УПРАВЛЕНИЕ'])
   })
 
-  it('a cashier has no inventory service; a doctor has no finance and no dashboards tab (his dashboard is above the schedule)', () => {
+  it('a cashier has no inventory service; a doctor has no finance, and in dashboards only his own terms (his dashboard is above the schedule)', () => {
     expect(servicesFor('CASHIER')).toEqual(['dashboards', 'patients', 'finance', 'drive'])
-    expect(navigationFor('CASHIER')).toEqual(['today', 'schedule', 'patients', 'registry', 'cashier', 'drive', 'drive-shared', 'drive-trash'])
-    expect(servicesFor('DOCTOR')).toEqual(['patients', 'inventory', 'drive'])
+    expect(navigationFor('CASHIER')).toEqual(['today', 'hr-me', 'schedule', 'patients', 'registry', 'cashier', 'drive', 'drive-shared', 'drive-trash'])
+    expect(servicesFor('DOCTOR')).toEqual(['dashboards', 'patients', 'inventory', 'drive'])
+    expect(sectionsFor('dashboards', 'DOCTOR').flatMap((section) => section.pages)).toEqual(['hr-me'])
     expect(sectionsFor('inventory', 'DOCTOR').flatMap((section) => section.pages)).toEqual(['stock-balances', 'stock-items'])
     expect(canOpen('cashier', 'DOCTOR')).toBe(false)
     expect(canOpen('visit', 'DOCTOR')).toBe(true)
@@ -53,7 +55,7 @@ describe('services and pages by role', () => {
 
   it('a service tab opens its first page available to the role', () => {
     expect(firstPageOf('dashboards', 'ADMINISTRATOR')).toBe('today')
-    expect(firstPageOf('dashboards', 'DOCTOR')).toBeNull()
+    expect(firstPageOf('dashboards', 'DOCTOR')).toBe('hr-me')
     expect(firstPageOf('inventory', 'NURSE')).toBe('stock-balances')
     expect(firstPageOf('finance', 'NURSE')).toBeNull()
   })

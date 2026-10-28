@@ -27,7 +27,7 @@ public final class RolePermissions {
   public static final String SUPPORT = "SUPPORT";
 
   /** Версия набора разрешений: отдаётся в /auth/me как permissionsVersion. */
-  public static final String VERSION = "2026-10-28.2";
+  public static final String VERSION = "2026-10-28.3";
 
   /** Роли сотрудников в порядке экрана «Сотрудники». */
   public static final List<String> STAFF_ROLES =
@@ -46,6 +46,7 @@ public final class RolePermissions {
   private static Map<String, Set<Permission>> build() {
     var operations =
         EnumSet.of(
+            HR_READ_OWN,
             STAFF_READ,
             STAFF_MANAGE,
             ROLE_ASSIGN_ADMIN,
@@ -88,6 +89,7 @@ public final class RolePermissions {
 
     var owner = EnumSet.copyOf(operations);
     owner.add(ROLE_ASSIGN_PRIVILEGED);
+    owner.add(HR_MANAGE);
     owner.add(CLINICAL_BREAK_GLASS);
     owner.add(CLINICAL_BREAK_GLASS_REVIEW);
 
@@ -96,6 +98,7 @@ public final class RolePermissions {
 
     var manager =
         EnumSet.of(
+            HR_READ_OWN,
             STAFF_READ,
             STAFF_MANAGE,
             STAFF_PASSWORD_RESET,
@@ -126,6 +129,7 @@ public final class RolePermissions {
 
     var doctor =
         EnumSet.of(
+            HR_READ_OWN,
             SCHEDULE_READ,
             APPOINTMENT_WRITE_OWN,
             PRACTITIONER_READ,
@@ -143,6 +147,7 @@ public final class RolePermissions {
 
     var nurse =
         EnumSet.of(
+            HR_READ_OWN,
             SCHEDULE_READ,
             APPOINTMENT_WRITE,
             PRACTITIONER_READ,
@@ -159,6 +164,7 @@ public final class RolePermissions {
 
     var cashier =
         EnumSet.of(
+            HR_READ_OWN,
             SCHEDULE_READ,
             PRACTITIONER_READ,
             SERVICE_READ,
@@ -172,6 +178,7 @@ public final class RolePermissions {
 
     var support =
         EnumSet.of(
+            HR_READ_OWN,
             STAFF_READ,
             STAFF_PASSWORD_RESET_PLATFORM,
             SCHEDULE_READ,
