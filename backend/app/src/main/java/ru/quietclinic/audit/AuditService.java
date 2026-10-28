@@ -51,6 +51,29 @@ public class AuditService {
         rows.getTotalElements());
   }
 
+  /** Страница журнала без событий над перечисленными типами объектов. */
+  @Transactional(readOnly = true)
+  public AuditPage page(
+      Collection<UUID> actorIds,
+      String result,
+      Collection<String> hiddenTypes,
+      int page,
+      int size) {
+    if (actorIds.isEmpty()) return new AuditPage(List.of(), page, size, 0);
+    var request = PageRequest.of(page, size);
+    var rows =
+        result == null || result.isBlank()
+            ? repository.findByActorIdInAndObjectTypeNotInOrderByOccurredAtDescIdDesc(
+                actorIds, hiddenTypes, request)
+            : repository.findByActorIdInAndResultAndObjectTypeNotInOrderByOccurredAtDescIdDesc(
+                actorIds, result, hiddenTypes, request);
+    return new AuditPage(
+        rows.getContent().stream().map(AuditService::view).toList(),
+        page,
+        size,
+        rows.getTotalElements());
+  }
+
   private static AuditView view(AuditEvent e) {
     return new AuditView(
         e.id,

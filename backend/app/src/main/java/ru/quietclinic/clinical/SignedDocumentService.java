@@ -1,10 +1,10 @@
 package ru.quietclinic.clinical;
 
 import static ru.quietclinic.platform.PlatformConfig.actorId;
+import static ru.quietclinic.platform.PlatformConfig.can;
 import static ru.quietclinic.platform.PlatformConfig.clinicId;
-import static ru.quietclinic.platform.PlatformConfig.hasRole;
 import static ru.quietclinic.platform.PlatformConfig.notFound;
-import static ru.quietclinic.platform.PlatformConfig.requireRole;
+import static ru.quietclinic.platform.PlatformConfig.requirePermission;
 
 import java.sql.ResultSet;
 import java.util.HashMap;
@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.quietclinic.audit.AuditService;
 import ru.quietclinic.platform.EncryptionService;
+import ru.quietclinic.platform.Permission;
 
 /**
  * Архив подписанных документов, только чтение. Врач видит документы, которые подписал сам; менеджер
@@ -50,9 +51,9 @@ class SignedDocumentService {
   /** Менеджер может сузить список до одного врача; врачу фильтр не нужен — он видит только своё. */
   @Transactional(readOnly = true)
   List<SignedDocumentView> list(UUID practitionerId) {
-    requireRole("DOCTOR", "MANAGER");
+    requirePermission(Permission.SIGNED_DOCUMENT_READ, Permission.SIGNED_DOCUMENT_READ_OWN);
     var rows =
-        hasRole("DOCTOR")
+        !can(Permission.SIGNED_DOCUMENT_READ)
             ? documents.findByStateAndSignedByOrderBySignedAtDesc(SIGNED, actorId())
             : practitionerId != null
                 ? documents.findByStateAndSignedByOrderBySignedAtDesc(SIGNED, practitionerId)
@@ -66,12 +67,12 @@ class SignedDocumentService {
 
   @Transactional(readOnly = true)
   SignedDocumentView get(UUID id) {
-    requireRole("DOCTOR", "MANAGER");
+    requirePermission(Permission.SIGNED_DOCUMENT_READ, Permission.SIGNED_DOCUMENT_READ_OWN);
     var doc =
         documents
             .findById(id)
             .filter(d -> SIGNED.equals(d.state))
-            .filter(d -> !hasRole("DOCTOR") || actorId().equals(d.signedBy))
+            .filter(d -> can(Permission.SIGNED_DOCUMENT_READ) || actorId().equals(d.signedBy))
             .orElseThrow(() -> notFound("SIGNED_DOCUMENT_NOT_FOUND", "Signed document not found"));
     var view =
         views(List.of(doc)).stream()

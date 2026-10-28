@@ -61,8 +61,11 @@ class PatientsControllerTest {
         .andExpect(jsonPath("$.fullName").value("Maria Sokolova-Ershova"))
         .andExpect(jsonPath("$.contacts[0].value").value("+79250000000"));
 
+    // Кассиру — только ФИО (нет clinical.patient.contacts-read).
     mvc.perform(get(MARIA).with(staff.role("CASHIER")))
-        .andExpect(jsonPath("$.fullName").value("Maria Sokolova-Ershova"));
+        .andExpect(jsonPath("$.fullName").value("Maria Sokolova-Ershova"))
+        .andExpect(jsonPath("$.contacts").isEmpty())
+        .andExpect(jsonPath("$.birthDate").value(org.hamcrest.Matchers.nullValue()));
   }
 
   @Test
@@ -310,7 +313,10 @@ class PatientsControllerTest {
                 .formatted(adminId));
     var card = "/api/v1/patients/" + id;
     // Второй телефон совпадает с основным у Анны Михайловой: предупреждение видно с обеих сторон.
+    // Врачу без связи с лечением карточка не видна; менеджер видит административную карточку.
     mvc.perform(get(card).with(staff.doctor(StaffSessions.PETROV)))
+        .andExpect(status().isNotFound());
+    mvc.perform(get(card).with(staff.role("MANAGER")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.email").value("contacts@example.org"))
         .andExpect(jsonPath("$.secondPhone").value("8 (916) 245-18-72"))

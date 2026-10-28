@@ -198,7 +198,9 @@ class AuthControllerTest {
     login(StaffSessions.ADMIN, StaffSessions.ADMIN_PASSWORD)
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.username").value("admin"))
-        .andExpect(jsonPath("$.role").value("ADMINISTRATOR"))
+        .andExpect(jsonPath("$.role").value("OWNER"))
+        .andExpect(jsonPath("$.permissionsVersion").isNotEmpty())
+        .andExpect(jsonPath("$.permissions").isArray())
         .andExpect(jsonPath("$.mustChangePassword").value(false));
     mvc.perform(get("/api/v1/patients").with(staff.admin())).andExpect(status().isOk());
   }

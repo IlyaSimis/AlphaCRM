@@ -16,6 +16,37 @@ public final class PlatformConfig {
         && auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_" + role));
   }
 
+  /** Роли сотрудника из сессии (без префикса ROLE_). */
+  public static java.util.Set<String> currentRoles() {
+    var auth = SecurityContextHolder.getContext().getAuthentication();
+    if (auth == null) return java.util.Set.of();
+    return auth.getAuthorities().stream()
+        .map(a -> a.getAuthority())
+        .filter(a -> a.startsWith("ROLE_"))
+        .map(a -> a.substring("ROLE_".length()))
+        .collect(java.util.stream.Collectors.toUnmodifiableSet());
+  }
+
+  /** Разрешения сотрудника из сессии — объединение разрешений его ролей. */
+  public static java.util.Set<Permission> currentPermissions() {
+    return RolePermissions.of(currentRoles());
+  }
+
+  /** Есть ли у сотрудника хотя бы одно из разрешений. */
+  public static boolean can(Permission... permissions) {
+    var granted = currentPermissions();
+    return java.util.Arrays.stream(permissions).anyMatch(granted::contains);
+  }
+
+  /**
+   * Проверка разрешения на сервере: хотя бы одно из перечисленных, иначе {@code 403 ACCESS_DENIED}.
+   * Атрибуты (своя клиника, своя запись, связь с лечением) сервис проверяет после.
+   */
+  public static void requirePermission(Permission... permissions) {
+    if (!can(permissions))
+      throw DomainException.forbidden("ACCESS_DENIED", "Not allowed for this role");
+  }
+
   public static java.util.UUID actorId() {
     return java.util.UUID.fromString(
         SecurityContextHolder.getContext().getAuthentication().getName());
@@ -26,6 +57,17 @@ public final class PlatformConfig {
     var auth = SecurityContextHolder.getContext().getAuthentication();
     if (auth != null && auth.getPrincipal() instanceof ClinicMember member) {
       return member.clinicId();
+    }
+    throw DomainException.unauthorized("Sign-in required");
+  }
+
+  /** Учётная запись сотрудника из сессии (не карточка врача). Без входа — 401. */
+  public static java.util.UUID staffId() {
+    var auth = SecurityContextHolder.getContext().getAuthentication();
+    if (auth != null
+        && auth.getPrincipal() instanceof ClinicMember member
+        && member.staffId() != null) {
+      return member.staffId();
     }
     throw DomainException.unauthorized("Sign-in required");
   }

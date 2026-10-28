@@ -3,8 +3,10 @@ package ru.quietclinic.staff;
 import static ru.quietclinic.platform.PlatformConfig.actorId;
 import static ru.quietclinic.platform.PlatformConfig.clinicId;
 import static ru.quietclinic.platform.PlatformConfig.conflict;
+import static ru.quietclinic.platform.PlatformConfig.currentPermissions;
+import static ru.quietclinic.platform.PlatformConfig.forbidden;
 import static ru.quietclinic.platform.PlatformConfig.notFound;
-import static ru.quietclinic.platform.PlatformConfig.requireRole;
+import static ru.quietclinic.platform.PlatformConfig.requirePermission;
 
 import java.util.List;
 import java.util.Locale;
@@ -14,10 +16,15 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.quietclinic.audit.AuditService;
+import ru.quietclinic.platform.Permission;
+import ru.quietclinic.platform.RolePermissions;
 
 /**
- * Сотрудники клиники: только администратор этой клиники заводит, выключает и задаёт временный
- * пароль. Роль не меняется. Сотрудники других клиник не видны и не меняются.
+ * Сотрудники клиники: заводят, выключают и задают временный пароль владелец, старший администратор,
+ * администратор и менеджер (разрешение {@code identity.staff.manage}). Роль владельца и старшего
+ * администратора назначает только владелец, администратора и техподдержку — администратор и выше:
+ * так менеджер не может завести себе администратора. Роль не меняется. Сотрудники других клиник не
+ * видны и не меняются.
  */
 @Service
 class StaffService {
@@ -45,17 +52,18 @@ class StaffService {
 
   @Transactional(readOnly = true)
   List<StaffView> list() {
-    requireRole("ADMINISTRATOR");
+    requirePermission(Permission.STAFF_READ);
     return staff.findByClinicIdOrderByFullName(clinicId()).stream().map(auth::view).toList();
   }
 
   @Transactional
   StaffView create(CreateStaffRequest request) {
-    requireRole("ADMINISTRATOR");
+    requirePermission(Permission.STAFF_MANAGE);
     var role = request.role().trim().toUpperCase(Locale.ROOT);
     if (!StaffRoles.ALL.contains(role)) {
       throw conflict("INVALID_ROLE", "Unknown staff role");
     }
+    requireMayAssign(role);
     var username = request.username().trim().toLowerCase(Locale.ROOT);
     if (staff.existsByUsername(username)) {
       throw conflict("USERNAME_TAKEN", "Username is already taken");
@@ -106,8 +114,9 @@ class StaffService {
 
   @Transactional
   StaffView setActive(UUID id, boolean active) {
-    requireRole("ADMINISTRATOR");
+    requirePermission(Permission.STAFF_MANAGE);
     var user = find(id);
+    requireMayAssign(user.role);
     if (!active && user.id.equals(auth.current().id)) {
       throw conflict("CANNOT_DEACTIVATE_SELF", "You cannot deactivate your own account");
     }
@@ -125,11 +134,30 @@ class StaffService {
   /** Временный пароль: в базе только хеш, при следующем входе сотрудник обязан его сменить. */
   @Transactional
   void resetPassword(UUID id, PasswordResetRequest request) {
-    requireRole("ADMINISTRATOR");
+    requirePermission(Permission.STAFF_PASSWORD_RESET, Permission.STAFF_PASSWORD_RESET_PLATFORM);
     var user = find(id);
+    var granted = currentPermissions();
+    // Техподдержка сбрасывает пароль любому, кроме владельца; остальные — тем, чью роль назначают.
+    var allowed =
+        (granted.contains(Permission.STAFF_PASSWORD_RESET)
+                && RolePermissions.mayAssign(granted, user.role))
+            || (granted.contains(Permission.STAFF_PASSWORD_RESET_PLATFORM)
+                && !RolePermissions.OWNER.equals(user.role));
+    if (!allowed) {
+      audit.record(
+          actorId(), "STAFF_PASSWORD_RESET", "STAFF", user.id, "DENIED", "role:" + user.role);
+      throw forbidden("ROLE_NOT_ASSIGNABLE", "Not allowed for a staff member with this role");
+    }
     user.passwordHash = encoder.encode(request.newPassword());
     user.mustChangePassword = true;
     audit.record(actorId(), "STAFF_PASSWORD_RESET", "STAFF", user.id, "ALLOWED", null);
+  }
+
+  /** Назначить (и обслуживать) роль можно только не выше своих прав. */
+  private void requireMayAssign(String role) {
+    if (!RolePermissions.mayAssign(currentPermissions(), role)) {
+      throw forbidden("ROLE_NOT_ASSIGNABLE", "Not allowed to manage staff with this role");
+    }
   }
 
   private boolean practitionerExists(UUID practitionerId) {

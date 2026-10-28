@@ -50,7 +50,7 @@ class ChargeServiceTest {
     assertThat(second).isEqualTo(first);
     var charge = repository.findByAppointmentId(COMPLETED_APPOINTMENT).orElseThrow();
     assertThat(charge.status).isEqualTo("PENDING");
-    assertThat(charge.amountMinor).isEqualTo(300000);
+    assertThat(charge.amountMinor).isEqualTo(300000L);
     assertThat(charge.currency).isEqualTo("RUB");
   }
 }

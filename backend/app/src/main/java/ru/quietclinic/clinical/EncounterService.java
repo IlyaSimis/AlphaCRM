@@ -4,7 +4,7 @@ import static ru.quietclinic.platform.PlatformConfig.actorId;
 import static ru.quietclinic.platform.PlatformConfig.conflict;
 import static ru.quietclinic.platform.PlatformConfig.forbidden;
 import static ru.quietclinic.platform.PlatformConfig.notFound;
-import static ru.quietclinic.platform.PlatformConfig.requireRole;
+import static ru.quietclinic.platform.PlatformConfig.requirePermission;
 
 import java.time.Instant;
 import java.util.List;
@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.quietclinic.audit.AuditService;
 import ru.quietclinic.platform.EncryptionService;
+import ru.quietclinic.platform.Permission;
 
 /**
  * Клинический контур приёма: старт по записи, заметка, документ, подпись и дополнения. Текст
@@ -52,7 +53,7 @@ class EncounterService {
 
   @Transactional
   EncounterStart start(StartEncounterRequest request) {
-    requireRole("DOCTOR");
+    requirePermission(Permission.CLINICAL_RECORD);
     if (!actorId().equals(request.practitionerId())) {
       throw forbidden("OWN_VISIT_ONLY", "A doctor can start only their own visit");
     }
@@ -94,7 +95,7 @@ class EncounterService {
 
   @Transactional
   ClinicalView saveNote(UUID encounterId, ClinicalNoteRequest request) {
-    requireRole("DOCTOR");
+    requirePermission(Permission.CLINICAL_RECORD);
     var encounter = findEncounter(encounterId);
     requireClinicalAccess(encounter.patientId);
     var note = notes.findByEncounterId(encounterId).orElseGet(ClinicalNote::new);
@@ -116,7 +117,7 @@ class EncounterService {
 
   @Transactional
   DocumentView createDocument(UUID encounterId, DocumentRequest request) {
-    requireRole("DOCTOR");
+    requirePermission(Permission.CLINICAL_RECORD);
     var encounter = findEncounter(encounterId);
     requireClinicalAccess(encounter.patientId);
     var content = contentOf(encounterId, request);
@@ -134,7 +135,7 @@ class EncounterService {
    */
   @Transactional
   DocumentView sign(UUID documentId) {
-    requireRole("DOCTOR");
+    requirePermission(Permission.CLINICAL_RECORD);
     var doc = findDocument(documentId);
     var encounter = findEncounter(doc.encounterId);
     requireClinicalAccess(encounter.patientId);
@@ -154,7 +155,7 @@ class EncounterService {
 
   @Transactional
   DocumentView amend(UUID documentId, DocumentRequest request) {
-    requireRole("DOCTOR");
+    requirePermission(Permission.CLINICAL_RECORD);
     var original = findDocument(documentId);
     if (!original.state.equals("SIGNED_LOCKED")) {
       throw conflict("ORIGINAL_NOT_SIGNED", "Only a signed document can be amended");
@@ -205,7 +206,7 @@ class EncounterService {
   }
 
   private void requireClinicalAccess(UUID patientId) {
-    requireRole("DOCTOR", "NURSE");
+    requirePermission(Permission.CLINICAL_RECORD);
     if (!careRelationships.isActive(actorId(), patientId)) {
       audit.record(
           actorId(), "CLINICAL_ACCESS", "PATIENT", patientId, "DENIED", "no-care-relationship");

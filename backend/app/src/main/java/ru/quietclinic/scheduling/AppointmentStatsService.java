@@ -1,7 +1,9 @@
 package ru.quietclinic.scheduling;
 
+import static ru.quietclinic.platform.PlatformConfig.actorId;
+import static ru.quietclinic.platform.PlatformConfig.can;
 import static ru.quietclinic.platform.PlatformConfig.conflict;
-import static ru.quietclinic.platform.PlatformConfig.requireRole;
+import static ru.quietclinic.platform.PlatformConfig.requirePermission;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -14,6 +16,7 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.quietclinic.platform.ClinicTime;
+import ru.quietclinic.platform.Permission;
 
 /** Агрегаты по записям без персональных данных: только дата, врач, статус и количество. */
 @Service
@@ -32,7 +35,9 @@ class AppointmentStatsService {
 
   @Transactional(readOnly = true)
   AppointmentStatsView stats(LocalDate from, LocalDate to, UUID practitionerId) {
-    requireRole("MANAGER", "ADMINISTRATOR");
+    requirePermission(Permission.ANALYTICS_READ, Permission.ANALYTICS_READ_OWN);
+    // Врач видит аналитику только своих приёмов.
+    var practitioner = can(Permission.ANALYTICS_READ) ? practitionerId : actorId();
     if (to.isBefore(from)) {
       throw conflict("INVALID_RANGE", "Period end must not be before its start");
     }
@@ -46,7 +51,7 @@ class AppointmentStatsService {
     var filtered =
         inRange.stream()
             .filter(a -> ownPractitioners.contains(a.practitionerId))
-            .filter(a -> practitionerId == null || a.practitionerId.equals(practitionerId))
+            .filter(a -> practitioner == null || a.practitionerId.equals(practitioner))
             .toList();
     return new AppointmentStatsView(from, to, aggregate(filtered, time.zone()));
   }

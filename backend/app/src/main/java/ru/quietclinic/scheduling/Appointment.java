@@ -34,8 +34,17 @@ class Appointment {
   @Column(nullable = false)
   Instant createdAt;
 
-  /** Снимок цены услуги на момент записи. */
+  /** Услуга из справочника; у старых записей может быть пустой. */
+  UUID serviceId;
+
+  /** Снимок режима цены: FIXED или OPEN (свободная цена); у старых записей без цены — пусто. */
+  String priceMode;
+
+  /** Снимок цены услуги на момент записи; при свободной цене пуст. */
   Long amountMinor;
+
+  /** Предварительная оценка свободной цены (необязательна). */
+  Long estimateMinor;
 
   String currency;
 
@@ -64,6 +73,7 @@ class Appointment {
     this.serviceName = serviceName;
     this.amountMinor = amountMinor;
     this.currency = currency;
+    if (amountMinor != null) priceMode = "FIXED";
     status = "BOOKED";
     createdAt = Instant.now();
   }

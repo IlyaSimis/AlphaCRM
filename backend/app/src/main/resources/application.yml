@@ -13,10 +13,10 @@ spring:
     name: quiet-clinic-api
   servlet:
     multipart:
-      # PDF пациента — не больше 10 МБ (PatientFileService.MAX_BYTES). Запрос чуть больше файла:
-      # в нём ещё граница multipart и поле appointmentId.
-      max-file-size: 10MB
-      max-request-size: 10304KB
+      # Диск (drive) принимает файлы до clinic.drive.max-file-bytes (100 МБ); предел PDF пациента
+      # проверяет сервис. Запрос чуть больше файла: граница multipart и поля формы.
+      max-file-size: 100MB
+      max-request-size: 101MB
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:55432/quiet_clinic}
     username: ${DATABASE_USER:quiet_clinic}
@@ -95,3 +95,28 @@ clinic:
     days: ${CLINIC_BOT_BOOKING_DAYS:14}
     min-lead: ${CLINIC_BOT_MIN_LEAD:PT2H}
     max-slots: ${CLINIC_BOT_MAX_SLOTS:60}
+  events:
+    # Релей доменных событий (outbox → потребители → inbox): после фиксации транзакции событие
+    # раздаётся сразу; фоновый проход повторяет то, что не раздалось.
+    enabled: ${CLINIC_EVENTS_ENABLED:true}
+    poll-interval: ${CLINIC_EVENTS_POLL_INTERVAL:PT30S}
+  registry:
+    # Задача регистратуры о нехватке на складе: название позиции и недостающее количество.
+    stock-shortage-title: "${CLINIC_STOCK_SHORTAGE_TITLE:Нехватка на складе — %s (не хватает %s)}"
+  inventory:
+    # Название основного склада, который создаётся сам при первом обращении к складу.
+    default-warehouse-name: ${CLINIC_DEFAULT_WAREHOUSE:Основной склад}
+  marking:
+    # Адаптер Честного знака: none — не настроено (операции ждут с MARKING_NOT_CONFIGURED),
+    # mock — заглушка MVP, отвечает «принято» и ничего не отправляет.
+    adapter: ${CLINIC_MARKING_ADAPTER:none}
+    relay-enabled: ${CLINIC_MARKING_RELAY_ENABLED:true}
+    poll-interval: ${CLINIC_MARKING_POLL_INTERVAL:PT60S}
+  drive:
+    # Корпоративный диск: файлы шифруются в сервисе и лежат в каталоге хранилища (Docker-том).
+    storage-dir: ${CLINIC_DRIVE_STORAGE_DIR:./data/drive}
+    max-file-bytes: ${CLINIC_DRIVE_MAX_FILE_BYTES:104857600}
+    default-quota-bytes: ${CLINIC_DRIVE_QUOTA_BYTES:10737418240}
+    keep-versions: ${CLINIC_DRIVE_KEEP_VERSIONS:20}
+    trash-days: ${CLINIC_DRIVE_TRASH_DAYS:30}
+    max-link-days: ${CLINIC_DRIVE_MAX_LINK_DAYS:30}

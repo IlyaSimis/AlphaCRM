@@ -174,7 +174,9 @@ class StaffControllerTest {
   @Test
   void otherRolesCannotManageStaffOrReadHashes() throws Exception {
     var adminId = staff.userId(StaffSessions.ADMIN);
-    mvc.perform(get("/api/v1/staff").with(staff.role("MANAGER"))).andExpect(status().isForbidden());
+    // Менеджер видит сотрудников (identity.staff.read), кассир — нет.
+    mvc.perform(get("/api/v1/staff").with(staff.role("MANAGER"))).andExpect(status().isOk());
+    mvc.perform(get("/api/v1/staff").with(staff.role("CASHIER"))).andExpect(status().isForbidden());
     mvc.perform(
             post("/api/v1/staff")
                 .with(staff.doctor(StaffSessions.PETROV))
@@ -348,7 +350,7 @@ class StaffControllerTest {
   void standaloneCardIsBoundToAccountLater() throws Exception {
     mvc.perform(
             post("/api/v1/practitioners")
-                .with(staff.role("MANAGER"))
+                .with(staff.role("CASHIER"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     """

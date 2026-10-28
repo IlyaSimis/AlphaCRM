@@ -1,12 +1,12 @@
 package ru.quietclinic.registry;
 
 import static ru.quietclinic.platform.PlatformConfig.actorId;
+import static ru.quietclinic.platform.PlatformConfig.can;
 import static ru.quietclinic.platform.PlatformConfig.clinicId;
 import static ru.quietclinic.platform.PlatformConfig.conflict;
 import static ru.quietclinic.platform.PlatformConfig.forbidden;
-import static ru.quietclinic.platform.PlatformConfig.hasRole;
 import static ru.quietclinic.platform.PlatformConfig.notFound;
-import static ru.quietclinic.platform.PlatformConfig.requireRole;
+import static ru.quietclinic.platform.PlatformConfig.requirePermission;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -19,6 +19,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.quietclinic.audit.AuditService;
+import ru.quietclinic.platform.Permission;
 
 /**
  * Регистратура: задачи сотрудникам и лист ожидания. Модуль связан с пациентами, врачами и записями
@@ -48,7 +49,7 @@ class RegistryService {
    */
   @Transactional(readOnly = true)
   List<TaskView> tasks(LocalDate dueTo, UUID patientId) {
-    requireRole("ADMINISTRATOR", "MANAGER", "CASHIER");
+    requirePermission(Permission.REGISTRY_TASK_READ);
     var rows =
         patientId != null
             ? tasks.findByClinicIdAndPatientIdOrderByDueDate(clinicId(), patientId)
@@ -59,7 +60,7 @@ class RegistryService {
 
   @Transactional
   TaskView createTask(CreateTaskRequest request) {
-    requireRole("ADMINISTRATOR");
+    requirePermission(Permission.REGISTRY_TASK_MANAGE);
     var assigneeActive =
         exists(
             "select count(*) from staff_user where id = ? and active = true and clinic_id = ?",
@@ -90,12 +91,12 @@ class RegistryService {
   /** Закрыть или открыть снова может администратор или сам исполнитель. */
   @Transactional
   TaskView setDone(UUID id, boolean done) {
-    requireRole("ADMINISTRATOR", "MANAGER", "CASHIER");
+    requirePermission(Permission.REGISTRY_TASK_READ);
     var task =
         tasks
             .findByIdAndClinicId(id, clinicId())
             .orElseThrow(() -> notFound("TASK_NOT_FOUND", "Task not found"));
-    if (!hasRole("ADMINISTRATOR") && !actorId().equals(task.assigneeId)) {
+    if (!can(Permission.REGISTRY_TASK_MANAGE) && !actorId().equals(task.assigneeId)) {
       throw forbidden(
           "TASK_CLOSE_FORBIDDEN", "Only the assignee or an administrator can close the task");
     }
@@ -114,7 +115,7 @@ class RegistryService {
   /** Активные ожидания; с врачом и днём — только подходящие к освободившемуся слоту. */
   @Transactional(readOnly = true)
   List<WaitlistView> waitlist(UUID practitionerId, LocalDate day) {
-    requireRole("ADMINISTRATOR", "MANAGER");
+    requirePermission(Permission.WAITLIST_READ);
     var own = clinicPatients();
     return waitlist.findByStatusOrderByWishFrom("ACTIVE").stream()
         .filter(e -> own.contains(e.patientId))
@@ -125,7 +126,7 @@ class RegistryService {
 
   @Transactional
   WaitlistView addToWaitlist(CreateWaitlistRequest request) {
-    requireRole("ADMINISTRATOR");
+    requirePermission(Permission.WAITLIST_MANAGE);
     if (request.wishTo().isBefore(request.wishFrom())) {
       throw conflict("INVALID_RANGE", "Period end must not be before its start");
     }
@@ -161,7 +162,7 @@ class RegistryService {
 
   @Transactional
   WaitlistView book(UUID id, BookWaitlistRequest request) {
-    requireRole("ADMINISTRATOR");
+    requirePermission(Permission.WAITLIST_MANAGE);
     var entry = active(id);
     if (!exists(
         "select count(*) from appointment a join practitioner p on p.id = a.practitioner_id"
@@ -177,7 +178,7 @@ class RegistryService {
 
   @Transactional
   WaitlistView cancel(UUID id) {
-    requireRole("ADMINISTRATOR");
+    requirePermission(Permission.WAITLIST_MANAGE);
     var entry = active(id);
     entry.status = "CANCELLED";
     audit.record(actorId(), "WAITLIST_CANCELLED", "WAITLIST", entry.id, "ALLOWED", null);

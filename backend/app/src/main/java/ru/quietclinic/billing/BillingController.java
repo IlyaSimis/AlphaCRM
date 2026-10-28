@@ -3,7 +3,7 @@ package ru.quietclinic.billing;
 import static ru.quietclinic.platform.PlatformConfig.actorId;
 import static ru.quietclinic.platform.PlatformConfig.conflict;
 import static ru.quietclinic.platform.PlatformConfig.notFound;
-import static ru.quietclinic.platform.PlatformConfig.requireRole;
+import static ru.quietclinic.platform.PlatformConfig.requirePermission;
 
 import jakarta.validation.Valid;
 import java.time.Instant;
@@ -14,12 +14,14 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import ru.quietclinic.audit.AuditService;
 import ru.quietclinic.communications.OutboxService;
+import ru.quietclinic.platform.Permission;
 
 @RestController
 @RequestMapping("/api/v1/billing")
@@ -57,10 +59,17 @@ public class BillingController {
     return chargeService.create(request);
   }
 
+  /** Сумма свободной цены (счёт в статусе AWAITING_AMOUNT). */
+  @PutMapping("/charges/{chargeId}/amount")
+  ChargeView setAmount(
+      @PathVariable UUID chargeId, @Valid @RequestBody ChargeAmountRequest request) {
+    return chargeService.setAmount(chargeId, request);
+  }
+
   @PostMapping("/charges/{chargeId}/payments")
   @Transactional
   BillingView pay(@PathVariable UUID chargeId, @Valid @RequestBody PaymentRequest request) {
-    requireRole("CASHIER");
+    requirePermission(Permission.INVOICE_WRITE);
     var charge =
         charges
             .findById(chargeId)
@@ -68,6 +77,10 @@ public class BillingController {
             .orElseThrow(() -> notFound("CHARGE_NOT_FOUND", "Charge not found"));
     var existing = payments.findByIdempotencyKey(request.idempotencyKey());
     if (existing.isPresent()) return view(charge, existing.get());
+    // Свободная цена без суммы: оплатить нельзя, пока сумму не ввели.
+    if (Charge.AWAITING_AMOUNT.equals(charge.status)) {
+      throw conflict("AMOUNT_REQUIRED", "Enter the amount before accepting payment");
+    }
     if (!charge.status.equals("PENDING")) {
       throw conflict("CHARGE_NOT_PAYABLE", "Charge is already paid");
     }

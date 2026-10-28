@@ -37,7 +37,8 @@ class ClinicBootstrapTest {
     var admin = ArgumentCaptor.forClass(StaffUser.class);
     verify(staff).save(admin.capture());
     assertThat(admin.getValue().username).isEqualTo("admin");
-    assertThat(admin.getValue().role).isEqualTo("ADMINISTRATOR");
+    // Начальная учётная запись — владелец клиники (раздел C целевой архитектуры).
+    assertThat(admin.getValue().role).isEqualTo("OWNER");
     assertThat(admin.getValue().fullName).isEqualTo("Clinic Administrator");
     assertThat(admin.getValue().clinicId).isEqualTo(clinic.getValue().id);
     assertThat(admin.getValue().mustChangePassword).isTrue();

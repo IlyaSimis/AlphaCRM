@@ -163,10 +163,15 @@ class SchedulingControllerTest {
   }
 
   @Test
-  void onlyAdministratorCanCancelAndTheSlotCanBeBookedAgain() throws Exception {
+  void otherDoctorCannotCancelAndTheSlotCanBeBookedAgain() throws Exception {
+    // Врач отменяет только свои записи (schedule.appointment.write-own); 301 — запись Петрова.
     mvc.perform(
             post("/api/v1/appointments/00000000-0000-0000-0000-000000000301/cancel")
-                .with(staff.role("DOCTOR")))
+                .with(staff.doctor(LEBEDEVA)))
+        .andExpect(status().isForbidden());
+    mvc.perform(
+            post("/api/v1/appointments/00000000-0000-0000-0000-000000000301/cancel")
+                .with(staff.role("CASHIER")))
         .andExpect(status().isForbidden());
 
     mvc.perform(
@@ -358,9 +363,10 @@ class SchedulingControllerTest {
                    {"dayOfWeek":4,"startsAt":"10:00","endsAt":"19:00"}]}
         """;
     try {
+      // Смены меняют администраторы и менеджер; кассир — нет.
       mvc.perform(
               put(hours)
-                  .with(staff.role("MANAGER"))
+                  .with(staff.role("CASHIER"))
                   .contentType(MediaType.APPLICATION_JSON)
                   .content(original))
           .andExpect(status().isForbidden());

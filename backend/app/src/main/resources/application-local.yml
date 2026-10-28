@@ -16,3 +16,8 @@ clinic:
   # Только для локальной разработки: вход admin / admin сразу, без смены пароля.
   admin-password: admin
   admin-must-change-password: false
+  # Локально маркировка отвечает заглушкой, файлы диска — во временном каталоге.
+  marking:
+    adapter: mock
+  drive:
+    storage-dir: ${java.io.tmpdir}/alphacrm-drive

@@ -17,6 +17,11 @@ record StaffPrincipal(UUID userId, UUID actorId, UUID clinicId, String username,
   }
 
   @Override
+  public UUID staffId() {
+    return userId;
+  }
+
+  @Override
   public String getName() {
     return actorId.toString();
   }

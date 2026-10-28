@@ -4,7 +4,7 @@ import static ru.quietclinic.platform.PlatformConfig.actorId;
 import static ru.quietclinic.platform.PlatformConfig.clinicId;
 import static ru.quietclinic.platform.PlatformConfig.conflict;
 import static ru.quietclinic.platform.PlatformConfig.notFound;
-import static ru.quietclinic.platform.PlatformConfig.requireRole;
+import static ru.quietclinic.platform.PlatformConfig.requirePermission;
 
 import java.util.HashSet;
 import java.util.List;
@@ -14,6 +14,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.quietclinic.audit.AuditService;
+import ru.quietclinic.platform.Permission;
 
 /** Счета за приёмы. Один счёт на запись — уникальность по appointment_id. */
 @Service
@@ -46,8 +47,8 @@ public class ChargeService {
   }
 
   /**
-   * Счёт как следствие завершения приёма. Права не проверяет: вызывается модулем расписания, а не
-   * по HTTP. Повторный вызов возвращает уже созданный счёт.
+   * Счёт как следствие завершения приёма. Права не проверяет: вызывается потребителем события
+   * {@code AppointmentCompleted}, а не по HTTP. Повторный вызов возвращает уже созданный счёт.
    */
   @Transactional
   public UUID chargeForCompletedVisit(UUID appointmentId, long amountMinor, String currency) {
@@ -59,10 +60,40 @@ public class ChargeService {
     return charge.id;
   }
 
+  /** Счёт по свободной цене: ждёт суммы в пределах услуги. Повтор возвращает тот же счёт. */
+  @Transactional
+  public UUID awaitAmountForCompletedVisit(
+      UUID appointmentId, String currency, Long minMinor, Long maxMinor, Long estimateMinor) {
+    var existing = charges.findByAppointmentId(appointmentId);
+    if (existing.isPresent()) return existing.get().id;
+    var charge =
+        charges.saveAndFlush(
+            Charge.awaitingAmount(appointmentId, currency, minMinor, maxMinor, estimateMinor));
+    audit.record(
+        actorId(), "CHARGE_CREATED", "CHARGE", charge.id, "ALLOWED", "appointment-completed:open");
+    return charge.id;
+  }
+
+  /** Сумма свободной цены: администратор или кассир, в пределах услуги. */
+  @Transactional
+  ChargeView setAmount(UUID chargeId, ChargeAmountRequest request) {
+    requirePermission(Permission.INVOICE_SET_AMOUNT);
+    var charge =
+        charges
+            .findById(chargeId)
+            .filter(this::inClinic)
+            .orElseThrow(() -> notFound("CHARGE_NOT_FOUND", "Charge not found"));
+    charge.setAmount(request.amountMinor());
+    charges.saveAndFlush(charge);
+    audit.record(actorId(), "CHARGE_AMOUNT_SET", "CHARGE", charge.id, "ALLOWED", "open-price");
+    return ChargeView.of(
+        charge, payments.findFirstByChargeIdOrderByCreatedAtDesc(charge.id).orElse(null));
+  }
+
   /** Ручное выставление счёта по HTTP: администратор или кассир, если счёта ещё нет. */
   @Transactional
   ChargeView create(ChargeRequest request) {
-    requireRole("CASHIER", "ADMINISTRATOR");
+    requirePermission(Permission.INVOICE_WRITE);
     if (!clinicAppointments().contains(request.appointmentId())) {
       throw notFound("APPOINTMENT_NOT_FOUND", "Appointment not found");
     }
@@ -78,7 +109,7 @@ public class ChargeService {
 
   @Transactional(readOnly = true)
   List<ChargeView> list() {
-    requireRole("CASHIER", "ADMINISTRATOR");
+    requirePermission(Permission.INVOICE_READ);
     var own = clinicAppointments();
     return charges.findAllByOrderByCreatedAtDesc().stream()
         .filter(c -> own.contains(c.appointmentId))

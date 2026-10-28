@@ -7,9 +7,15 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
-/** Новая услуга: название, длительность в минутах, цена в копейках; валюта пока только RUB. */
+/**
+ * Новая услуга: название, длительность в минутах и цена в копейках; валюта пока только RUB. Режим
+ * цены по умолчанию FIXED; для OPEN вместо цены — пределы minMinor и maxMinor.
+ */
 record CreateServiceRequest(
     @NotBlank @Size(max = 255) String name,
     @Positive @Max(720) int durationMinutes,
-    @PositiveOrZero long priceMinor,
-    @Pattern(regexp = "RUB") String currency) {}
+    @PositiveOrZero Long priceMinor,
+    @Pattern(regexp = "RUB") String currency,
+    @Pattern(regexp = "FIXED|OPEN") String priceMode,
+    @PositiveOrZero Long minMinor,
+    @PositiveOrZero Long maxMinor) {}

@@ -9,12 +9,14 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import ru.quietclinic.platform.RolePermissions;
 
 /**
  * Первый старт: если учётных записей ещё нет, создаёт клинику (CLINIC_NAME, по умолчанию AlphaCRM)
  * и её администратора с логином {@code admin} и паролем из CLINIC_ADMIN_PASSWORD; ФИО
  * администратора — из CLINIC_ADMIN_NAME. Хеш считается здесь же, bcrypt со своей солью; ни пароля,
- * ни хеша нет ни в коде, ни в миграциях. Дальше сотрудников заводит администратор.
+ * ни хеша нет ни в коде, ни в миграциях. Начальная учётная запись — владелец клиники (OWNER):
+ * только он назначает старших администраторов. Дальше сотрудников заводит администратор.
  */
 @Component
 class ClinicBootstrap implements ApplicationRunner {
@@ -74,9 +76,9 @@ class ClinicBootstrap implements ApplicationRunner {
             fullName,
             ADMIN_USERNAME,
             encoder.encode(adminPassword),
-            "ADMINISTRATOR",
+            RolePermissions.OWNER,
             null,
             adminMustChangePassword));
-    log.info("Created administrator '{}' for clinic '{}'", ADMIN_USERNAME, name);
+    log.info("Created owner '{}' for clinic '{}'", ADMIN_USERNAME, name);
   }
 }

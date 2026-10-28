@@ -1,13 +1,13 @@
 package ru.quietclinic.clinical;
 
 import static ru.quietclinic.platform.PlatformConfig.actorId;
+import static ru.quietclinic.platform.PlatformConfig.can;
 import static ru.quietclinic.platform.PlatformConfig.clinicId;
 import static ru.quietclinic.platform.PlatformConfig.conflict;
 import static ru.quietclinic.platform.PlatformConfig.forbidden;
-import static ru.quietclinic.platform.PlatformConfig.hasRole;
 import static ru.quietclinic.platform.PlatformConfig.notFound;
 import static ru.quietclinic.platform.PlatformConfig.payloadTooLarge;
-import static ru.quietclinic.platform.PlatformConfig.requireRole;
+import static ru.quietclinic.platform.PlatformConfig.requirePermission;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -25,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.quietclinic.audit.AuditService;
 import ru.quietclinic.platform.EncryptionService;
+import ru.quietclinic.platform.Permission;
 
 /**
  * PDF пациента: загрузка, подпись и выгрузка. Файл хранится только зашифрованным.
@@ -73,21 +74,21 @@ class PatientFileService {
   /** Файлы карточки. Менеджер видит только подписанные, врач — при связи с лечением. */
   @Transactional(readOnly = true)
   List<PatientFileView> list(UUID patientId) {
-    requireRole("ADMINISTRATOR", "DOCTOR", "MANAGER");
+    requirePermission(READ, READ_SIGNED, WRITE_CARE);
     requirePatient(patientId);
-    if (hasRole("DOCTOR")) requireCare(patientId);
+    if (careOnly()) requireCare(patientId);
     var sql = SELECT + " and f.patient_id = ?";
-    if (hasRole("MANAGER")) sql += " and f.state = '" + PatientFile.SIGNED + "'";
+    if (signedOnly()) sql += " and f.state = '" + PatientFile.SIGNED + "'";
     return jdbc.query(sql + " order by f.uploaded_at desc", this::row, clinicId(), patientId);
   }
 
   /** Архив подписанных PDF: врач — подписанные им самим, менеджер — все файлы клиники. */
   @Transactional(readOnly = true)
   List<PatientFileView> signedArchive() {
-    requireRole("DOCTOR", "MANAGER");
+    requirePermission(READ, READ_SIGNED, WRITE_CARE);
     var sql = SELECT + " and f.state = '" + PatientFile.SIGNED + "'";
     var args = new ArrayList<Object>(List.of(clinicId()));
-    if (hasRole("DOCTOR")) {
+    if (careOnly()) {
       sql += " and f.signed_by = ?";
       args.add(actorId());
     }
@@ -96,9 +97,9 @@ class PatientFileService {
 
   @Transactional
   PatientFileView upload(UUID patientId, UUID appointmentId, String filename, byte[] content) {
-    requireRole("ADMINISTRATOR", "DOCTOR");
+    requirePermission(Permission.PATIENT_FILE_WRITE, WRITE_CARE);
     requirePatient(patientId);
-    if (hasRole("DOCTOR")) requireCare(patientId);
+    if (!can(Permission.PATIENT_FILE_WRITE)) requireCare(patientId);
     if (appointmentId != null) requireAppointment(appointmentId, patientId);
     if (content.length > MAX_BYTES) {
       throw payloadTooLarge("FILE_TOO_LARGE", "The file is larger than 10 MB");
@@ -122,9 +123,9 @@ class PatientFileService {
   /** Хеш считается по открытым байтам файла в момент подписи. */
   @Transactional
   PatientFileView sign(UUID fileId) {
-    requireRole("ADMINISTRATOR", "DOCTOR");
+    requirePermission(Permission.PATIENT_FILE_WRITE, WRITE_CARE);
     var file = find(fileId);
-    if (hasRole("DOCTOR")) requireCare(file.patientId);
+    if (!can(Permission.PATIENT_FILE_WRITE)) requireCare(file.patientId);
     if (file.signed()) throw conflict("ALREADY_SIGNED", "The file is already signed");
     file.sign(actorId(), sha256(encryption.decryptBytes(file.ciphertext)), Instant.now());
     files.saveAndFlush(file);
@@ -134,18 +135,32 @@ class PatientFileService {
 
   @Transactional(readOnly = true)
   FileDownload download(UUID fileId) {
-    requireRole("ADMINISTRATOR", "DOCTOR", "MANAGER");
+    requirePermission(READ, READ_SIGNED, WRITE_CARE);
     var file = find(fileId);
-    if (!file.signed() && hasRole("MANAGER")) {
+    if (!file.signed() && signedOnly()) {
       throw forbidden("FILE_NOT_SIGNED", "Only signed files are available to this role");
     }
     // Подписанный им самим файл врач открывает из архива и без текущей связи с лечением.
-    if (hasRole("DOCTOR") && !(file.signed() && actorId().equals(file.signedBy))) {
+    if (careOnly() && !(file.signed() && actorId().equals(file.signedBy))) {
       requireCare(file.patientId);
     }
     var content = encryption.decryptBytes(file.ciphertext);
     audit.record(actorId(), "PDF_READ", "PATIENT_FILE", file.id, "ALLOWED", null);
     return new FileDownload(file.originalName, content);
+  }
+
+  private static final Permission READ = Permission.PATIENT_FILE_READ;
+  private static final Permission READ_SIGNED = Permission.PATIENT_FILE_READ_SIGNED;
+  private static final Permission WRITE_CARE = Permission.PATIENT_FILE_WRITE_CARE;
+
+  /** Врач: только пациенты по связи с лечением и подписанные им самим файлы. */
+  private static boolean careOnly() {
+    return !can(READ) && !can(READ_SIGNED);
+  }
+
+  /** Менеджер: только подписанные файлы. */
+  private static boolean signedOnly() {
+    return !can(READ) && can(READ_SIGNED);
   }
 
   static boolean isPdf(byte[] content) {

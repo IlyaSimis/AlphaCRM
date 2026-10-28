@@ -40,14 +40,38 @@ public final class StaffSessions {
           "t.manager", List.of("Test Manager", "MANAGER", ""),
           "t.cashier", List.of("Test Cashier", "CASHIER", ""),
           "t.petrov", List.of("Александр Петров", "DOCTOR", PETROV),
-          "t.lebedeva", List.of("Ольга Лебедева", "DOCTOR", LEBEDEVA));
+          "t.lebedeva", List.of("Ольга Лебедева", "DOCTOR", LEBEDEVA),
+          "t.senior", List.of("Test Senior Administrator", "SENIOR_ADMINISTRATOR", ""),
+          "t.admin", List.of("Test Administrator", "ADMINISTRATOR", ""),
+          "t.nurse", List.of("Test Nurse", "NURSE", ""),
+          "t.support", List.of("Test Support", "SUPPORT", ""));
 
+  /**
+   * Роль → сотрудник. ADMINISTRATOR — начальная учётная запись admin (она владелец клиники и может
+   * всё, что администратор), как в тестах до появления роли OWNER.
+   */
   private static final Map<String, String> BY_ROLE =
       Map.of(
+          "OWNER", ADMIN,
           "ADMINISTRATOR", ADMIN,
+          "SENIOR_ADMINISTRATOR", "t.senior",
           "MANAGER", "t.manager",
           "CASHIER", "t.cashier",
-          "DOCTOR", "t.petrov");
+          "DOCTOR", "t.petrov",
+          "NURSE", "t.nurse",
+          "SUPPORT", "t.support");
+
+  /** Сотрудник ровно этой роли — для матрицы RBAC (ADMINISTRATOR — t.admin, а не владелец). */
+  private static final Map<String, String> EXACT =
+      Map.of(
+          "OWNER", ADMIN,
+          "SENIOR_ADMINISTRATOR", "t.senior",
+          "ADMINISTRATOR", "t.admin",
+          "MANAGER", "t.manager",
+          "CASHIER", "t.cashier",
+          "DOCTOR", "t.petrov",
+          "NURSE", "t.nurse",
+          "SUPPORT", "t.support");
 
   private final MockMvc mvc;
   private final Map<String, Login> sessions = new HashMap<>();
@@ -67,9 +91,16 @@ public final class StaffSessions {
     return login;
   }
 
-  /** ADMINISTRATOR → admin, MANAGER → t.manager, CASHIER → t.cashier, DOCTOR → t.petrov. */
+  /** ADMINISTRATOR и OWNER → admin, MANAGER → t.manager, CASHIER → t.cashier, DOCTOR → t.petrov. */
   public RequestPostProcessor role(String role) {
     return as(BY_ROLE.get(role));
+  }
+
+  /** Сотрудник ровно с этой ролью (матрица RBAC). */
+  public RequestPostProcessor exactly(String role) {
+    var username = EXACT.get(role);
+    if (username == null) throw new IllegalArgumentException("Unknown role " + role);
+    return as(username);
   }
 
   public RequestPostProcessor doctor(String practitionerId) {
