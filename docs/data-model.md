@@ -119,13 +119,32 @@ erDiagram
 | `full_name` | VARCHAR(255) | NN | ФИО — данные, как ввёл администратор |
 | `username` | VARCHAR(80) | NN, U | логин, уникален во всей установке, хранится в нижнем регистре |
 | `password_hash` | VARCHAR(100) | NN | bcrypt со своей солью. Пароля в открытом виде нет нигде |
-| `role` | VARCHAR(40) | NN, CHECK | `OWNER`, `SENIOR_ADMINISTRATOR`, `ADMINISTRATOR`, `MANAGER`, `DOCTOR`, `NURSE`, `CASHIER`, `SUPPORT`. Разрешения роли в базе не хранятся — они в коде (`RolePermissions`) |
+| `role` | VARCHAR(40) | NN, CHECK | основная роль: `OWNER`, `SENIOR_ADMINISTRATOR`, `ADMINISTRATOR`, `MANAGER`, `DOCTOR`, `NURSE`, `CASHIER`, `SUPPORT`; у врача — `DOCTOR`, иначе старшая из ролей. Все роли — в `staff_role`. Разрешения ролей в базе не хранятся — они в коде (`RolePermissions`) |
 | `practitioner_id` | UUID | FK → `practitioner`, U | только у `DOCTOR`, у остальных `NULL` (CHECK) |
 | `active` | BOOLEAN | NN | `false` — войти нельзя, открытые сессии перестают действовать |
 | `must_change_password` | BOOLEAN | NN, default `false` | временный пароль: до смены API отвечает `403 PASSWORD_CHANGE_REQUIRED` |
 | `created_at` | TIMESTAMPTZ | NN | |
 
 Сессии хранятся в памяти backend (Spring Session не используется): перезапуск backend завершает все сессии.
+
+#### `staff_role` — роли сотрудника
+
+`(staff_id, role)` — PK, `staff_id` → `staff_user`, `role` — CHECK тем же списком. Сотрудник может иметь несколько ролей, права складываются; роли меняются только `PUT /staff/{id}/roles`. Сессия пересчитывает права на следующем запросе, если роли поменялись.
+
+#### `hr_contract` — условия работы и ставка
+
+| Колонка | Тип | | Смысл |
+|---|---|---|---|
+| `id` | UUID | PK | |
+| `clinic_id`, `staff_id` | UUID | FK, NN | клиника и сотрудник |
+| `position` | VARCHAR(160) | NN | должность — данные, как ввёл владелец |
+| `rate_minor` | BIGINT | NN, CHECK ≥ 0 | ставка в копейках |
+| `rate_unit` | VARCHAR(10) | NN, CHECK | `MONTH`, `HOUR`, `VISIT` |
+| `currency` | VARCHAR(3) | NN | |
+| `valid_from`, `valid_to` | DATE | `valid_from` NN | период; `valid_to` пусто — действуют сейчас. Новые условия закрывают прежние днём раньше |
+| `created_by`, `created_at` | | NN | кто внёс |
+
+Чужие условия читает и меняет только владелец, свои — каждый сотрудник. Суммы в аудит не пишутся.
 
 ### patients — пациенты
 
@@ -329,6 +348,19 @@ erDiagram
 
 Индекс `medical_document_signed_idx (state, signed_by, signed_at)` — архив подписанных документов. Архив читает текст из `snapshot_encrypted`, а не из текущей заметки.
 
+#### `break_glass_grant` — экстренный доступ владельца
+
+| Колонка | Тип | | Смысл |
+|---|---|---|---|
+| `id` | UUID | PK | |
+| `clinic_id`, `patient_id` | UUID | FK, NN | один пациент своей клиники |
+| `owner_id` | UUID | NN | учётная запись владельца |
+| `reason_code` | VARCHAR(40) | NN, CHECK | `PATIENT_COMPLAINT`, `LEGAL_REQUEST`, `DOCTOR_UNAVAILABLE`, `QUALITY_REVIEW`, `OTHER` |
+| `reason_text_encrypted` | VARCHAR(4000) | NN | пояснение, AES-GCM; в аудит не попадает |
+| `granted_at`, `expires_at` | TIMESTAMPTZ | NN, CHECK `expires_at > granted_at` | 60 минут |
+
+Пока доступ действует, владелец читает клиническую историю пациента; каждое чтение — `CLINICAL_HISTORY_READ` с основанием `break-glass`.
+
 #### `patient_file` — PDF пациента
 
 | Колонка | Тип | | Смысл |
@@ -361,8 +393,9 @@ CHECK `patient_file_signed_complete`: у `SIGNED_LOCKED` заполнены хе
 | `price_mode` | VARCHAR(10) | NN, default `FIXED` | снимок режима цены |
 | `min_minor`, `max_minor`, `estimate_minor` | BIGINT | | снимок пределов и оценки свободной цены на момент приёма |
 | `currency` | VARCHAR(3) | NN | |
-| `status` | VARCHAR(40) | NN, CHECK | `AWAITING_AMOUNT` → `PENDING` → `PAID`; фиксированная цена начинает с `PENDING` |
+| `status` | VARCHAR(40) | NN, CHECK | `AWAITING_AMOUNT` → `PENDING` → `PAID` → `REFUNDED`; неоплаченный — `VOIDED`; фиксированная цена начинает с `PENDING` |
 | `created_at` | TIMESTAMPTZ | NN | |
+| `voided_at`, `voided_by`, `void_reason` | | | аннулирование: когда, кто, код причины (`DUPLICATE`, `ERROR`, `PATIENT_DECLINED`, `OTHER`) |
 
 #### `payment_record` — оплата
 
@@ -375,6 +408,21 @@ CHECK `patient_file_signed_complete`: у `SIGNED_LOCKED` заполнены хе
 | `payment_status` | VARCHAR(40) | NN | ответ адаптера |
 | `fiscal_status` | VARCHAR(40) | NN | `QUEUED` — чек ждёт онлайн-кассу; `SENT_TO_CASHBOX` — передан в кассу (`CLINIC_CASHBOX_URL`). Сама CRM чек не печатает |
 | `created_at` | TIMESTAMPTZ | NN | |
+
+#### `refund_record` — возврат оплаты
+
+| Колонка | Тип | | Смысл |
+|---|---|---|---|
+| `id` | UUID | PK | |
+| `payment_id` | UUID | FK → `payment_record`, NN, U | один возврат на платёж (полный) |
+| `charge_id` | UUID | FK → `charge`, NN | |
+| `idempotency_key` | VARCHAR(255) | NN, U | повтор не делает второй возврат |
+| `amount_minor`, `currency` | | NN | вся сумма оплаты |
+| `reason` | VARCHAR(40) | NN | код: `PATIENT_REQUEST`, `SERVICE_NOT_PROVIDED`, `ERROR`, `OTHER` |
+| `fiscal_status` | VARCHAR(40) | NN | чек возврата: `QUEUED` → `SENT_TO_CASHBOX` |
+| `created_by`, `created_at` | | NN | |
+
+Отчёт о продажах (`GET /finance/sales`) считает оплаты по `payment_record.created_at` и вычитает возвраты по `refund_record.created_at`.
 
 ### platform — доменные события
 
@@ -550,10 +598,14 @@ CHECK `patient_file_signed_complete`: у `SIGNED_LOCKED` заполнены хе
 | `011-inventory.sql` | 032 | `clinic_service_norm` — нормы расхода |
 | | 033 | схема `inventory`: номенклатура, склады, документы, остатки, марки и операции маркировки |
 | `012-drive.sql` | 034 | схема `drive`: узлы, версии, права и ссылки, квота |
+| `013-finance.sql` | 035 | аннулирование счёта (`VOIDED`), `refund_record`, статус `REFUNDED` |
+| `014-break-glass.sql` | 036 | `break_glass_grant` — экстренный доступ владельца |
+| `015-staff-roles.sql` | 037 | `staff_role`: несколько ролей на сотрудника (заполняется из `staff_user.role`) |
+| `016-hr.sql` | 038 | `hr_contract`: условия работы и ставки |
 
 Как добавить изменение:
 
-1. Новый changeset в конце последнего файла или новый файл `013-….sql`, подключённый в `db.changelog-master.yaml`.
+1. Новый changeset в конце последнего файла или новый файл `017-….sql`, подключённый в `db.changelog-master.yaml`.
 2. Идентификаторы таблиц, колонок, индексов и ограничений — на английском, `snake_case`. Русский допустим только в значениях данных и в комментариях `--`.
 3. Если колонка становится `NOT NULL`, сначала добавьте её nullable, заполните `UPDATE`, затем `SET NOT NULL` — так миграция пройдёт на базе с данными.
 4. Разницу PostgreSQL/H2 оформляйте отдельными changeset-ами с `dbms:postgresql` / `dbms:h2`.
