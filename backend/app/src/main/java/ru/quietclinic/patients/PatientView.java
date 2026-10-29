@@ -16,12 +16,14 @@ record PatientView(
     List<PatientRef> phoneSharedWith,
     String email,
     String secondPhone,
-    AssignedStaffView assignedStaff) {
+    AssignedStaffView assignedStaff,
+    PatientProfile profile) {
 
-  /** Только ФИО — для кассира: ни даты рождения, ни контактов, ни согласий. */
+  /** Только ФИО — для кассира: ни даты рождения, ни контактов, ни согласий, ни реквизитов. */
   PatientView nameOnly() {
     return new PatientView(
-        id, fullName, null, List.of(), List.of(), null, null, false, List.of(), null, null, null);
+        id, fullName, null, List.of(), List.of(), null, null, false, List.of(), null, null, null,
+        null);
   }
 
   static PatientView of(
@@ -44,6 +46,7 @@ record PatientView(
         phoneSharedWith,
         patient.email(),
         patient.secondPhone(),
-        assignedStaff);
+        assignedStaff,
+        patient.profile);
   }
 }

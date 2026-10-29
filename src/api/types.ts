@@ -25,6 +25,46 @@ export type ScheduleItem = {
 
 export type PriceMode = 'FIXED' | 'OPEN'
 
+export type PatientRepresentative = { fullName?: string | null; relationship?: string | null; primary?: boolean | null }
+
+/** Расширенные административные реквизиты; клинические записи хранятся отдельно. */
+export type PatientProfile = {
+  lastName?: string | null
+  firstName?: string | null
+  middleName?: string | null
+  gender?: 'MALE' | 'FEMALE' | 'UNSPECIFIED' | null
+  addressType?: string | null
+  region?: string | null
+  locality?: string | null
+  street?: string | null
+  house?: string | null
+  apartment?: string | null
+  employer?: string | null
+  professionCompany?: string | null
+  professionNsi?: string | null
+  workStartDate?: string | null
+  bonusCard?: string | null
+  documentType?: string | null
+  documentSeriesNumber?: string | null
+  documentIssueDate?: string | null
+  documentDepartmentCode?: string | null
+  documentIssuedBy?: string | null
+  contractNumber?: string | null
+  contractFrom?: string | null
+  contractTo?: string | null
+  representatives?: PatientRepresentative[]
+  snils?: string | null
+  inn?: string | null
+  referralAgent?: string | null
+  tags?: string[]
+  ambulatoryNumber?: string | null
+  ambulatoryNotes?: string | null
+  emailNotifications?: boolean | null
+  smsNotifications?: boolean | null
+  messengerNotifications?: boolean | null
+  pushNotifications?: boolean | null
+}
+
 export type PatientItem = {
   id: string
   name: string
@@ -33,6 +73,7 @@ export type PatientItem = {
   phone: string
   consent: ConsentState
   consents: ConsentItem[]
+  profile?: PatientProfile | null
   /** Откуда пришёл пациент — код из справочника регистратуры. */
   referralSource?: string | null
   /** Административная заметка регистратуры: в клинический контур не попадает. */

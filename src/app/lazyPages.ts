@@ -1,0 +1,23 @@
+import { lazy } from 'react'
+
+/** Разделы загружаются при первом открытии; стартовые «Сегодня» и «Расписание» остаются в основном бандле. */
+export const Analytics = lazy(() => import('../features/analytics/Analytics').then((module) => ({ default: module.Analytics })))
+export const AuditLog = lazy(() => import('../features/audit/AuditLog').then((module) => ({ default: module.AuditLog })))
+export const BreakGlassLog = lazy(() => import('../features/breakglass/BreakGlassLog').then((module) => ({ default: module.BreakGlassLog })))
+export const Cashier = lazy(() => import('../features/cashier/Cashier').then((module) => ({ default: module.Cashier })))
+export const SalesPage = lazy(() => import('../features/finance/SalesPage').then((module) => ({ default: module.SalesPage })))
+export const ContractsPage = lazy(() => import('../features/hr/HrPages').then((module) => ({ default: module.ContractsPage })))
+export const MyContractPage = lazy(() => import('../features/hr/HrPages').then((module) => ({ default: module.MyContractPage })))
+export const SignedDocuments = lazy(() => import('../features/documents/SignedDocuments').then((module) => ({ default: module.SignedDocuments })))
+export const PatientFiles = lazy(() => import('../features/files/PatientFiles').then((module) => ({ default: module.PatientFiles })))
+export const OutboxPage = lazy(() => import('../features/outbox/OutboxPage').then((module) => ({ default: module.OutboxPage })))
+export const PatientCard = lazy(() => import('../features/patients/PatientCard').then((module) => ({ default: module.PatientCard })))
+export const PatientsList = lazy(() => import('../features/patients/PatientsList').then((module) => ({ default: module.PatientsList })))
+export const RegistryPanel = lazy(() => import('../features/patients/RegistryPanel').then((module) => ({ default: module.RegistryPanel })))
+export const RegistryPage = lazy(() => import('../features/registry/RegistryPage').then((module) => ({ default: module.RegistryPage })))
+export const SettingsPage = lazy(() => import('../features/settings/SettingsPage').then((module) => ({ default: module.SettingsPage })))
+export const StaffPage = lazy(() => import('../features/staff/StaffPage').then((module) => ({ default: module.StaffPage })))
+export const WorkspacePage = lazy(() => import('../features/workspace/WorkspacePage').then((module) => ({ default: module.WorkspacePage })))
+export const InventoryPage = lazy(() => import('../features/inventory/InventoryPage').then((module) => ({ default: module.InventoryPage })))
+export const DrivePage = lazy(() => import('../features/drive/DrivePage').then((module) => ({ default: module.DrivePage })))
+export const Visit = lazy(() => import('../features/visit/Visit').then((module) => ({ default: module.Visit })))

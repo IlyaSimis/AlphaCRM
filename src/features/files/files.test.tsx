@@ -40,8 +40,11 @@ describe('PDF пациента', () => {
     const fetchMock = withAuth((address, init) => {
       const method = init?.method ?? 'GET'
       if (address.endsWith(`/patients/${anna.id}/files`) && method === 'POST') {
-        sent.file = (init?.body as FormData).get('file') as File
-        rows = [file({ originalName: sent.file.name }), ...rows]
+        const body = init?.body
+        const uploaded = body instanceof FormData ? body.get('file') : null
+        if (!(uploaded instanceof File)) return jsonResponse({}, 400)
+        sent.file = uploaded
+        rows = [file({ originalName: uploaded.name }), ...rows]
         return jsonResponse(rows[0], 201)
       }
       if (address.endsWith(`/patients/${anna.id}/files`)) return jsonResponse(rows)
@@ -70,8 +73,9 @@ describe('PDF пациента', () => {
     await waitFor(() => expect(sent.file).not.toBeNull())
     expect(sent.file?.name).toBe('заключение.pdf')
     const post = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith('/files') && init?.method === 'POST')
+    const headers = post?.[1]?.headers as Record<string, string> | undefined
     // FormData уходит без JSON-заголовка: границу multipart ставит браузер.
-    expect((post?.[1]?.headers as Record<string, string>)['Content-Type']).toBeUndefined()
+    expect(headers?.['Content-Type']).toBeUndefined()
 
     await user.click(await within(block).findByRole('button', { name: 'Подписать заключение.pdf' }))
     const dialog = screen.getByRole('dialog')

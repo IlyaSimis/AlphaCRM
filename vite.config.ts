@@ -14,5 +14,9 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
+    // Не создаём worker на каждый файл: на Windows это приводит к тайм-аутам.
+    maxWorkers: 4,
+    // Полные пользовательские сценарии MUI + userEvent могут занимать больше 5 секунд.
+    testTimeout: 10_000,
   },
 })

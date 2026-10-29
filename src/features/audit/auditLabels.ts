@@ -142,7 +142,7 @@ const dayNames = ['', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс']
 
 const fieldNames: Record<string, string> = {
   phone: 'телефон', fullName: 'ФИО', birthDate: 'дата рождения', referralSource: 'источник', registryNote: 'заметка регистратуры', telegram: 'Telegram',
-  email: 'e-mail', secondPhone: 'второй телефон', assignedStaff: 'постоянный администратор',
+  email: 'e-mail', secondPhone: 'второй телефон', assignedStaff: 'постоянный администратор', profile: 'расширенные реквизиты',
   specialty: 'специальность', room: 'кабинет', shifts: 'график',
 }
 

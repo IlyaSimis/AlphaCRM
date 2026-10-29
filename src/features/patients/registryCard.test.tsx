@@ -11,7 +11,7 @@ describe('patient card: registry', () => {
     await enterDemo(user, 'ADMINISTRATOR')
     await openPage(user, 'Пациенты')
     await user.click(screen.getByText('Анна Михайлова'))
-    expect(screen.getByText('Рекомендация знакомых')).toBeInTheDocument()
+    expect(await screen.findByText('Рекомендация знакомых')).toBeInTheDocument()
     expect(screen.getByText('Просит звонить после 18:00')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Изменить' }))
     await user.click(screen.getByRole('combobox', { name: 'Откуда пришёл' }))
@@ -37,7 +37,7 @@ describe('patient card: registry', () => {
     await enterDemo(user, 'ADMINISTRATOR')
     await openPage(user, 'Пациенты')
     await user.click(screen.getByText('Мария Соколова'))
-    expect(screen.getByRole('button', { name: 'Выполнено: Обновить согласие' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Выполнено: Обновить согласие' })).toBeInTheDocument()
     // Задача без пациента в карточку не попадает.
     expect(screen.queryByText(/Заказать бланки согласий/)).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Задача' }))

@@ -39,3 +39,5 @@ databaseChangeLog:
       file: db/changelog/019-telephony.sql
   - include:
       file: db/changelog/020-terminal-payments.sql
+  - include:
+      file: db/changelog/021-patient-profile.sql

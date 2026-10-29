@@ -7,7 +7,7 @@ import { canWriteClinical, profileOf } from '../shared/roles'
 import { pageTitles, sectionsFor, serviceOf, serviceTitles, startPage, type Page, type Service } from './pages'
 import { rolesOf } from '../shared/permissions'
 
-export const pageIcons: Partial<Record<Page, ReactNode>> = {
+const pageIcons: Partial<Record<Page, ReactNode>> = {
   today: <TodayRounded />,
   workspace: <AssignmentTurnedInRounded />,
   analytics: <InsightsRounded />,

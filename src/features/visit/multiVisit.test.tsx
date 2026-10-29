@@ -12,7 +12,7 @@ describe('several visits in a row', () => {
     await enterDemo(user)
 
     await user.click(screen.getByRole('button', { name: 'Начать приём 10:10 Дмитрий Волков' }))
-    expect(screen.getByRole('heading', { name: 'Дмитрий Волков' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Дмитрий Волков' })).toBeInTheDocument()
     await user.type(screen.getByLabelText('Диагноз'), 'Черновик первого приёма')
     await openPage(user, 'Расписание')
     // Первый приём открыт, но кнопки у соседних строк на месте.
@@ -21,7 +21,7 @@ describe('several visits in a row', () => {
     expect(screen.getAllByText('На приёме').length).toBeGreaterThan(0)
 
     await user.click(screen.getByRole('button', { name: 'Начать приём 11:00 Мария Соколова' }))
-    expect(screen.getByRole('heading', { name: 'Мария Соколова' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Мария Соколова' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Приём: Дмитрий Волков · 10:10' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Приём: Мария Соколова · 11:00' })).toBeInTheDocument()
 
@@ -37,7 +37,7 @@ describe('several visits in a row', () => {
 
     // Возврат к первому приёму: черновик на месте, приём не закрыт и не подписан.
     await user.click(screen.getByRole('button', { name: 'Приём: Дмитрий Волков · 10:10' }))
-    expect(screen.getByLabelText('Диагноз')).toHaveValue('Черновик первого приёма')
+    expect(await screen.findByLabelText('Диагноз')).toHaveValue('Черновик первого приёма')
     expect(screen.getByLabelText('Диагноз')).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Завершить приём' })).toBeInTheDocument()
   })

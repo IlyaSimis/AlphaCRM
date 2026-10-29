@@ -260,6 +260,14 @@ button, input, textarea { font: inherit; }
 .patient-header { display: flex; gap: 17px; align-items: center; background: var(--paper); border: 1px solid var(--border); border-radius: 15px; padding: 22px; margin-bottom: 16px; }
 .patient-header .MuiChip-root { margin-left: auto; }
 .patient-columns { display: grid; grid-template-columns: 1fr 1.35fr; gap: 16px; }
+.patient-profile-details { margin-top: 16px; }
+.patient-profile-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px 32px; }
+.patient-profile-section { min-width: 0; }
+.patient-profile-section .info-row { margin: 12px 0; overflow-wrap: anywhere; }
+.patient-form-section { padding-bottom: 4px; }
+.patient-form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.patient-representative { display: grid; grid-template-columns: 2fr 1.4fr auto auto; align-items: center; gap: 12px; }
+.patient-notifications { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .panel { padding: 22px; }
 .panel-label { display: block; margin-bottom: 20px !important; }
 .panel-title-row { display: flex; justify-content: space-between; color: var(--muted); }
@@ -287,6 +295,9 @@ button, input, textarea { font: inherit; }
   .visit-layout { grid-template-columns: 1fr; }
   .sticky-summary { position: static; }
   .patient-columns { grid-template-columns: 1fr; }
+  .patient-profile-grid, .patient-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .patient-representative { grid-template-columns: 1fr 1fr; }
+  .patient-notifications { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .analytics-kpis { grid-template-columns: repeat(2, 1fr); }
   .analytics-columns { grid-template-columns: 1fr; }
 }
@@ -324,6 +335,7 @@ button, input, textarea { font: inherit; }
   .patient-header { align-items: flex-start; flex-wrap: wrap; }
   .patient-header h4 { font-size: 24px; }
   .patient-header .MuiChip-root { margin-left: 80px; }
+  .patient-profile-grid, .patient-form-grid, .patient-representative, .patient-notifications { grid-template-columns: 1fr; }
   .visit-banner { align-items: flex-start; gap: 12px; }
   .visit-banner h4 { font-size: 25px; }
   .visit-banner .MuiChip-root { max-width: 130px; height: auto; }

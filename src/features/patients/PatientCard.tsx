@@ -13,12 +13,13 @@ import { Info } from '../../shared/ui'
 import { BreakGlassDialog } from '../breakglass/BreakGlassDialog'
 import { untilText } from '../breakglass/breakGlass'
 import { RESCHEDULABLE } from '../schedule/statusActions'
-import { ConsentDialog, consentBases } from './ConsentDialog'
-import { consentLabels } from './consentLabels'
+import { ConsentDialog } from './ConsentDialog'
+import { consentBases, consentLabels } from './consentLabels'
 import { splitHistory } from './history'
 import { useClinicalHistory } from './useClinicalHistory'
 import { usePatientHistory } from './usePatientHistory'
 import { PatientCalls } from '../telephony/PatientCalls'
+import { PatientProfileDetails } from './PatientProfileDetails'
 
 type PatientCardProps = {
   patient: PatientItem
@@ -86,7 +87,7 @@ export function PatientCard(props: PatientCardProps) {
           {patient.secondPhone && <Info label="Второй телефон" value={patient.secondPhone} />}
           {patient.email && <Info label="E-mail" value={patient.email} />}
           <Info label="Постоянный администратор" value={patient.assignedStaff ? `${patient.assignedStaff.fullName}${patient.assignedStaff.active ? '' : ' · учётная запись отключена'}` : 'не назначен'} />
-          <Info label="Предпочтительный канал" value="SMS · нейтральный шаблон" />
+          <Info label="Каналы уведомлений" value={[patient.profile?.emailNotifications && 'E-mail', patient.profile?.smsNotifications && 'SMS', patient.profile?.messengerNotifications && 'Мессенджеры', patient.profile?.pushNotifications && 'Push'].filter(Boolean).join(' · ') || 'Не выбраны'} />
           {patient.phone !== '—' && <PatientCalls patientId={patient.id} apiOnline={apiOnline} />}
           {props.registry}
           <Divider sx={{ mt: 2 }} />
@@ -110,6 +111,7 @@ export function PatientCard(props: PatientCardProps) {
         </Box>
         <ClinicalPanel {...props} />
       </Box>
+      <PatientProfileDetails patient={patient} />
       {props.files}
       {consentDialog && <ConsentDialog error={consentError} onClose={() => setConsentDialog(false)} onSave={async (input) => {
         const error = await props.onGrantConsent(input)
@@ -174,14 +176,17 @@ function EmergencyPanel({ patient }: { patient: PatientItem }) {
   }, [patient.id])
 
   useEffect(() => {
-    if (!active) { setEncounters(null); return }
+    if (!active) return
     let cancelled = false
     loadEncounters(patient.id)
       .then((rows) => { if (!cancelled) setEncounters(rows) })
       .catch((reason: Error) => { if (!cancelled) setError(reason.message) })
     // Срок вышел — история закрывается без перезагрузки страницы.
     const left = grant?.expiresAt ? new Date(grant.expiresAt).getTime() - Date.now() : 0
-    const timer = window.setTimeout(() => setGrant((current) => (current ? { ...current, active: false } : current)), Math.max(0, Math.min(left, 2 ** 31 - 1)))
+    const timer = window.setTimeout(() => {
+      setEncounters(null)
+      setGrant((current) => (current ? { ...current, active: false } : current))
+    }, Math.max(0, Math.min(left, 2 ** 31 - 1)))
     return () => { cancelled = true; window.clearTimeout(timer) }
   }, [active, patient.id, grant?.expiresAt])
 

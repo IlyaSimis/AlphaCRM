@@ -48,7 +48,7 @@ export function useRegistry(staff: StaffItem, live: boolean, apiOnline: boolean,
         .catch(() => { /* исполнителей подставим из известных учётных записей */ })
     }
     return () => { cancelled = true }
-  }, [apiOnline, role, today, revision])
+  }, [apiOnline, role, today, revision, setTasks, setWaitlist])
 
   /** Сотрудники для выбора исполнителя и подписи задач. На сервере — только его учётные записи. */
   const staffList = live ? remoteStaff ?? [staff] : sandboxStaff

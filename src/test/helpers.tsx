@@ -1,6 +1,6 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { vi } from 'vitest'
+import { expect, vi } from 'vitest'
 import { LEBEDEVA_ID, PETROV_ID } from '../api/client'
 import App from '../app/App'
 import { pageTitles, serviceOf, serviceTitles, type Page } from '../app/pages'
@@ -27,6 +27,8 @@ export async function openPage(user: User, title: string) {
   const tab = screen.getByRole('tab', { name: serviceTitles[serviceOf(pageByTitle(title))] })
   if (tab.getAttribute('aria-selected') !== 'true') await user.click(tab)
   await user.click(menu().getByRole('button', { name: title }))
+  // Нестартовые разделы подгружаются через React.lazy.
+  await waitFor(() => expect(screen.queryByLabelText('Загрузка раздела')).not.toBeInTheDocument())
 }
 
 /** Есть ли страница в меню сотрудника: вкладка её сервиса и раздел в нём. Переключает вкладку. */

@@ -14,6 +14,8 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "patient")
@@ -45,6 +47,11 @@ class Patient {
    */
   UUID assignedStaffId;
 
+  /** Адрес, документы, работа, договор, представители и настройки уведомлений. */
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(columnDefinition = "jsonb")
+  PatientProfile profile;
+
   @OneToMany(mappedBy = "patient", cascade = CascadeType.ALL, orphanRemoval = true)
   List<Contact> contacts = new ArrayList<>();
 
@@ -66,8 +73,8 @@ class Patient {
   }
 
   /**
-   * Применяет карточку целиком: ФИО, дату рождения, телефон, e-mail, второй телефон и постоянного
-   * администратора. Пустой необязательный контакт удаляется, а не хранится пустой строкой.
+   * Применяет карточку целиком. Пустой необязательный контакт удаляется, а не хранится пустой
+   * строкой. Отсутствующий profile означает старый клиент и не затирает расширенные реквизиты.
    * Возвращает имена изменённых полей — их, без значений, пишем в аудит.
    */
   List<String> update(PatientDetails details) {
@@ -87,6 +94,10 @@ class Patient {
     if (!java.util.Objects.equals(details.assignedStaffId(), assignedStaffId)) {
       assignedStaffId = details.assignedStaffId();
       changed.add("assignedStaff");
+    }
+    if (details.profile() != null && !java.util.Objects.equals(details.profile(), profile)) {
+      profile = details.profile();
+      changed.add("profile");
     }
     return changed;
   }

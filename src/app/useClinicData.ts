@@ -120,7 +120,7 @@ export function useClinicData(doctorId: string, live: boolean) {
       .then((remote) => { if (!cancelled) setServices(remote) })
       .catch(() => { /* справочник недоступен: запись покажет, что услуг нет */ })
     return () => { cancelled = true }
-  }, [live])
+  }, [live, setPatientItems, setPractitioners, setServices])
 
   useEffect(() => {
     if (!apiOnline) return
@@ -139,7 +139,7 @@ export function useClinicData(doctorId: string, live: boolean) {
         if (!cancelled && generation === loadGeneration.current) setApiOnline(false)
       })
     return () => { cancelled = true }
-  }, [apiOnline, scheduleDate, scheduleView])
+  }, [apiOnline, scheduleDate, scheduleView, setScheduleItems])
 
   const updateLocally = (id: string, change: (item: ScheduleItem) => ScheduleItem) =>
     setScheduleItems((items) => items.map((row) => row.id === id ? change(row) : row))
@@ -549,3 +549,5 @@ export function useClinicData(doctorId: string, live: boolean) {
     setLocalChargeAmount,
   }
 }
+
+export type ClinicData = ReturnType<typeof useClinicData>

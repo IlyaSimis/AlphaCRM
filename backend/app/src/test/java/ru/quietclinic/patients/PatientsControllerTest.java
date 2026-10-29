@@ -480,4 +480,92 @@ class PatientsControllerTest {
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("INVALID_ASSIGNED_STAFF"));
   }
+
+  @Test
+  void storesEveryExtendedProfileFieldAndKeepsItForLegacyUpdates() throws Exception {
+    var created =
+        mvc.perform(
+                post("/api/v1/patients")
+                    .with(staff.admin())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"fullName":"Симис Илья Борисович","birthDate":"2002-07-23","phone":"+79251765422",
+                         "consentVersion":"v1.2","consentBasis":"SIGNED_FORM",
+                         "profile":{
+                           "lastName":"Симис","firstName":"Илья","middleName":"Борисович","gender":"MALE",
+                           "addressType":"registration","region":"Москва","locality":"Москва",
+                           "street":"Академика Лазарева","house":"54к1","apartment":"45",
+                           "employer":"ООО Ромашка","professionCompany":"Инженер","professionNsi":"Разработчик",
+                           "workStartDate":"2020-01-15","bonusCard":"B-100",
+                           "documentType":"Паспорт РФ","documentSeriesNumber":"4523 293608",
+                           "documentIssueDate":"2022-12-29","documentDepartmentCode":"770-120",
+                           "documentIssuedBy":"ГУ МВД России по г. Москве",
+                           "contractNumber":"00317","contractFrom":"2026-07-03","contractTo":"2027-07-03",
+                           "representatives":[{"fullName":"Борис Симис","relationship":"Отец","primary":true}],
+                           "snils":"123-456-789 01","inn":"771234567890","referralAgent":"Партнёр",
+                           "tags":["vip","family"],"ambulatoryNumber":"0328","ambulatoryNotes":"После 18:00",
+                           "emailNotifications":true,"smsNotifications":false,
+                           "messengerNotifications":true,"pushNotifications":false}}
+                        """))
+            .andExpect(status().isCreated())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    String id = JsonPath.read(created, "$.id");
+    java.util.Map<String, Object> profile = JsonPath.read(created, "$.profile");
+    org.assertj.core.api.Assertions.assertThat(profile)
+        .containsEntry("lastName", "Симис")
+        .containsEntry("firstName", "Илья")
+        .containsEntry("middleName", "Борисович")
+        .containsEntry("gender", "MALE")
+        .containsEntry("addressType", "registration")
+        .containsEntry("region", "Москва")
+        .containsEntry("locality", "Москва")
+        .containsEntry("street", "Академика Лазарева")
+        .containsEntry("house", "54к1")
+        .containsEntry("apartment", "45")
+        .containsEntry("employer", "ООО Ромашка")
+        .containsEntry("professionCompany", "Инженер")
+        .containsEntry("professionNsi", "Разработчик")
+        .containsEntry("workStartDate", "2020-01-15")
+        .containsEntry("bonusCard", "B-100")
+        .containsEntry("documentType", "Паспорт РФ")
+        .containsEntry("documentSeriesNumber", "4523 293608")
+        .containsEntry("documentIssueDate", "2022-12-29")
+        .containsEntry("documentDepartmentCode", "770-120")
+        .containsEntry("documentIssuedBy", "ГУ МВД России по г. Москве")
+        .containsEntry("contractNumber", "00317")
+        .containsEntry("contractFrom", "2026-07-03")
+        .containsEntry("contractTo", "2027-07-03")
+        .containsEntry("snils", "123-456-789 01")
+        .containsEntry("inn", "771234567890")
+        .containsEntry("referralAgent", "Партнёр")
+        .containsEntry("tags", java.util.List.of("vip", "family"))
+        .containsEntry("ambulatoryNumber", "0328")
+        .containsEntry("ambulatoryNotes", "После 18:00")
+        .containsEntry("emailNotifications", true)
+        .containsEntry("smsNotifications", false)
+        .containsEntry("messengerNotifications", true)
+        .containsEntry("pushNotifications", false);
+    org.assertj.core.api.Assertions.assertThat(profile.get("representatives").toString())
+        .contains("Борис Симис")
+        .contains("Отец")
+        .contains("\"primary\":true");
+
+    // Старый клиент не передаёт profile: обновление контакта не стирает новые реквизиты.
+    mvc.perform(
+            put("/api/v1/patients/" + id)
+                .with(staff.admin())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"fullName":"Симис Илья Борисович","birthDate":"2002-07-23","phone":"+79250000000"}
+                    """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.profile.snils").value("123-456-789 01"))
+        .andExpect(jsonPath("$.profile.representatives[0].fullName").value("Борис Симис"));
+    mvc.perform(get("/api/v1/patients/" + id).with(staff.role("CASHIER")))
+        .andExpect(jsonPath("$.profile").doesNotExist());
+  }
 }

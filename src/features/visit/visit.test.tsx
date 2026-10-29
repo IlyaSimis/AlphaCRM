@@ -6,7 +6,7 @@ import { anna, enterDemo, goOffline, jsonResponse, renderApp, withAuth } from '.
 type User = ReturnType<typeof userEvent.setup>
 
 async function fillNote(user: User) {
-  await user.type(screen.getByLabelText('Жалобы и анамнез'), 'Нарушение сна')
+  await user.type(await screen.findByLabelText('Жалобы и анамнез'), 'Нарушение сна')
   await user.type(screen.getByLabelText('Психический статус'), 'Контакт продуктивный')
   await user.type(screen.getByLabelText('Диагноз'), 'Синтетический диагноз')
   await user.type(screen.getByLabelText('Назначения и рекомендации'), 'Контроль через 2 недели')
@@ -19,7 +19,7 @@ describe('patient visit', () => {
     renderApp()
     await enterDemo(user)
     await user.click(screen.getByRole('button', { name: 'Начать приём 09:00 Анна Михайлова' }))
-    expect(screen.getByRole('heading', { name: 'Анна Михайлова' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Анна Михайлова' })).toBeInTheDocument()
     expect(screen.getByText(/ПЕРВИЧНЫЙ ПРИЁМ · .* · 09:00–09:50/)).toBeInTheDocument()
     expect(screen.getByLabelText('Диагноз')).toHaveValue('')
 
