@@ -16,14 +16,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import ru.quietclinic.StaffSessions;
 import ru.quietclinic.assistant.AssistantGateway.GatewayResult;
 
-/** ИИ возвращает только разрешённый id; ошибочный ответ не расходует месячную квоту. */
+/** ИИ возвращает только разрешённый id, без тарифа и месячного учёта обращений. */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("local")
@@ -36,26 +35,23 @@ class AssistantControllerTest {
       """;
 
   @Autowired MockMvc mvc;
-  @Autowired JdbcTemplate jdbc;
   @MockitoBean AssistantGateway gateway;
   StaffSessions staff;
 
   @BeforeEach
   void setUp() {
     staff = new StaffSessions(mvc);
-    jdbc.update("delete from assistant.usage_counter");
     when(gateway.enabled()).thenReturn(true);
     when(gateway.model()).thenReturn("test-model");
   }
 
   @Test
-  void statusIsAvailableToEveryStaffRole() throws Exception {
+  void statusIsAvailableToEveryStaffRoleWithoutUsageQuota() throws Exception {
     mvc.perform(get("/api/v1/assistant/status").with(staff.role("DOCTOR")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.enabled").value(true))
         .andExpect(jsonPath("$.model").value("test-model"))
-        .andExpect(jsonPath("$.usage.planCode").value("FREE"))
-        .andExpect(jsonPath("$.usage.remainingAiRequests").value(100));
+        .andExpect(jsonPath("$.usage").doesNotExist());
   }
 
   @Test
@@ -69,7 +65,7 @@ class AssistantControllerTest {
   }
 
   @Test
-  void acceptedDestinationConsumesOneRequestAndRecordsTokens() throws Exception {
+  void acceptedDestinationIsReturnedWithoutUsageAccounting() throws Exception {
     when(gateway.navigate(anyString(), anyString(), anyList()))
         .thenReturn(new GatewayResult("workspace-today", 120, 30));
 
@@ -81,18 +77,13 @@ class AssistantControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.destinationId").value("workspace-today"))
         .andExpect(jsonPath("$.source").value("AI"))
-        .andExpect(jsonPath("$.usage.usedAiRequests").value(1))
-        .andExpect(jsonPath("$.usage.remainingAiRequests").value(99));
+        .andExpect(jsonPath("$.usage").doesNotExist());
 
     verify(gateway).navigate(eq("что у меня на сегодня"), eq("today"), anyList());
-    var tokens =
-        jdbc.queryForMap("select input_tokens, output_tokens from assistant.usage_counter");
-    org.assertj.core.api.Assertions.assertThat(tokens.get("INPUT_TOKENS")).isEqualTo(120L);
-    org.assertj.core.api.Assertions.assertThat(tokens.get("OUTPUT_TOKENS")).isEqualTo(30L);
   }
 
   @Test
-  void destinationOutsideCatalogIsRejectedAndReservationReleased() throws Exception {
+  void destinationOutsideCatalogIsRejected() throws Exception {
     when(gateway.navigate(anyString(), anyString(), anyList()))
         .thenReturn(new GatewayResult("cashier", 100, 20));
 
@@ -103,9 +94,5 @@ class AssistantControllerTest {
                 .content(REQUEST))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("ASSISTANT_UNKNOWN_DESTINATION"));
-    mvc.perform(get("/api/v1/assistant/status").with(staff.role("DOCTOR")))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.usage.usedAiRequests").value(0))
-        .andExpect(jsonPath("$.usage.remainingAiRequests").value(100));
   }
 }

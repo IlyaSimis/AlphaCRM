@@ -1,4 +1,4 @@
-import { ArticleRounded, AssignmentTurnedInRounded, BadgeRounded, CalendarMonthRounded, ContactPhoneRounded, DeleteOutlineRounded, DescriptionRounded, EventNoteRounded, FolderSharedRounded, FolderRounded, HealthAndSafetyRounded, HistoryRounded, InsightsRounded, Inventory2Rounded, ListAltRounded, MedicalServicesRounded, OutboxRounded, PaymentsRounded, PeopleAltRounded, QrCode2Rounded, QueryStatsRounded, WorkOutlineRounded, WorkRounded, ReceiptLongRounded, SellRounded, TodayRounded } from '@mui/icons-material'
+import { ArticleRounded, AssignmentTurnedInRounded, BadgeRounded, CalendarMonthRounded, ContactPhoneRounded, DeleteOutlineRounded, DescriptionRounded, EventNoteRounded, FolderSharedRounded, FolderRounded, HealthAndSafetyRounded, HistoryRounded, InsightsRounded, Inventory2Rounded, ListAltRounded, MedicalServicesRounded, OutboxRounded, PaymentsRounded, PeopleAltRounded, QrCode2Rounded, QueryStatsRounded, SettingsRounded, WorkOutlineRounded, WorkRounded, ReceiptLongRounded, SellRounded, TodayRounded } from '@mui/icons-material'
 import { Avatar, Box, Stack, Typography } from '@mui/material'
 import type { ReactNode } from 'react'
 import type { StaffItem } from '../api/types'
@@ -51,10 +51,11 @@ type SidebarProps = {
   activeVisit: VisitTarget | null
   onNavigate: (page: Page) => void
   onVisit: (visit: VisitTarget) => void
+  onSettings: () => void
 }
 
-/** Боковое меню: разделы выбранного сервиса и открытые приёмы врача. */
-export function Sidebar({ className, page, service, staff, live, visits, activeVisit, onNavigate, onVisit }: SidebarProps) {
+/** Боковое меню: разделы выбранного сервиса, открытые приёмы и личные настройки внизу. */
+export function Sidebar({ className, page, service, staff, live, visits, activeVisit, onNavigate, onVisit, onSettings }: SidebarProps) {
   const profile = profileOf(staff)
   const role = rolesOf(staff)
   const sections = sectionsFor(service, role)
@@ -82,9 +83,12 @@ export function Sidebar({ className, page, service, staff, live, visits, activeV
           ))}
         </Stack>
       </Box>}
-      <Box className="profile">
-        <Avatar sx={{ bgcolor: 'action.selected', color: 'primary.main' }}>{profile.initials}</Avatar>
-        <Box sx={{ minWidth: 0, flex: 1 }}><Typography noWrap sx={{ fontWeight: 700, fontSize: 14 }}>{profile.name}</Typography><Typography sx={{ color: 'text.secondary', fontSize: 12 }}>{profile.role}{live ? '' : ' · демо'}</Typography></Box>
+      <Box className="sidebar-bottom">
+        <button type="button" className="nav-item settings-item" onClick={onSettings}><SettingsRounded />Настройки</button>
+        <Box className="profile">
+          <Avatar sx={{ bgcolor: 'action.selected', color: 'primary.main' }}>{profile.initials}</Avatar>
+          <Box sx={{ minWidth: 0, flex: 1 }}><Typography noWrap sx={{ fontWeight: 700, fontSize: 14 }}>{profile.name}</Typography><Typography sx={{ color: 'text.secondary', fontSize: 12 }}>{profile.role}{live ? '' : ' · демо'}</Typography></Box>
+        </Box>
       </Box>
     </Box>
   )

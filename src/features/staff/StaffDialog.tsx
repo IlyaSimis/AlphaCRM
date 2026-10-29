@@ -61,6 +61,7 @@ export function StaffDialog({ practitioners, error, roles, onClose, onSave }: St
           </TextField>
           : <Typography sx={{ color: 'text.secondary', fontSize: 14 }}>Свободных карточек нет: у всех врачей справочника уже есть учётная запись.</Typography>)}
         {doctor && mode === 'new' && <>
+          <Alert severity="info">Учётная запись и карточка врача создаются вместе. Врач сразу появится в расписании — отдельно создавать его не нужно.</Alert>
           <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: 2 }}>
             <TextField label="Специальность" value={specialty} onChange={(event) => setSpecialty(event.target.value)} slotProps={{ htmlInput: { maxLength: 120 } }} />
             <TextField label="Кабинет" value={room} onChange={(event) => setRoom(event.target.value)} slotProps={{ htmlInput: { maxLength: 80 } }} />

@@ -56,7 +56,6 @@ export function AssistantDialog({ open, role, currentPage, apiOnline, onClose, o
       const answer = await navigateWithAssistant(text, currentPage, catalog.map(({ id, title, description, keywords }) => ({ id, title, description, keywords })))
       const destination = catalog.find((item) => item.id === answer.destinationId)
       if (!destination) throw new Error('Модель выбрала неизвестный раздел. Выберите вариант из списка.')
-      setStatus((current) => current ? { ...current, usage: answer.usage } : current)
       select(destination)
     } catch (reason) {
       setError((reason as Error).message)
@@ -76,7 +75,6 @@ export function AssistantDialog({ open, role, currentPage, apiOnline, onClose, o
         <Stack direction="row" spacing={0.7} useFlexGap sx={{ mt: 1.5, flexWrap: 'wrap' }}>
           {['Задачи на сегодня', 'Услуги и цены', 'Общие файлы'].map((example) => <Chip key={example} size="small" variant="outlined" label={example} onClick={() => setQuery(example)} />)}
         </Stack>
-        {status && <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 2 }}>Тариф «{status.usage.planName}»: осталось {status.usage.remainingAiRequests} из {status.usage.monthlyAiRequests} ИИ-запросов в этом месяце. Локальный поиск лимит не расходует.</Typography>}
         {!apiOnline && <Alert severity="info" sx={{ mt: 2 }}>В песочнице работает локальный поиск без обращения к внешней модели.</Alert>}
         {apiOnline && status && !status.enabled && <Alert severity="info" sx={{ mt: 2 }}>Внешняя модель не настроена. Точные совпадения по-прежнему открываются локально.</Alert>}
         {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}

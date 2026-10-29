@@ -106,7 +106,7 @@ describe('staff', () => {
     await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/auth/password'))).toBe(true))
   })
 
-  it('a new doctor card with room and shift goes in the same request; an empty schedule only warns', async () => {
+  it('a manager creates a doctor and schedule card in one request; an empty schedule only warns', async () => {
     let posted: Record<string, unknown> | null = null
     let practitionerReads = 0
     const fetchMock = withAuth((address, init) => {
@@ -115,7 +115,7 @@ describe('staff', () => {
         posted = JSON.parse(String(init?.body))
         return jsonResponse({ id: '00000000-0000-0000-0000-0000000a0777', fullName: 'Врач Новый', username: 'new.doctor', role: 'DOCTOR', practitionerId: '00000000-0000-0000-0000-0000000a0777', active: true, mustChangePassword: true }, 201)
       }
-      if (address.endsWith('/staff')) return jsonResponse([testAccounts().admin, testAccounts()['t.petrov']])
+      if (address.endsWith('/staff')) return jsonResponse([testAccounts()['t.manager'], testAccounts()['t.petrov']])
       if (address.endsWith('/practitioners')) {
         practitionerReads += 1
         return jsonResponse([
@@ -126,7 +126,7 @@ describe('staff', () => {
       if (address.includes('/patients')) return jsonResponse([anna])
       if (address.includes('/appointments')) return jsonResponse([])
       return jsonResponse({}, 404)
-    }, 'admin')
+    }, 't.manager')
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
@@ -145,6 +145,7 @@ describe('staff', () => {
     await user.keyboard('{Escape}')
     await user.click(screen.getByRole('button', { name: 'Новая карточка' }))
 
+    expect(screen.getByText(/Врач сразу появится в расписании/)).toBeInTheDocument()
     expect(screen.getByText(/Смен нет: карточка создастся/)).toBeInTheDocument()
     await user.type(screen.getByLabelText('ФИО'), 'Врач Новый')
     await user.type(screen.getByLabelText('Специальность'), 'Психотерапевт')

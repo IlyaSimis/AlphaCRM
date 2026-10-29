@@ -35,12 +35,12 @@ flowchart LR
     NGINX -- "/api/v1/* proxy" --> API
     API -- "JDBC, Liquibase" --> PG
     SPA --- LS
-    API -. "порты внешних систем" .-> EXT["ИИ, ЮKassa, уведомления, KMS"]
+    API -. "порты внешних систем" .-> EXT["ИИ, уведомления, KMS"]
 ```
 
 - Интерфейс и API работают на одном origin: nginx в Docker, прокси Vite при разработке. Поэтому cookie сессии и CSRF работают без CORS.
 - backend не публикует порт наружу, база слушает только `127.0.0.1`.
-- Внешние системы закрыты портами. ИИ-навигация и оплата тарифа выключены без ключей; остальные адаптеры по умолчанию безопасно не отправляют данные наружу.
+- Внешние системы закрыты портами. Обращения ИИ-навигации к модели выключены без ключа; остальные адаптеры по умолчанию безопасно не отправляют данные наружу.
 
 ## Развёртывание
 
@@ -77,7 +77,6 @@ flowchart TB
     insights["insights<br/>персональный дашборд"]
     workspace["workspace<br/>личные задачи, заметки, произвольные поля и представления"]
     assistant["assistant<br/>навигация по разрешённым страницам"]
-    commercial["commercial<br/>тариф клиники, квота ИИ, hosted checkout"]
     platform["platform<br/>ошибки, шифрование, KMS, clinicId(),<br/>разрешения ролей, доменные события"]
 
     scheduling -->|"CareRelationshipService"| clinical
@@ -95,8 +94,7 @@ flowchart TB
     bot -->|"OperatorRequests"| registry
     scheduling & clinical & billing & registry & patients & staff & inventory & drive & workspace --> audit
     scheduling & clinical & billing & registry & patients & staff & audit & inventory & drive & insights & workspace --> platform
-    assistant --> commercial
-    assistant & commercial --> platform
+    assistant --> platform
 ```
 
 | Модуль | Отвечает за | Зависит от кода |
@@ -114,8 +112,7 @@ flowchart TB
 | `drive` | папки, файлы и версии, права с наследованием (`VIEW`/`EDIT`/`MANAGE`), ссылки только на просмотр после входа, корзина и квота; содержимое — шифрованные объекты в `ObjectStorage` (`LocalObjectStorage`) | platform, audit |
 | `insights` | `GET /me/dashboard`: виджеты по разрешениям роли, только агрегаты запросами к таблицам других модулей | platform |
 | `workspace` | личные задачи, заметки и записи произвольных типов; свободные статусы, теги, чек-листы и поля; сроки, связи, архив и сохранённые представления. Каждая строка ограничена `clinic_id + owner_id`; клинический текст сюда не переносится | platform, audit |
-| `assistant` | статус и переходы ИИ-навигатора; OpenAI-compatible адаптер принимает вопрос и каталог разрешённых роли страниц, возвращает только `destinationId` из whitelist. Пациенты и содержимое страниц в запрос не попадают | platform, commercial |
-| `commercial` | тариф и месячная квота клиники, учёт токенов, история платежей подписки; hosted checkout ЮKassa и серверная сверка платежа после публичного вебхука. Отделён от кассы пациентов `billing` | platform |
+| `assistant` | статус и переходы ИИ-навигатора без отдельных тарифов и месячных лимитов; OpenAI-compatible адаптер принимает вопрос и каталог разрешённых роли страниц, возвращает только `destinationId` из whitelist. Пациенты и содержимое страниц в запрос не попадают | platform |
 | `communications` | `OutboxService` (постановка по событию), `OutboxDispatcher` (доставка, повторы, переносы), `NotificationPort` → вебхук клиники, Telegram или mock, порт кассы `FiscalPort`, экран `GET /outbox` | platform, audit |
 
 Правила, на которых держатся границы:

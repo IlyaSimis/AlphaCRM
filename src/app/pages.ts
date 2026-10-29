@@ -9,17 +9,18 @@ export type Page =
   | 'drive' | 'drive-shared' | 'drive-trash'
 
 /** Сервис — вкладка верхней панели; его разделы — в боковом меню. */
-export type Service = 'dashboards' | 'patients' | 'inventory' | 'finance' | 'drive'
+export type Service = 'dashboards' | 'management' | 'patients' | 'inventory' | 'finance' | 'drive'
 
 export const serviceTitles: Record<Service, string> = {
   dashboards: 'Дашборды',
+  management: 'Управление',
   patients: 'База данных пациентов',
   inventory: 'Склад',
   finance: 'Финансы',
   drive: 'Диск',
 }
 
-export const services: Service[] = ['dashboards', 'patients', 'inventory', 'finance', 'drive']
+export const services: Service[] = ['dashboards', 'management', 'patients', 'inventory', 'finance', 'drive']
 
 export const pageTitles: Record<Page, string> = {
   today: 'Сегодня',
@@ -55,6 +56,8 @@ export const pageTitles: Record<Page, string> = {
 export const serviceSections: Record<Service, Array<{ label: string; pages: Page[] }>> = {
   dashboards: [
     { label: 'ОБЗОР', pages: ['today', 'workspace', 'analytics', 'hr-me'] },
+  ],
+  management: [
     { label: 'УПРАВЛЕНИЕ', pages: ['staff', 'hr', 'audit', 'break-glass', 'outbox'] },
   ],
   patients: [

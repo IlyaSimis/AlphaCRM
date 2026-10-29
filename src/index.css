@@ -87,7 +87,9 @@ button, input, textarea { font: inherit; }
 .nav-item svg { width: 20px; }
 .nav-item:hover { background: var(--hover); }
 .nav-item.active { color: var(--active-text); background: var(--active-bg); }
-.profile { display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--border); margin-top: auto; padding: 18px 5px 0; }
+.sidebar-bottom { margin-top: auto; padding-top: 18px; }
+.settings-item { width: 100%; margin-bottom: 10px; }
+.profile { display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--border); padding: 18px 5px 0; }
 .main { flex: 1; min-width: 0; position: relative; isolation: isolate; }
 /* Шапка (sticky, z-index 5) и страница — над пейзажем. */
 .main > .content { position: relative; z-index: 1; }

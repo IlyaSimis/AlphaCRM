@@ -25,7 +25,7 @@ export function SettingsPage({ practitioners, services, onSaveHours, onSaveCard,
   if (section === 'hours') return (
     <>
       <Box className="section-intro">
-        <Box><Typography sx={{ color: 'text.secondary' }}>Специальность, кабинет и смены врачей по дням недели. Новый врач заводится в «Дашборды → Сотрудники».</Typography></Box>
+        <Box><Typography sx={{ color: 'text.secondary' }}>Специальность, кабинет и смены врачей по дням недели. Новый врач заводится в «Управление → Сотрудники» и сразу появляется в расписании.</Typography></Box>
       </Box>
       <Box className="settings-grid">
         {practitioners.map((practitioner) => <WorkingHoursForm key={practitioner.id} practitioner={practitioner} onSave={(shifts) => onSaveHours(practitioner, shifts)} onSaveCard={(input) => onSaveCard(practitioner, input)} />)}

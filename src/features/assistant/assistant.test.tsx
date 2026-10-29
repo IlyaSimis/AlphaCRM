@@ -3,8 +3,6 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { enterDemo, goOffline, jsonResponse, renderApp, withAuth } from '../../test/helpers'
 
-const usage = { planCode: 'FREE', planName: 'Старт', monthlyAiRequests: 100, usedAiRequests: 0, remainingAiRequests: 100 }
-
 describe('AI navigator', () => {
   it('opens overdue tasks locally in the sandbox without a model request', async () => {
     goOffline()
@@ -23,9 +21,9 @@ describe('AI navigator', () => {
 
   it('uses the model only for an ambiguous request and opens its whitelisted destination', async () => {
     const fetchMock = withAuth((address, init) => {
-      if (address.endsWith('/assistant/status')) return jsonResponse({ enabled: true, model: 'test-model', usage })
+      if (address.endsWith('/assistant/status')) return jsonResponse({ enabled: true, model: 'test-model' })
       if (address.endsWith('/assistant/navigate') && init?.method === 'POST') {
-        return jsonResponse({ destinationId: 'cashier', source: 'AI', usage: { ...usage, usedAiRequests: 1, remainingAiRequests: 99 } })
+        return jsonResponse({ destinationId: 'cashier', source: 'AI' })
       }
       return jsonResponse([])
     })

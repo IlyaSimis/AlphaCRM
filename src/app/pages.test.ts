@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { canOpen, firstPageOf, navigationFor, sectionsFor, serviceOf, servicesFor, startPage } from './pages'
 
 describe('services and pages by role', () => {
-  it('the top bar has five services; every page belongs to one of them', () => {
-    expect(servicesFor('ADMINISTRATOR')).toEqual(['dashboards', 'patients', 'inventory', 'finance', 'drive'])
+  it('the top bar has six services; every page belongs to one of them', () => {
+    expect(servicesFor('ADMINISTRATOR')).toEqual(['dashboards', 'management', 'patients', 'inventory', 'finance', 'drive'])
     expect(serviceOf('cashier')).toBe('finance')
     expect(serviceOf('prices')).toBe('finance')
     expect(serviceOf('sales')).toBe('finance')
@@ -13,7 +13,7 @@ describe('services and pages by role', () => {
     expect(serviceOf('hours')).toBe('patients')
     expect(serviceOf('stock-items')).toBe('inventory')
     expect(serviceOf('drive-trash')).toBe('drive')
-    expect(serviceOf('staff')).toBe('dashboards')
+    expect(serviceOf('staff')).toBe('management')
   })
 
   it('the administrator sees everything operational, grouped by service', () => {
@@ -30,7 +30,8 @@ describe('services and pages by role', () => {
     expect(navigationFor('OWNER')).toEqual(withLog.flatMap((page) => (page === 'staff' ? ['staff', 'hr'] : [page])))
     expect(canOpen('hr', 'SENIOR_ADMINISTRATOR')).toBe(false)
     expect(canOpen('break-glass', 'MANAGER')).toBe(false)
-    expect(sectionsFor('dashboards', 'ADMINISTRATOR').map((section) => section.label)).toEqual(['ОБЗОР', 'УПРАВЛЕНИЕ'])
+    expect(sectionsFor('dashboards', 'ADMINISTRATOR').map((section) => section.label)).toEqual(['ОБЗОР'])
+    expect(sectionsFor('management', 'ADMINISTRATOR').map((section) => section.label)).toEqual(['УПРАВЛЕНИЕ'])
   })
 
   it('a cashier has no inventory service; every role has a personal workspace', () => {
@@ -48,14 +49,16 @@ describe('services and pages by role', () => {
   it('manager sees prices read-only in finance, nurse works with stock, support has no patients', () => {
     expect(sectionsFor('finance', 'MANAGER').flatMap((section) => section.pages)).toEqual(['cashier', 'sales', 'prices'])
     expect(canOpen('outbox', 'MANAGER')).toBe(false)
+    expect(sectionsFor('management', 'MANAGER').flatMap((section) => section.pages)).toEqual(['staff', 'audit'])
     expect(sectionsFor('inventory', 'NURSE').flatMap((section) => section.pages)).toEqual(['stock-balances', 'stock-items', 'stock-documents', 'stock-marking', 'stock-norms'])
-    expect(servicesFor('SUPPORT')).toEqual(['dashboards', 'patients', 'inventory', 'drive'])
+    expect(servicesFor('SUPPORT')).toEqual(['dashboards', 'management', 'patients', 'inventory', 'drive'])
     expect(canOpen('patient', 'SUPPORT')).toBe(false)
   })
 
   it('a service tab opens its first page available to the role', () => {
     expect(firstPageOf('dashboards', 'ADMINISTRATOR')).toBe('today')
     expect(firstPageOf('dashboards', 'DOCTOR')).toBe('workspace')
+    expect(firstPageOf('management', 'MANAGER')).toBe('staff')
     expect(firstPageOf('inventory', 'NURSE')).toBe('stock-balances')
     expect(firstPageOf('finance', 'NURSE')).toBeNull()
   })

@@ -110,12 +110,14 @@ describe('«Сегодня» — домашняя страница', () => {
     renderApp()
     await enterDemo(user, 'ADMINISTRATOR')
     const tabs = screen.getByRole('tablist', { name: 'Сервисы' })
-    expect(within(tabs).getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Дашборды', 'База данных пациентов', 'Склад', 'Финансы', 'Диск'])
+    expect(within(tabs).getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Дашборды', 'Управление', 'База данных пациентов', 'Склад', 'Финансы', 'Диск'])
     expect(within(tabs).getByRole('tab', { name: 'Дашборды' })).toHaveAttribute('aria-selected', 'true')
     const overview = within(sidebar()).getByRole('navigation', { name: 'Обзор' })
     expect(within(overview).getAllByRole('button').map((button) => button.textContent)).toEqual(['Сегодня', 'Моё пространство', 'Аналитика', 'Мои условия работы'])
-    expect(within(within(sidebar()).getByRole('navigation', { name: 'Управление' })).getAllByRole('button').map((button) => button.textContent)).toEqual(['Сотрудники', 'Журнал аудита', 'Внешние выводы'])
+    expect(within(sidebar()).queryByRole('navigation', { name: 'Управление' })).not.toBeInTheDocument()
     expect(within(overview).getByRole('button', { name: 'Сегодня' })).toHaveClass('active')
+    await user.click(within(tabs).getByRole('tab', { name: 'Управление' }))
+    expect(within(within(sidebar()).getByRole('navigation', { name: 'Управление' })).getAllByRole('button').map((button) => button.textContent)).toEqual(['Сотрудники', 'Журнал аудита', 'Внешние выводы'])
 
     // Вкладка сервиса открывает его первый раздел; разделы другого сервиса из меню уходят.
     await user.click(within(tabs).getByRole('tab', { name: 'База данных пациентов' }))

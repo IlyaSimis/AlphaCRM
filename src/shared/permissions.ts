@@ -20,7 +20,7 @@ export type Permission =
   | 'inventory.item.read' | 'inventory.item.write' | 'inventory.document.write' | 'inventory.document.allow-negative'
   | 'inventory.stock.read' | 'inventory.marking.read' | 'inventory.marking.manage'
   | 'drive.file.use' | 'drive.clinic.admin' | 'workspace.item.use'
-  | 'assistant.navigation.use' | 'commercial.subscription.manage'
+  | 'assistant.navigation.use'
   | 'insights.dashboard.read' | 'insights.analytics.read' | 'insights.analytics.read-own'
   | 'audit.event.read' | 'audit.event.read-platform'
   | 'communications.delivery.read' | 'communications.delivery.retry'
@@ -39,7 +39,7 @@ const OPERATIONS: Permission[] = [
 ]
 
 export const rolePermissions: Record<StaffRole, Permission[]> = {
-  OWNER: [...OPERATIONS, 'identity.role.assign-privileged', 'clinical.record.break-glass', 'clinical.break-glass.review', 'identity.hr.manage', 'commercial.subscription.manage'],
+  OWNER: [...OPERATIONS, 'identity.role.assign-privileged', 'clinical.record.break-glass', 'clinical.break-glass.review', 'identity.hr.manage'],
   SENIOR_ADMINISTRATOR: [...OPERATIONS, 'clinical.break-glass.review'],
   ADMINISTRATOR: OPERATIONS,
   MANAGER: [

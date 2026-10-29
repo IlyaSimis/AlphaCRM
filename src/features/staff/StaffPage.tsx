@@ -74,7 +74,7 @@ export function StaffPage({ self, live, practitioners, notify, onPractitionerAdd
       }
       setRevision((value) => value + 1)
       if (draft.newPractitioner) onPractitionerAdded()
-      notify('Сотрудник создан')
+      notify(draft.newPractitioner ? 'Сотрудник создан, врач добавлен в расписание' : 'Сотрудник создан')
       setIssued({ username: draft.username.toLowerCase(), password: draft.password })
     } else {
       const card = draft.role === 'DOCTOR' ? draft.newPractitioner : null

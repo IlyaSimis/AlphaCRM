@@ -25,9 +25,12 @@ describe('workspace background and greeting', () => {
     // Оба светила в сцене: какое видно, решает тема (CSS), смена темы сцену не пересоздаёт.
     expect(scenes[0].querySelectorAll('.ls-sun')).toHaveLength(1)
     expect(scenes[0].querySelectorAll('.ls-moon')).toHaveLength(1)
-    await user.click(screen.getByRole('button', { name: 'Включить тёмную тему' }))
+    await user.click(screen.getByRole('button', { name: 'Настройки' }))
+    await user.click(screen.getByRole('switch', { name: 'Тёмная тема' }))
     await waitFor(() => expect(document.documentElement).toHaveAttribute('data-theme', 'dark'))
     expect(document.querySelector('.landscape')).toBe(scenes[0])
+    await user.click(screen.getByRole('button', { name: 'Готово' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
 
     // Смена вкладки не создаёт вторую сцену и не проигрывает выезд заново.
     await openPage(user, 'Пациенты')

@@ -133,10 +133,3 @@ clinic:
     api-key: ${CLINIC_ASSISTANT_API_KEY:}
     model: ${CLINIC_ASSISTANT_MODEL:gpt-5.4-nano}
     api-url: ${CLINIC_ASSISTANT_API_URL:https://api.openai.com/v1}
-  commercial:
-    yookassa:
-      # Hosted checkout подписки. Все три значения обязательны для включения оплаты.
-      shop-id: ${CLINIC_YOOKASSA_SHOP_ID:}
-      secret-key: ${CLINIC_YOOKASSA_SECRET_KEY:}
-      return-url: ${CLINIC_YOOKASSA_RETURN_URL:}
-      api-url: ${CLINIC_YOOKASSA_API_URL:https://api.yookassa.ru/v3}

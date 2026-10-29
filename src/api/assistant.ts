@@ -1,8 +1,8 @@
 import { apiFetch, failure } from './client'
 
-export type AssistantUsage = { planCode: string; planName: string; monthlyAiRequests: number; usedAiRequests: number; remainingAiRequests: number }
-export type AssistantStatus = { enabled: boolean; model: string; usage: AssistantUsage }
+export type AssistantStatus = { enabled: boolean; model: string }
 export type AssistantDestination = { id: string; title: string; description: string; keywords: string[] }
+export type AssistantNavigation = { destinationId: string; source: string }
 
 export async function loadAssistantStatus(): Promise<AssistantStatus> {
   const response = await apiFetch('/assistant/status')
@@ -10,8 +10,8 @@ export async function loadAssistantStatus(): Promise<AssistantStatus> {
   return response.json() as Promise<AssistantStatus>
 }
 
-export async function navigateWithAssistant(query: string, currentPage: string, destinations: AssistantDestination[]): Promise<{ destinationId: string; source: string; usage: AssistantUsage }> {
+export async function navigateWithAssistant(query: string, currentPage: string, destinations: AssistantDestination[]): Promise<AssistantNavigation> {
   const response = await apiFetch('/assistant/navigate', { method: 'POST', body: JSON.stringify({ query, currentPage, destinations }) })
   if (!response.ok) throw await failure(response, 'ИИ-навигатор временно недоступен')
-  return response.json() as Promise<{ destinationId: string; source: string; usage: AssistantUsage }>
+  return response.json() as Promise<AssistantNavigation>
 }

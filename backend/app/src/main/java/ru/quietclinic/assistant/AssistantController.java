@@ -11,7 +11,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import ru.quietclinic.commercial.CommercialService.UsageView;
 
 @RestController
 @RequestMapping("/api/v1/assistant")
@@ -44,7 +43,7 @@ public class AssistantController {
       @Size(max = 500) String description,
       @Size(max = 16) List<@Size(max = 80) String> keywords) {}
 
-  public record StatusView(boolean enabled, String model, UsageView usage) {}
+  public record StatusView(boolean enabled, String model) {}
 
-  public record NavigationView(String destinationId, String source, UsageView usage) {}
+  public record NavigationView(String destinationId, String source) {}
 }

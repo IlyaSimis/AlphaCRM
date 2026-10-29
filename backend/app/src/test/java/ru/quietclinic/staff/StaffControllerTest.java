@@ -292,6 +292,33 @@ class StaffControllerTest {
   }
 
   @Test
+  void managerCreatesDoctorAndScheduleCardInOneRequest() throws Exception {
+    var created =
+        mvc.perform(
+                post("/api/v1/staff")
+                    .with(staff.role("MANAGER"))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"fullName":"Врач Менеджера","username":"manager.doctor","password":"doctor-pass-1",
+                         "role":"DOCTOR","newPractitioner":{"specialty":"Психиатр","room":"305",
+                         "shifts":[{"dayOfWeek":4,"startsAt":"10:00","endsAt":"18:00"}]}}
+                        """))
+            .andExpect(status().isCreated())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    String practitionerId = JsonPath.read(created, "$.practitionerId");
+    var card = "$[?(@.id == '" + practitionerId + "')]";
+    mvc.perform(get("/api/v1/practitioners").with(staff.role("MANAGER")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath(card + ".fullName").value(contains("Врач Менеджера")))
+        .andExpect(jsonPath(card + ".room").value(contains("305")))
+        .andExpect(jsonPath(card + ".workingHours[0].dayOfWeek").value(contains(4)));
+    assertThat(practitionersNamed("Врач Менеджера")).isEqualTo(1);
+  }
+
+  @Test
   void failedDoctorAccountLeavesNoPractitionerCard() throws Exception {
     create(
             """
