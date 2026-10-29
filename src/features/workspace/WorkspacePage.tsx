@@ -7,7 +7,7 @@ import { formatClinicMoment } from '../../shared/clinicTime'
 import { NameDialog } from '../drive/NameDialog'
 import type { WorkspaceNavigationIntent } from '../assistant/navigationCatalog'
 import { WorkspaceItemDialog } from './WorkspaceItemDialog'
-import { blankWorkspaceItem, emptyWorkspaceFilter, filterWorkspace, inputOf, isWorkspaceOverdue, isWorkspaceReminderDue, newWorkspaceId } from './workspace'
+import { blankWorkspaceItem, emptyWorkspaceFilter, filterWorkspace, inputOf, isWorkspaceOverdue, isWorkspaceReminderDue, newWorkspaceId, offlineStore } from './workspace'
 
 type WorkspacePageProps = {
   apiOnline: boolean
@@ -16,24 +16,6 @@ type WorkspacePageProps = {
   appointments: ScheduleItem[]
   notify: (message: string) => void
   navigationIntent?: ({ key: number } & WorkspaceNavigationIntent) | null
-}
-
-type OfflineStore = { items: WorkspaceItem[]; views: WorkspaceView[] }
-const storageKey = (selfId: string) => `alphacrm.workspace.${selfId}`
-
-function offlineStore(selfId: string): OfflineStore {
-  try {
-    const stored = globalThis.localStorage?.getItem(storageKey(selfId))
-    if (stored) return JSON.parse(stored) as OfflineStore
-  } catch { /* Песочница продолжит работу в памяти. */ }
-  const now = new Date().toISOString()
-  return {
-    items: [
-      { ...blankWorkspaceItem(), id: newWorkspaceId(), title: 'Собрать план на неделю', body: 'Свободная задача: добавьте свои поля, теги и чек-лист.', tags: ['планирование'], checklist: [{ text: 'Выбрать приоритеты', done: false }], createdAt: now, updatedAt: now, completedAt: null, archivedAt: null },
-      { ...blankWorkspaceItem('Заметка'), id: newWorkspaceId(), title: 'Идеи для клиники', body: 'Здесь может быть любой текст — обязательной структуры нет.', createdAt: now, updatedAt: now, completedAt: null, archivedAt: null },
-    ],
-    views: [],
-  }
 }
 
 /** Личное пространство: серверная версия для работы и локально сохраняемая демо-песочница. */
@@ -63,7 +45,7 @@ export function WorkspacePage({ apiOnline, selfId, patients, appointments, notif
 
   useEffect(() => {
     if (apiOnline) return
-    try { globalThis.localStorage?.setItem(storageKey(selfId), JSON.stringify({ items, views })) } catch { /* Нет места — остаётся текущая сессия. */ }
+    try { globalThis.localStorage?.setItem(`alphacrm.workspace.${selfId}`, JSON.stringify({ items, views })) } catch { /* Нет места — остаётся текущая сессия. */ }
   }, [apiOnline, selfId, items, views])
 
   useEffect(() => {

@@ -65,3 +65,22 @@ export function isWorkspaceReminderDue(item: WorkspaceItem, now = new Date()) {
 export function newWorkspaceId() {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
+
+type OfflineStore = { items: WorkspaceItem[]; views: import('../../api/types').WorkspaceView[] }
+const storageKey = (selfId: string) => `alphacrm.workspace.${selfId}`
+
+/** Локальное демо-пространство используется и полной страницей, и панелью заметок. */
+export function offlineStore(selfId: string): OfflineStore {
+  try {
+    const stored = globalThis.localStorage?.getItem(storageKey(selfId))
+    if (stored) return JSON.parse(stored) as OfflineStore
+  } catch { /* Песочница продолжит работу в памяти. */ }
+  const now = new Date().toISOString()
+  return {
+    items: [
+      { ...blankWorkspaceItem(), id: newWorkspaceId(), title: 'Собрать план на неделю', body: 'Свободная задача: добавьте свои поля, теги и чек-лист.', tags: ['планирование'], checklist: [{ text: 'Выбрать приоритеты', done: false }], createdAt: now, updatedAt: now, completedAt: null, archivedAt: null },
+      { ...blankWorkspaceItem('Заметка'), id: newWorkspaceId(), title: 'Идеи для клиники', body: 'Здесь может быть любой текст — обязательной структуры нет.', createdAt: now, updatedAt: now, completedAt: null, archivedAt: null },
+    ],
+    views: [],
+  }
+}

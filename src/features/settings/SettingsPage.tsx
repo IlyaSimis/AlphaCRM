@@ -16,7 +16,7 @@ type SettingsPageProps = {
   onToggleService: (service: ServiceItem) => Promise<string | null>
   /** Цены и услуги меняют администраторы и владелец; менеджер видит их без правки. */
   canEditPrices?: boolean
-  /** «График врачей» — в базе пациентов, «Услуги и цены» — в финансах. */
+  /** «График врачей» — в управлении, «Услуги и цены» — в финансах. */
   section: 'hours' | 'prices'
 }
 

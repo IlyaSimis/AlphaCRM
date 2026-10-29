@@ -198,6 +198,10 @@ class DashboardService {
               List.of()));
     }
 
+    if (can(Permission.HR_READ_OWN) || can(Permission.HR_MANAGE)) {
+      widgets.add(salaryWidget(monthStart, today, from, to));
+    }
+
     if (can(Permission.WORKSPACE_USE)) {
       widgets.add(
           new Widget(
@@ -330,6 +334,64 @@ class DashboardService {
 
     var role = currentRoles().stream().findFirst().orElse(null);
     return new DashboardView(role, monthStart, today, Instant.now(), widgets);
+  }
+
+  /**
+   * Расчётная зарплата сотрудника, а не платёжная ведомость: месячный оклад, часы по месячному
+   * графику или оплата завершённых приёмов. Чужие ставки в общий дашборд не попадают.
+   */
+  private Widget salaryWidget(
+      java.time.LocalDate monthStart, java.time.LocalDate today, Timestamp from, Timestamp to) {
+    var contracts =
+        jdbc.queryForList(
+            "select rate_minor, rate_unit from hr_contract where clinic_id = ? and staff_id = ?"
+                + " and valid_from <= ? and (valid_to is null or valid_to >= ?)"
+                + " order by valid_from desc limit 1",
+            clinicId(),
+            staffId(),
+            Date.valueOf(today),
+            Date.valueOf(today));
+    if (contracts.isEmpty()) {
+      return new Widget("salary.month", "OWN", 0, null, "money", List.of());
+    }
+    var contract = contracts.get(0);
+    var rate = number(contract.get("rate_minor"));
+    var unit = String.valueOf(contract.get("rate_unit"));
+    long value;
+    if ("MONTH".equals(unit)) {
+      value = rate;
+    } else if ("VISIT".equals(unit)) {
+      var completed =
+          count(
+              "select count(*) from appointment a join practitioner p on p.id = a.practitioner_id"
+                  + " where p.clinic_id = ? and a.practitioner_id = ? and a.status = 'COMPLETED'"
+                  + " and a.starts_at >= ? and a.starts_at < ?",
+              clinicId(),
+              actorId(),
+              from,
+              to);
+      value = Math.multiplyExact(rate, completed);
+    } else {
+      var shifts =
+          jdbc.queryForList(
+              "select s.day_of_week, s.starts_at, s.ends_at from practitioner_schedule s"
+                  + " join staff_user u on u.practitioner_id = s.practitioner_id"
+                  + " where u.clinic_id = ? and u.id = ?",
+              clinicId(),
+              staffId());
+      long minutes = 0;
+      for (var day = monthStart; day.isBefore(monthStart.plusMonths(1)); day = day.plusDays(1)) {
+        for (var shift : shifts) {
+          if (number(shift.get("day_of_week")) == day.getDayOfWeek().getValue()) {
+            var start = ((java.sql.Time) shift.get("starts_at")).toLocalTime();
+            var end = ((java.sql.Time) shift.get("ends_at")).toLocalTime();
+            minutes += java.time.Duration.between(start, end).toMinutes();
+          }
+        }
+      }
+      value = Math.multiplyExact(rate, minutes) / 60;
+    }
+    return new Widget("salary.month", "OWN", value, null, "money", List.of(unit));
   }
 
   /** Фильтр «только свои приёмы» для врача. */

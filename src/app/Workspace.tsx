@@ -228,7 +228,7 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
         <Landscape />
         <Topbar eyebrow={eyebrow} title={page === 'today' ? '' : pageTitles[page]} services={servicesFor(role)} service={service} onService={openService} live={live} clinicName={staff.clinicName} onAssistant={() => setAssistant(true)} onSignOut={onSignOut} onMenu={() => setDrawer(true)} />
         <Box className="content">
-          {page === 'today' && <TodayPage role={role} selfName={staff.fullName} onNewAppointment={() => openBooking(localToday())} onNewPatient={() => { setCreateError(''); setPatientDialog(true) }} apiOnline={clinic.apiOnline} practitioners={practitioners} patients={patientItems} localAppointments={scheduleItems} localCharges={clinic.localCharges} dueTasks={registry.todayTasks} tasksError={registry.error} staffName={registry.staffName} onPatient={openPatientOf} onOpen={navigate} />}
+          {page === 'today' && <TodayPage role={role} selfId={staff.id} selfName={staff.fullName} onNewAppointment={() => openBooking(localToday())} onNewPatient={() => { setCreateError(''); setPatientDialog(true) }} apiOnline={clinic.apiOnline} patients={patientItems} dueTasks={registry.todayTasks} tasksError={registry.error} staffName={registry.staffName} onOpen={navigate} />}
           {page === 'workspace' && <WorkspacePage key={staff.id} apiOnline={clinic.apiOnline} selfId={staff.id} patients={canSeePatients(role) ? patientItems : []} appointments={scheduleItems} notify={clinic.notify} navigationIntent={workspaceIntent} />}
           {/* Врача встречают на расписании; остальных — на «Сегодня». */}
           {page === 'schedule' && canWriteClinical(role) && <Typography className="greeting" sx={{ mb: 1.5 }}>{greeting(staff.fullName)}</Typography>}

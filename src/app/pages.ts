@@ -58,11 +58,10 @@ export const serviceSections: Record<Service, Array<{ label: string; pages: Page
     { label: 'ОБЗОР', pages: ['today', 'workspace', 'analytics', 'hr-me'] },
   ],
   management: [
-    { label: 'УПРАВЛЕНИЕ', pages: ['staff', 'hr', 'audit', 'break-glass', 'outbox'] },
+    { label: 'УПРАВЛЕНИЕ', pages: ['staff', 'hours', 'hr', 'audit', 'break-glass', 'outbox'] },
   ],
   patients: [
     { label: 'РАБОТА С ПАЦИЕНТАМИ', pages: ['schedule', 'patients', 'registry', 'documents'] },
-    { label: 'НАСТРОЙКИ', pages: ['hours'] },
   ],
   inventory: [
     { label: 'СКЛАД', pages: ['stock-balances', 'stock-items', 'stock-documents'] },

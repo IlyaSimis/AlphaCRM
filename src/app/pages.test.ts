@@ -10,7 +10,7 @@ describe('services and pages by role', () => {
     expect(canOpen('sales', 'CASHIER')).toBe(false)
     expect(serviceOf('patient')).toBe('patients')
     expect(serviceOf('visit')).toBe('patients')
-    expect(serviceOf('hours')).toBe('patients')
+    expect(serviceOf('hours')).toBe('management')
     expect(serviceOf('stock-items')).toBe('inventory')
     expect(serviceOf('drive-trash')).toBe('drive')
     expect(serviceOf('staff')).toBe('management')
@@ -18,8 +18,8 @@ describe('services and pages by role', () => {
 
   it('the administrator sees everything operational, grouped by service', () => {
     expect(navigationFor('ADMINISTRATOR')).toEqual([
-      'today', 'workspace', 'analytics', 'hr-me', 'staff', 'audit', 'outbox',
-      'schedule', 'patients', 'registry', 'hours',
+      'today', 'workspace', 'analytics', 'hr-me', 'staff', 'hours', 'audit', 'outbox',
+      'schedule', 'patients', 'registry',
       'stock-balances', 'stock-items', 'stock-documents', 'stock-marking', 'stock-norms',
       'cashier', 'sales', 'prices',
       'drive', 'drive-shared', 'drive-trash',
@@ -27,7 +27,7 @@ describe('services and pages by role', () => {
     // Владелец и старший администратор вдобавок видят журнал экстренных доступов (K1), владелец — ставки.
     const withLog = navigationFor('ADMINISTRATOR').flatMap((page) => (page === 'audit' ? ['audit', 'break-glass'] : [page]))
     expect(navigationFor('SENIOR_ADMINISTRATOR')).toEqual(withLog)
-    expect(navigationFor('OWNER')).toEqual(withLog.flatMap((page) => (page === 'staff' ? ['staff', 'hr'] : [page])))
+    expect(navigationFor('OWNER')).toEqual(withLog.flatMap((page) => (page === 'hours' ? ['hours', 'hr'] : [page])))
     expect(canOpen('hr', 'SENIOR_ADMINISTRATOR')).toBe(false)
     expect(canOpen('break-glass', 'MANAGER')).toBe(false)
     expect(sectionsFor('dashboards', 'ADMINISTRATOR').map((section) => section.label)).toEqual(['ОБЗОР'])
@@ -49,7 +49,7 @@ describe('services and pages by role', () => {
   it('manager sees prices read-only in finance, nurse works with stock, support has no patients', () => {
     expect(sectionsFor('finance', 'MANAGER').flatMap((section) => section.pages)).toEqual(['cashier', 'sales', 'prices'])
     expect(canOpen('outbox', 'MANAGER')).toBe(false)
-    expect(sectionsFor('management', 'MANAGER').flatMap((section) => section.pages)).toEqual(['staff', 'audit'])
+    expect(sectionsFor('management', 'MANAGER').flatMap((section) => section.pages)).toEqual(['staff', 'hours', 'audit'])
     expect(sectionsFor('inventory', 'NURSE').flatMap((section) => section.pages)).toEqual(['stock-balances', 'stock-items', 'stock-documents', 'stock-marking', 'stock-norms'])
     expect(servicesFor('SUPPORT')).toEqual(['dashboards', 'management', 'patients', 'inventory', 'drive'])
     expect(canOpen('patient', 'SUPPORT')).toBe(false)

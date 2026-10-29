@@ -21,6 +21,7 @@ import ru.quietclinic.StaffSessions;
 @ActiveProfiles("local")
 class DashboardControllerTest {
   @Autowired MockMvc mvc;
+  @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
   StaffSessions staff;
 
   @BeforeEach
@@ -48,6 +49,27 @@ class DashboardControllerTest {
     mvc.perform(get("/api/v1/me/dashboard").with(staff.role("MANAGER")))
         .andExpect(jsonPath("$.widgets[*].code").value(hasItem("revenue.month")))
         .andExpect(jsonPath("$.widgets[?(@.code == 'appointments.month')].scope").value("CLINIC"));
+  }
+
+  @Test
+  void salaryUsesTheCurrentEmployeesOwnMonthlyRate() throws Exception {
+    var account = jdbc.queryForMap("select id, clinic_id from staff_user where username = 'admin'");
+    var staffId = (java.util.UUID) account.get("id");
+    jdbc.update(
+        "insert into hr_contract(id, clinic_id, staff_id, position, rate_minor, rate_unit,"
+            + " currency, valid_from, valid_to, created_by, created_at) values (?, ?, ?, ?, ?,"
+            + " 'MONTH', 'RUB', date '2026-10-01', null, ?, current_timestamp)",
+        java.util.UUID.randomUUID(),
+        account.get("clinic_id"),
+        staffId,
+        "Administrator",
+        7_500_000L,
+        staffId);
+
+    mvc.perform(get("/api/v1/me/dashboard").with(staff.role("OWNER")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.widgets[?(@.code == 'salary.month')].scope").value("OWN"))
+        .andExpect(jsonPath("$.widgets[?(@.code == 'salary.month')].value").value(7_500_000));
   }
 
   @Test

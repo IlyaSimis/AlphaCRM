@@ -23,7 +23,9 @@ export function widgetText(widget: DashboardWidget): { label: string; note: stri
   const second = widget.secondary ?? 0
   switch (widget.code) {
     case 'appointments.month':
-      return { label: own ? 'мои приёмы за месяц' : 'приёмов за месяц', note: `завершено ${second}`, accent: false }
+      return { label: own ? 'мои приёмы за месяц' : 'приёмы за месяц', note: `завершено ${second}`, accent: false }
+    case 'salary.month':
+      return { label: 'зарплата за месяц', note: 'по действующим условиям', accent: false }
     case 'appointments.month.noShow':
       return { label: 'неявок за месяц', note: `отмен ${second}`, accent: widget.value > 0 }
     case 'appointments.today':
