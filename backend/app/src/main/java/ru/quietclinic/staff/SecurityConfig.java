@@ -54,7 +54,8 @@ class SecurityConfig {
     return http.csrf(
             csrf ->
                 csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
-                    .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler()))
+                    .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler())
+                    .ignoringRequestMatchers("/api/v1/commercial/payments/yookassa/webhook"))
         .cors(Customizer.withDefaults())
         .addFilterAfter(new ActiveStaffFilter(staff), SecurityContextHolderFilter.class)
         .authorizeHttpRequests(
@@ -62,6 +63,9 @@ class SecurityConfig {
                 auth.requestMatchers(HttpMethod.POST, "/api/v1/auth/login")
                     .permitAll()
                     .requestMatchers(HttpMethod.GET, "/api/v1/auth/csrf")
+                    .permitAll()
+                    .requestMatchers(
+                        HttpMethod.POST, "/api/v1/commercial/payments/yookassa/webhook")
                     .permitAll()
                     .requestMatchers(
                         "/actuator/health",

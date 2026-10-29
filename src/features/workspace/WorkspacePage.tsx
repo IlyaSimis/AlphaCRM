@@ -5,6 +5,7 @@ import { archiveWorkspaceItem, createWorkspaceItem, createWorkspaceView, deleteW
 import type { PatientItem, ScheduleItem, WorkspaceFilter, WorkspaceItem, WorkspaceItemInput, WorkspaceView } from '../../api/types'
 import { formatClinicMoment } from '../../shared/clinicTime'
 import { NameDialog } from '../drive/NameDialog'
+import type { WorkspaceNavigationIntent } from '../assistant/navigationCatalog'
 import { WorkspaceItemDialog } from './WorkspaceItemDialog'
 import { blankWorkspaceItem, emptyWorkspaceFilter, filterWorkspace, inputOf, isWorkspaceOverdue, isWorkspaceReminderDue, newWorkspaceId } from './workspace'
 
@@ -14,6 +15,7 @@ type WorkspacePageProps = {
   patients: PatientItem[]
   appointments: ScheduleItem[]
   notify: (message: string) => void
+  navigationIntent?: ({ key: number } & WorkspaceNavigationIntent) | null
 }
 
 type OfflineStore = { items: WorkspaceItem[]; views: WorkspaceView[] }
@@ -35,7 +37,7 @@ function offlineStore(selfId: string): OfflineStore {
 }
 
 /** Личное пространство: серверная версия для работы и локально сохраняемая демо-песочница. */
-export function WorkspacePage({ apiOnline, selfId, patients, appointments, notify }: WorkspacePageProps) {
+export function WorkspacePage({ apiOnline, selfId, patients, appointments, notify, navigationIntent }: WorkspacePageProps) {
   const initial = useMemo(() => apiOnline ? { items: [], views: [] } : offlineStore(selfId), [apiOnline, selfId])
   const [items, setItems] = useState<WorkspaceItem[]>(initial.items)
   const [views, setViews] = useState<WorkspaceView[]>(initial.views)
@@ -63,6 +65,16 @@ export function WorkspacePage({ apiOnline, selfId, patients, appointments, notif
     if (apiOnline) return
     try { globalThis.localStorage?.setItem(storageKey(selfId), JSON.stringify({ items, views })) } catch { /* Нет места — остаётся текущая сессия. */ }
   }, [apiOnline, selfId, items, views])
+
+  useEffect(() => {
+    if (!navigationIntent) return
+    setArchived(false)
+    setFilter({
+      ...emptyWorkspaceFilter,
+      due: navigationIntent.due ?? 'all',
+      type: navigationIntent.type ?? '',
+    })
+  }, [navigationIntent])
 
   const patchFilter = <K extends keyof WorkspaceFilter>(key: K, value: WorkspaceFilter[K]) => setFilter((current) => ({ ...current, [key]: value }))
   const visible = useMemo(() => filterWorkspace(apiOnline ? items : items.filter((item) => archived ? item.archivedAt : !item.archivedAt), filter), [apiOnline, items, archived, filter])

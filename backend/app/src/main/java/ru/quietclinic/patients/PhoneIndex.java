@@ -34,6 +34,17 @@ final class PhoneIndex {
     return digits;
   }
 
+  /** Пациенты, у которых цифры основного или второго телефона содержат запрос. */
+  List<Patient> matching(String query) {
+    var needle = normalize(query);
+    if (needle.isEmpty()) return List.of();
+    return byPhone.entrySet().stream()
+        .filter(entry -> entry.getKey().contains(needle))
+        .flatMap(entry -> entry.getValue().stream())
+        .distinct()
+        .toList();
+  }
+
   List<PatientRef> sharedWith(Patient patient) {
     UUID self = patient.id;
     return Stream.of(patient.phone(), patient.secondPhone())

@@ -91,6 +91,12 @@ public enum Permission {
   // workspace: личные задачи, заметки и настраиваемые представления
   WORKSPACE_USE("workspace.item.use"),
 
+  // assistant: безопасная навигация без доступа к содержимому страниц
+  ASSISTANT_USE("assistant.navigation.use"),
+
+  // commercial: тариф и оплата подписки клиники, только владелец
+  SUBSCRIPTION_MANAGE("commercial.subscription.manage"),
+
   // insights
   DASHBOARD_READ("insights.dashboard.read"),
   ANALYTICS_READ("insights.analytics.read"),

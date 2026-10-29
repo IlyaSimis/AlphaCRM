@@ -128,3 +128,15 @@ clinic:
     keep-versions: ${CLINIC_DRIVE_KEEP_VERSIONS:20}
     trash-days: ${CLINIC_DRIVE_TRASH_DAYS:30}
     max-link-days: ${CLINIC_DRIVE_MAX_LINK_DAYS:30}
+  assistant:
+    # OpenAI-compatible API. Ключ только на backend; пусто — доступен локальный поиск без модели.
+    api-key: ${CLINIC_ASSISTANT_API_KEY:}
+    model: ${CLINIC_ASSISTANT_MODEL:gpt-5.4-nano}
+    api-url: ${CLINIC_ASSISTANT_API_URL:https://api.openai.com/v1}
+  commercial:
+    yookassa:
+      # Hosted checkout подписки. Все три значения обязательны для включения оплаты.
+      shop-id: ${CLINIC_YOOKASSA_SHOP_ID:}
+      secret-key: ${CLINIC_YOOKASSA_SECRET_KEY:}
+      return-url: ${CLINIC_YOOKASSA_RETURN_URL:}
+      api-url: ${CLINIC_YOOKASSA_API_URL:https://api.yookassa.ru/v3}

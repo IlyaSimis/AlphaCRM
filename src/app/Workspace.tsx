@@ -4,6 +4,9 @@ import { changePassword } from '../api/auth'
 import { PETROV_ID } from '../api/client'
 import type { AssignedStaff, EncounterView, PatientItem, ScheduleItem, StaffItem, WaitlistItem } from '../api/types'
 import { Analytics } from '../features/analytics/Analytics'
+import { AssistantDialog } from '../features/assistant/AssistantDialog'
+import type { NavigationDestination, WorkspaceNavigationIntent } from '../features/assistant/navigationCatalog'
+import { SubscriptionDialog } from '../features/commercial/SubscriptionDialog'
 import { AuditLog } from '../features/audit/AuditLog'
 import { PasswordDialog } from '../features/auth/PasswordDialog'
 import { Cashier } from '../features/cashier/Cashier'
@@ -42,7 +45,7 @@ import { canOpen, driveView, firstPageOf, pageTitles, serviceOf, servicesFor, st
 import { Sidebar } from './Sidebar'
 import { Topbar } from './Topbar'
 import { useClinicData } from './useClinicData'
-import { rolesOf } from '../shared/permissions'
+import { can, rolesOf } from '../shared/permissions'
 
 type WorkspaceProps = {
   staff: StaffItem
@@ -82,6 +85,9 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
   const [passwordError, setPasswordError] = useState('')
   const [waitSlot, setWaitSlot] = useState<ScheduleItem | null>(null)
   const [waitError, setWaitError] = useState('')
+  const [assistant, setAssistant] = useState(false)
+  const [subscription, setSubscription] = useState(false)
+  const [workspaceIntent, setWorkspaceIntent] = useState<({ key: number } & WorkspaceNavigationIntent) | null>(null)
 
   const { patientItems, scheduleItems, practitioners, scheduleDate } = clinic
   const visiblePatients = useMemo(() => filterPatients(patientItems, query), [patientItems, query])
@@ -92,6 +98,13 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
     setPage(target)
     setLastPages((pages) => ({ ...pages, [serviceOf(target)]: target }))
     setDrawer(false)
+  }
+
+  const navigateFromAssistant = (destination: NavigationDestination) => {
+    if (destination.page === 'workspace') {
+      setWorkspaceIntent({ key: Date.now(), ...destination.workspaceIntent })
+    }
+    navigate(destination.page)
   }
 
   const service = serviceOf(page)
@@ -210,10 +223,10 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
       <Drawer open={drawer} onClose={() => setDrawer(false)}><Sidebar className="sidebar sidebar-in-drawer" page={page} service={service} staff={staff} live={live} visits={visits} activeVisit={page === 'visit' ? visit : null} onNavigate={navigate} onVisit={(target) => { openVisit(target); setDrawer(false) }} /></Drawer>
       <Box component="main" className="main">
         <Landscape />
-        <Topbar eyebrow={eyebrow} title={page === 'today' ? '' : pageTitles[page]} services={servicesFor(role)} service={service} onService={openService} live={live} clinicName={staff.clinicName} onPassword={() => { setPasswordError(''); setPassword(true) }} onSignOut={onSignOut} onMenu={() => setDrawer(true)} />
+        <Topbar eyebrow={eyebrow} title={page === 'today' ? '' : pageTitles[page]} services={servicesFor(role)} service={service} onService={openService} live={live} clinicName={staff.clinicName} onAssistant={() => setAssistant(true)} canManageSubscription={can(role, 'commercial.subscription.manage')} onSubscription={() => setSubscription(true)} onPassword={() => { setPasswordError(''); setPassword(true) }} onSignOut={onSignOut} onMenu={() => setDrawer(true)} />
         <Box className="content">
           {page === 'today' && <TodayPage role={role} selfName={staff.fullName} onNewAppointment={() => openBooking(localToday())} onNewPatient={() => { setCreateError(''); setPatientDialog(true) }} apiOnline={clinic.apiOnline} practitioners={practitioners} patients={patientItems} localAppointments={scheduleItems} localCharges={clinic.localCharges} dueTasks={registry.todayTasks} tasksError={registry.error} staffName={registry.staffName} onPatient={openPatientOf} onOpen={navigate} />}
-          {page === 'workspace' && <WorkspacePage key={staff.id} apiOnline={clinic.apiOnline} selfId={staff.id} patients={canSeePatients(role) ? patientItems : []} appointments={scheduleItems} notify={clinic.notify} />}
+          {page === 'workspace' && <WorkspacePage key={staff.id} apiOnline={clinic.apiOnline} selfId={staff.id} patients={canSeePatients(role) ? patientItems : []} appointments={scheduleItems} notify={clinic.notify} navigationIntent={workspaceIntent} />}
           {/* Врача встречают на расписании; остальных — на «Сегодня». */}
           {page === 'schedule' && canWriteClinical(role) && <Typography className="greeting" sx={{ mb: 1.5 }}>{greeting(staff.fullName)}</Typography>}
           {page === 'schedule' && canWriteClinical(role) && <DashboardWidgets apiOnline={clinic.apiOnline} />}
@@ -282,6 +295,8 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
           setPasswordError((error as Error).message)
         }
       }} />}
+      <AssistantDialog open={assistant} role={role} currentPage={page} apiOnline={clinic.apiOnline} onClose={() => setAssistant(false)} onNavigate={navigateFromAssistant} />
+      {live && can(role, 'commercial.subscription.manage') && <SubscriptionDialog open={subscription} onClose={() => setSubscription(false)} />}
       <Snackbar open={clinic.notice.open} autoHideDuration={2500} onClose={clinic.closeNotice} message={clinic.notice.message} />
     </Box>
   )

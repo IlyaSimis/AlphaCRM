@@ -35,12 +35,12 @@ flowchart LR
     NGINX -- "/api/v1/* proxy" --> API
     API -- "JDBC, Liquibase" --> PG
     SPA --- LS
-    API -. "порты с mock-адаптерами" .-> EXT["платежи, уведомления, KMS"]
+    API -. "порты внешних систем" .-> EXT["ИИ, ЮKassa, уведомления, KMS"]
 ```
 
 - Интерфейс и API работают на одном origin: nginx в Docker, прокси Vite при разработке. Поэтому cookie сессии и CSRF работают без CORS.
 - backend не публикует порт наружу, база слушает только `127.0.0.1`.
-- Внешние системы (платёжный шлюз, SMS/email, KMS) закрыты портами; сейчас за ними безопасные mock-адаптеры, которые ничего не отправляют.
+- Внешние системы закрыты портами. ИИ-навигация и оплата тарифа выключены без ключей; остальные адаптеры по умолчанию безопасно не отправляют данные наружу.
 
 ## Развёртывание
 
@@ -76,6 +76,8 @@ flowchart TB
     drive["drive<br/>корпоративный диск"]
     insights["insights<br/>персональный дашборд"]
     workspace["workspace<br/>личные задачи, заметки, произвольные поля и представления"]
+    assistant["assistant<br/>навигация по разрешённым страницам"]
+    commercial["commercial<br/>тариф клиники, квота ИИ, hosted checkout"]
     platform["platform<br/>ошибки, шифрование, KMS, clinicId(),<br/>разрешения ролей, доменные события"]
 
     scheduling -->|"CareRelationshipService"| clinical
@@ -93,6 +95,8 @@ flowchart TB
     bot -->|"OperatorRequests"| registry
     scheduling & clinical & billing & registry & patients & staff & inventory & drive & workspace --> audit
     scheduling & clinical & billing & registry & patients & staff & audit & inventory & drive & insights & workspace --> platform
+    assistant --> commercial
+    assistant & commercial --> platform
 ```
 
 | Модуль | Отвечает за | Зависит от кода |
@@ -110,6 +114,8 @@ flowchart TB
 | `drive` | папки, файлы и версии, права с наследованием (`VIEW`/`EDIT`/`MANAGE`), ссылки только на просмотр после входа, корзина и квота; содержимое — шифрованные объекты в `ObjectStorage` (`LocalObjectStorage`) | platform, audit |
 | `insights` | `GET /me/dashboard`: виджеты по разрешениям роли, только агрегаты запросами к таблицам других модулей | platform |
 | `workspace` | личные задачи, заметки и записи произвольных типов; свободные статусы, теги, чек-листы и поля; сроки, связи, архив и сохранённые представления. Каждая строка ограничена `clinic_id + owner_id`; клинический текст сюда не переносится | platform, audit |
+| `assistant` | статус и переходы ИИ-навигатора; OpenAI-compatible адаптер принимает вопрос и каталог разрешённых роли страниц, возвращает только `destinationId` из whitelist. Пациенты и содержимое страниц в запрос не попадают | platform, commercial |
+| `commercial` | тариф и месячная квота клиники, учёт токенов, история платежей подписки; hosted checkout ЮKassa и серверная сверка платежа после публичного вебхука. Отделён от кассы пациентов `billing` | platform |
 | `communications` | `OutboxService` (постановка по событию), `OutboxDispatcher` (доставка, повторы, переносы), `NotificationPort` → вебхук клиники, Telegram или mock, порт кассы `FiscalPort`, экран `GET /outbox` | platform, audit |
 
 Правила, на которых держатся границы:
@@ -168,6 +174,8 @@ sequenceDiagram
 - **Время** — `platform.ClinicTime`: пояс клиники (`CLINIC_TIME_ZONE`) для дней, смен и экрана, моменты в базе — UTC; запись в прошлое отклоняется (`409 APPOINTMENT_IN_PAST`). Интерфейс берёт пояс из `/auth/me` (`shared/clinicTime.ts`).
 - **Сессия** — cookie `JSESSIONID`, `HttpOnly`, `SameSite=Lax`, 8 часов, `Secure` при `SESSION_COOKIE_SECURE=true`. Хранится в памяти backend.
 - **CSRF** — `CookieCsrfTokenRepository`: сервер кладёт `XSRF-TOKEN`, интерфейс отправляет его в `X-XSRF-TOKEN` на изменяющих запросах (`src/api/client.ts`).
+- **ИИ-навигатор** — ключ модели только на backend; внешний запрос содержит вопрос и безопасные метаданные страниц, но не пациентов или содержимое. Модель выбирает лишь id из серверного whitelist. Текст вопроса не сохраняется, учитываются только количество запросов и токенов.
+- **Оплата подписки** — данные карты вводятся на hosted checkout ЮKassa. Вебхук публичен и исключён из CSRF, но не считается доказательством оплаты: сервер повторно запрашивает платёк у провайдера и сверяет id, сумму и валюту.
 - **Роль и автор действия** сервер берёт только из сессии. Роль раскрывается в набор разрешений `<сервис>.<ресурс>.<действие>` (`platform.RolePermissions`, версия — `permissionsVersion`); сервис проверяет разрешение (`requirePermission`), затем атрибуты. Интерфейс получает список разрешений в `/auth/me` и лишь прячет недоступные кнопки (`src/shared/permissions.ts`). Матрицу ролей и маршрутов держит `RbacMatrixTest` + `rbac-matrix.csv`.
 - **Назначение ролей** — не выше своей: владельца и старшего администратора назначает только владелец, администратора и техподдержку — администраторы (`RolePermissions.mayAssign`, `403 ROLE_NOT_ASSIGNABLE`).
 - **Файлы диска** шифруются тем же `EncryptionService`, отдаются всегда вложением `application/octet-stream`; ссылка на файл — только после входа сотрудника этой клиники, в базе — хеш токена.

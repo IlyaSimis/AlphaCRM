@@ -20,6 +20,7 @@ export type Permission =
   | 'inventory.item.read' | 'inventory.item.write' | 'inventory.document.write' | 'inventory.document.allow-negative'
   | 'inventory.stock.read' | 'inventory.marking.read' | 'inventory.marking.manage'
   | 'drive.file.use' | 'drive.clinic.admin' | 'workspace.item.use'
+  | 'assistant.navigation.use' | 'commercial.subscription.manage'
   | 'insights.dashboard.read' | 'insights.analytics.read' | 'insights.analytics.read-own'
   | 'audit.event.read' | 'audit.event.read-platform'
   | 'communications.delivery.read' | 'communications.delivery.retry'
@@ -33,12 +34,12 @@ const OPERATIONS: Permission[] = [
   'finance.invoice.read', 'finance.invoice.write', 'finance.invoice.set-amount', 'finance.invoice.void', 'finance.payment.refund', 'finance.revenue.read',
   'inventory.item.read', 'inventory.item.write', 'inventory.document.write', 'inventory.document.allow-negative',
   'inventory.stock.read', 'inventory.marking.read', 'inventory.marking.manage',
-  'drive.file.use', 'workspace.item.use', 'drive.clinic.admin', 'insights.dashboard.read', 'insights.analytics.read', 'audit.event.read',
+  'drive.file.use', 'workspace.item.use', 'assistant.navigation.use', 'drive.clinic.admin', 'insights.dashboard.read', 'insights.analytics.read', 'audit.event.read',
   'communications.delivery.read', 'communications.delivery.retry', 'identity.hr.read-own',
 ]
 
 export const rolePermissions: Record<StaffRole, Permission[]> = {
-  OWNER: [...OPERATIONS, 'identity.role.assign-privileged', 'clinical.record.break-glass', 'clinical.break-glass.review', 'identity.hr.manage'],
+  OWNER: [...OPERATIONS, 'identity.role.assign-privileged', 'clinical.record.break-glass', 'clinical.break-glass.review', 'identity.hr.manage', 'commercial.subscription.manage'],
   SENIOR_ADMINISTRATOR: [...OPERATIONS, 'clinical.break-glass.review'],
   ADMINISTRATOR: OPERATIONS,
   MANAGER: [
@@ -49,29 +50,29 @@ export const rolePermissions: Record<StaffRole, Permission[]> = {
     'clinical.signed-document.read', 'clinical.patient-file.read-signed',
     'finance.invoice.read', 'finance.revenue.read',
     'inventory.item.read', 'inventory.item.write', 'inventory.document.write', 'inventory.stock.read', 'inventory.marking.read', 'inventory.marking.manage',
-    'drive.file.use', 'workspace.item.use', 'insights.dashboard.read', 'insights.analytics.read', 'audit.event.read', 'identity.hr.read-own',
+    'drive.file.use', 'workspace.item.use', 'assistant.navigation.use', 'insights.dashboard.read', 'insights.analytics.read', 'audit.event.read', 'identity.hr.read-own',
   ],
   DOCTOR: [
     'schedule.appointment.read', 'schedule.appointment.write-own', 'schedule.practitioner.read', 'schedule.service.read',
     'clinical.patient.read-care', 'clinical.patient.contacts-read', 'clinical.note.write', 'clinical.signed-document.read-own',
     'clinical.patient-file.write-care', 'inventory.item.read', 'inventory.stock.read',
-    'drive.file.use', 'workspace.item.use', 'insights.dashboard.read', 'insights.analytics.read-own', 'identity.hr.read-own',
+    'drive.file.use', 'workspace.item.use', 'assistant.navigation.use', 'insights.dashboard.read', 'insights.analytics.read-own', 'identity.hr.read-own',
   ],
   NURSE: [
     'schedule.appointment.read', 'schedule.appointment.write', 'schedule.practitioner.read', 'schedule.service.read',
     'clinical.patient.read', 'clinical.patient.contacts-read',
     'inventory.item.read', 'inventory.item.write', 'inventory.document.write', 'inventory.stock.read', 'inventory.marking.read',
-    'drive.file.use', 'workspace.item.use', 'insights.dashboard.read', 'identity.hr.read-own',
+    'drive.file.use', 'workspace.item.use', 'assistant.navigation.use', 'insights.dashboard.read', 'identity.hr.read-own',
   ],
   CASHIER: [
     'schedule.appointment.read', 'schedule.practitioner.read', 'schedule.service.read', 'clinical.patient.read',
     'schedule.registry-task.read', 'finance.invoice.read', 'finance.invoice.write', 'finance.invoice.set-amount',
-    'drive.file.use', 'workspace.item.use', 'insights.dashboard.read', 'identity.hr.read-own',
+    'drive.file.use', 'workspace.item.use', 'assistant.navigation.use', 'insights.dashboard.read', 'identity.hr.read-own',
   ],
   SUPPORT: [
     'identity.staff.read', 'identity.staff.reset-password-platform', 'schedule.appointment.read', 'schedule.practitioner.read',
     'schedule.service.read', 'inventory.item.read', 'inventory.stock.read', 'inventory.marking.read', 'inventory.marking.manage',
-    'drive.file.use', 'workspace.item.use', 'drive.clinic.admin', 'insights.dashboard.read', 'insights.analytics.read', 'audit.event.read-platform',
+    'drive.file.use', 'workspace.item.use', 'assistant.navigation.use', 'drive.clinic.admin', 'insights.dashboard.read', 'insights.analytics.read', 'audit.event.read-platform',
     'communications.delivery.read', 'communications.delivery.retry', 'identity.hr.read-own',
   ],
 }

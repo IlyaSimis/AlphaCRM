@@ -4,16 +4,43 @@ import { describe, expect, it } from 'vitest'
 import { anna, enterDemo, goOffline, jsonResponse, renderApp, withAuth, openPage } from '../../test/helpers'
 
 describe('patients', () => {
-  it('opens the patient list and the selected person card', async () => {
+  it('opens the full patient card by clicking a table row', async () => {
     goOffline()
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user)
     await openPage(user, 'Пациенты')
-    expect(screen.getByRole('heading', { name: 'Поиск пациента' })).toBeInTheDocument()
-    await user.click(screen.getByText('Дмитрий Волков'))
+    expect(screen.getByRole('heading', { name: 'Пациенты', level: 4 })).toBeInTheDocument()
+    expect(screen.getByRole('table', { name: 'Пациенты' })).toBeInTheDocument()
+    for (const column of ['Пациент', 'Дата рождения', 'Телефон', 'Согласие']) {
+      expect(screen.getByRole('columnheader', { name: column })).toBeInTheDocument()
+    }
+    const row = screen.getByText('Дмитрий Волков').closest('tr')
+    expect(row).not.toBeNull()
+    await user.click(row!)
     expect(screen.getByRole('heading', { name: 'Дмитрий Волков' })).toBeInTheDocument()
     expect(screen.getByText('+7 903 782-44-16')).toBeInTheDocument()
+    expect(screen.getByText('Ближайшие записи')).toBeInTheDocument()
+    expect(screen.getByText('Прошедшие записи')).toBeInTheDocument()
+  })
+
+  it('filters the table by name and by phone in another format', async () => {
+    goOffline()
+    const user = userEvent.setup()
+    renderApp()
+    await enterDemo(user)
+    await openPage(user, 'Пациенты')
+    const search = screen.getByLabelText('Поиск по имени или телефону')
+    await user.type(search, 'анна')
+    expect(screen.getByText('Анна Михайлова')).toBeInTheDocument()
+    expect(screen.queryByText('Дмитрий Волков')).not.toBeInTheDocument()
+    await user.clear(search)
+    await user.type(search, '89037824416')
+    expect(screen.getByText('Дмитрий Волков')).toBeInTheDocument()
+    expect(screen.queryByText('Анна Михайлова')).not.toBeInTheDocument()
+    await user.clear(search)
+    expect(screen.getByText('Анна Михайлова')).toBeInTheDocument()
+    expect(screen.getByText('Дмитрий Волков')).toBeInTheDocument()
   })
 
   it('adds a patient to the list', async () => {

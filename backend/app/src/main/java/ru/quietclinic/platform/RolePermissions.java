@@ -27,7 +27,7 @@ public final class RolePermissions {
   public static final String SUPPORT = "SUPPORT";
 
   /** Версия набора разрешений: отдаётся в /auth/me как permissionsVersion. */
-  public static final String VERSION = "2026-10-28.5";
+  public static final String VERSION = "2026-10-29.1";
 
   /** Роли сотрудников в порядке экрана «Сотрудники». */
   public static final List<String> STAFF_ROLES =
@@ -81,6 +81,7 @@ public final class RolePermissions {
             MARKING_MANAGE,
             DRIVE_USE,
             WORKSPACE_USE,
+            ASSISTANT_USE,
             DRIVE_ADMIN,
             DASHBOARD_READ,
             ANALYTICS_READ,
@@ -93,6 +94,7 @@ public final class RolePermissions {
     owner.add(HR_MANAGE);
     owner.add(CLINICAL_BREAK_GLASS);
     owner.add(CLINICAL_BREAK_GLASS_REVIEW);
+    owner.add(SUBSCRIPTION_MANAGE);
 
     var senior = EnumSet.copyOf(operations);
     senior.add(CLINICAL_BREAK_GLASS_REVIEW);
@@ -125,6 +127,7 @@ public final class RolePermissions {
             MARKING_MANAGE,
             DRIVE_USE,
             WORKSPACE_USE,
+            ASSISTANT_USE,
             DASHBOARD_READ,
             ANALYTICS_READ,
             AUDIT_READ);
@@ -145,6 +148,7 @@ public final class RolePermissions {
             INVENTORY_STOCK_READ,
             DRIVE_USE,
             WORKSPACE_USE,
+            ASSISTANT_USE,
             DASHBOARD_READ,
             ANALYTICS_READ_OWN);
 
@@ -164,6 +168,7 @@ public final class RolePermissions {
             MARKING_STATUS_READ,
             DRIVE_USE,
             WORKSPACE_USE,
+            ASSISTANT_USE,
             DASHBOARD_READ);
 
     var cashier =
@@ -179,6 +184,7 @@ public final class RolePermissions {
             INVOICE_SET_AMOUNT,
             DRIVE_USE,
             WORKSPACE_USE,
+            ASSISTANT_USE,
             DASHBOARD_READ);
 
     var support =
@@ -195,6 +201,7 @@ public final class RolePermissions {
             MARKING_MANAGE,
             DRIVE_USE,
             WORKSPACE_USE,
+            ASSISTANT_USE,
             DRIVE_ADMIN,
             DASHBOARD_READ,
             ANALYTICS_READ,

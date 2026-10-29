@@ -253,12 +253,6 @@ button, input, textarea { font: inherit; }
 .section-intro { display: flex; justify-content: space-between; align-items: end; margin-bottom: 22px; }
 .data-boundary { margin: 18px 0; padding: 14px 17px; border-radius: 12px; display: flex; gap: 12px; color: var(--privacy-text); background: var(--privacy-bg); border: 1px solid var(--privacy-border); }
 .patient-results { overflow: hidden; }
-.patient-row { min-height: 84px; display: grid; grid-template-columns: auto minmax(190px, 1.5fr) minmax(140px, 1fr) 170px auto; align-items: center; gap: 16px; padding: 14px 20px; border-bottom: 1px solid var(--border-soft); cursor: pointer; }
-.patient-row:hover { background: var(--hover); }
-.patient-row:last-child { border-bottom: 0; }
-.patient-main { min-width: 0; }
-/* Колонка согласия одной ширины во всех строках: телефон не сдвигается из-за длины подписи. */
-.patient-row > .MuiChip-root { justify-self: end; }
 .empty { min-height: 260px; display: flex; flex-direction: column; justify-content: center; align-items: center; color: var(--muted); gap: 8px; }
 .empty svg { font-size: 44px; color: var(--label); }
 .patient-header { display: flex; gap: 17px; align-items: center; background: var(--paper); border: 1px solid var(--border); border-radius: 15px; padding: 22px; margin-bottom: 16px; }
@@ -325,8 +319,6 @@ button, input, textarea { font: inherit; }
   .topbar-action { min-width: 40px !important; padding: 6px !important; }
   .topbar-action .MuiButton-startIcon { margin: 0; }
   .section-intro h4 { font-size: 25px; }
-  .patient-row { grid-template-columns: auto 1fr auto; padding: 14px; }
-  .patient-row > :nth-child(3), .patient-row > :nth-child(4) { display: none; }
   .patient-header { align-items: flex-start; flex-wrap: wrap; }
   .patient-header h4 { font-size: 24px; }
   .patient-header .MuiChip-root { margin-left: 80px; }

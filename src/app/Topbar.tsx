@@ -1,4 +1,4 @@
-import { DarkModeRounded, DashboardRounded, FolderSharedRounded, Inventory2Rounded, KeyRounded, LightModeRounded, LogoutRounded, MenuRounded, PaymentsRounded, PeopleAltRounded } from '@mui/icons-material'
+import { AutoAwesomeRounded, DarkModeRounded, DashboardRounded, FolderSharedRounded, Inventory2Rounded, KeyRounded, LightModeRounded, LogoutRounded, MenuRounded, PaymentsRounded, PeopleAltRounded, WorkspacePremiumRounded } from '@mui/icons-material'
 import { Box, Button, Chip, IconButton, Tab, Tabs, Tooltip, Typography } from '@mui/material'
 import type { ReactElement } from 'react'
 import { serviceTitles, type Service } from './pages'
@@ -23,16 +23,19 @@ type TopbarProps = {
   live: boolean
   /** Клиника сотрудника — с сервера; в песочнице её нет. */
   clinicName?: string | null
+  onAssistant: () => void
+  canManageSubscription: boolean
+  onSubscription: () => void
   onPassword: () => void
   onSignOut: () => void
   onMenu: () => void
 }
 
 /**
- * Шапка: сверху — сервисы (вкладки), справа — тема, пароль и выход; под ними — заголовок
+ * Шапка: сверху — сервисы (вкладки), справа — навигатор, тема, пароль и выход; под ними — заголовок
  * страницы. Разделы сервиса — в боковом меню. Роль сменить нельзя.
  */
-export function Topbar({ eyebrow, title, services, service, onService, live, clinicName, onPassword, onSignOut, onMenu }: TopbarProps) {
+export function Topbar({ eyebrow, title, services, service, onService, live, clinicName, onAssistant, canManageSubscription, onSubscription, onPassword, onSignOut, onMenu }: TopbarProps) {
   const { mode, toggle } = useColorMode()
   const themeLabel = mode === 'light' ? 'Включить тёмную тему' : 'Включить светлую тему'
   return (
@@ -46,6 +49,8 @@ export function Topbar({ eyebrow, title, services, service, onService, live, cli
           {live && clinicName && <Typography className="topbar-clinic" sx={{ fontSize: 13, color: 'text.secondary' }}>{clinicName}</Typography>}
           {live && <Chip size="small" color="success" variant="outlined" label="API подключён" />}
           {!live && <Chip size="small" color="warning" variant="outlined" label="Демо: общие данные в памяти, пространство — локально" />}
+          {live && canManageSubscription && <Button size="small" className="topbar-action" aria-label="Тариф и оплата" startIcon={<WorkspacePremiumRounded />} onClick={onSubscription}><span className="topbar-label">Тариф</span></Button>}
+          <Button size="small" className="topbar-action" color="primary" variant="contained" aria-label="ИИ-навигатор" startIcon={<AutoAwesomeRounded />} onClick={onAssistant}><span className="topbar-label">ИИ-навигатор</span></Button>
           <Tooltip title={themeLabel}>
             <IconButton onClick={toggle} aria-label={themeLabel}>
               {mode === 'light' ? <DarkModeRounded /> : <LightModeRounded />}

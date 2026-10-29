@@ -123,12 +123,25 @@ class PatientService {
     var index = phoneIndex();
     var staff = clinicStaff();
     var care = can(Permission.PATIENT_READ) ? null : carePatients();
+    var matches = new java.util.LinkedHashMap<UUID, Patient>();
+    if (query.isBlank()) {
+      patients.findByClinicIdOrderByFullName(clinicId()).forEach(p -> matches.put(p.id, p));
+    } else {
+      patients
+          .findTop20ByClinicIdAndFullNameContainingIgnoreCaseOrderByFullName(
+              clinicId(), query.trim())
+          .forEach(p -> matches.put(p.id, p));
+      // Телефоны сравниваем по цифрам в уже загруженном индексе клиники: формат и 8/+7 не важны.
+      index.matching(query).forEach(p -> matches.putIfAbsent(p.id, p));
+    }
     var result =
-        (query.isBlank()
-                ? patients.findByClinicIdOrderByFullName(clinicId())
-                : patients.findTop20ByClinicIdAndFullNameContainingIgnoreCaseOrderByFullName(
-                    clinicId(), query))
-            .stream().filter(p -> visible(p, care)).map(p -> view(p, index, staff)).toList();
+        matches.values().stream()
+            .sorted(
+                java.util.Comparator.comparing(
+                    (Patient p) -> p.fullName, String.CASE_INSENSITIVE_ORDER))
+            .filter(p -> visible(p, care))
+            .map(p -> view(p, index, staff))
+            .toList();
     // Одно событие на просмотр списка, а не по событию на каждого пациента: иначе журнал из
     // последних 100 событий целиком забивается одним открытием списка.
     audit.record(

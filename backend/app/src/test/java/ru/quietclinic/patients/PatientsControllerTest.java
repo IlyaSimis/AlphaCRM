@@ -155,6 +155,28 @@ class PatientsControllerTest {
         .andExpect(status().isNotFound());
   }
 
+  @Test
+  void searchFindsNameAndEitherPhoneAcrossFormatsWithinClinic() throws Exception {
+    var id =
+        createPatient(
+            """
+            {"fullName":"Search Target","birthDate":"1990-06-06","phone":"+7 912 555-40-01",
+             "secondPhone":"8 (903) 555-40-02","consentVersion":"v1.2","consentBasis":"SIGNED_FORM"}
+            """);
+    for (var query : java.util.List.of("search target", "89125554001", "912 555", "89035554002")) {
+      mvc.perform(get("/api/v1/patients").param("query", query).with(staff.admin()))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$[*].id").value(hasItem(id)));
+    }
+
+    SecondClinic.ensure(jdbc);
+    mvc.perform(
+            get("/api/v1/patients").param("query", SecondClinic.PATIENT_NAME).with(staff.admin()))
+        .andExpect(jsonPath("$[*].id").value(not(hasItem(SecondClinic.PATIENT))));
+    mvc.perform(get("/api/v1/patients").param("query", "89162451872").with(staff.admin()))
+        .andExpect(jsonPath("$[*].id").value(not(hasItem(SecondClinic.PATIENT))));
+  }
+
   private String createPatient(String fullName, String phone) throws Exception {
     var created =
         mvc.perform(
