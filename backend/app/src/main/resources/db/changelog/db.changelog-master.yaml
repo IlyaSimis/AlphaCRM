@@ -35,3 +35,7 @@ databaseChangeLog:
       file: db/changelog/017-workspace.sql
   - include:
       file: db/changelog/018-assistant-commercial.sql
+  - include:
+      file: db/changelog/019-telephony.sql
+  - include:
+      file: db/changelog/020-terminal-payments.sql

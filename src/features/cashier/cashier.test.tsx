@@ -69,6 +69,7 @@ describe('cashier', () => {
     expect(await screen.findByText('Ожидает оплаты')).toBeInTheDocument()
     expect(screen.getByText('Анна Михайлова')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Принять оплату Анна Михайлова 10:10' }))
+    await user.click(screen.getByRole('button', { name: 'Отметить внешнюю оплату' }))
     const payment = fetchMock.mock.calls.find(([url]) => String(url).includes('/payments'))
     // Автора платежа сервер берёт из сессии: роль и id в запрос не подставляются.
     expect(payment?.[1]?.credentials).toBe('include')

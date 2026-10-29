@@ -321,6 +321,12 @@ export function useClinicData(doctorId: string, live: boolean) {
 
   const replacePatient = (updated: PatientItem) => setPatientItems((items) => items.map((item) => item.id === updated.id ? updated : item))
 
+  const refreshPatients = async () => {
+    if (!apiOnline) return
+    setPatientItems(await loadPatients())
+    bump()
+  }
+
   /** Возвращает текст ошибки для формы или null, если форму можно закрыть. */
   const updatePatient = async (patient: PatientItem, input: PatientInput, assigned: AssignedStaff | null = null): Promise<string | null> => {
     const local = (): PatientItem => ({ ...patient, ...localPatient(patient.id, input, patient.consents, assigned) })
@@ -534,6 +540,7 @@ export function useClinicData(doctorId: string, live: boolean) {
     reschedule,
     book,
     createPatient,
+    refreshPatients,
     updatePatient,
     grantConsent,
     revokeConsent,

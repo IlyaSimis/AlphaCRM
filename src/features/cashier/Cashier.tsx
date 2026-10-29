@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { PaymentsRounded, RefreshRounded } from '@mui/icons-material'
-import { Alert, Box, Button, Chip, CircularProgress, Stack, TextField, Typography } from '@mui/material'
-import { createCharge, loadCharges, payCharge, setChargeAmount } from '../../api/billing'
+import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField, Typography } from '@mui/material'
+import { createCharge, loadCharges, payCharge, setChargeAmount, startTerminalPayment } from '../../api/billing'
 import type { ApiError } from '../../api/client'
 import { loadAppointments } from '../../api/schedule'
 import type { ChargeItem, Practitioner, ScheduleItem } from '../../api/types'
@@ -30,6 +30,12 @@ type CashierProps = {
 }
 
 const PERIOD_DAYS = 90
+const terminalStatusLabels: Record<string, string> = {
+  PENDING: 'Оплата на терминале',
+  CANCELLED: 'Оплата отменена',
+  FAILED: 'Ошибка оплаты',
+  TIMEOUT: 'Время оплаты истекло',
+}
 
 /** Пределы свободной цены (и оценка, если есть) для строки без суммы. */
 function openRange(row: CashierRow) {
@@ -59,6 +65,7 @@ export function Cashier({ role, apiOnline, practitioners, localAppointments, loc
   const mayRefund = can(role, 'finance.payment.refund')
   /** Открытое окно аннулирования или возврата. */
   const [closing, setClosing] = useState<{ mode: 'void' | 'refund'; row: CashierRow } | null>(null)
+  const [paymentChoice, setPaymentChoice] = useState<CashierRow | null>(null)
   const today = localToday()
 
   useEffect(() => {
@@ -69,6 +76,13 @@ export function Cashier({ role, apiOnline, practitioners, localAppointments, loc
       .catch((reason: Error) => { if (!cancelled) setError(reason.message) })
     return () => { cancelled = true }
   }, [apiOnline, today, revision])
+
+  const terminalPending = remote?.charges.some((charge) => charge.paymentStatus === 'PENDING') ?? false
+  useEffect(() => {
+    if (!apiOnline || !terminalPending) return
+    const timer = window.setInterval(() => setRevision((value) => value + 1), 2000)
+    return () => window.clearInterval(timer)
+  }, [apiOnline, terminalPending])
 
   const source = apiOnline ? remote : { appointments: localAppointments.filter((item) => item.statusCode === 'COMPLETED'), charges: localCharges }
   const rows = source ? buildCashierRows(source.appointments, source.charges) : []
@@ -161,12 +175,27 @@ export function Cashier({ role, apiOnline, practitioners, localAppointments, loc
       notify('Демо-режим: оплата видна до обновления страницы')
       return
     }
-    // Платёжный шлюз не подключён (MOCK_NO_PROVIDER): оплата только отмечена — не выдаём её за настоящий платёж.
+    setPaymentChoice(row)
+  }
+
+  const manualPay = (row: CashierRow) => {
+    if (!row.charge) return
+    const chargeId = row.charge.chargeId
+    setPaymentChoice(null)
     let message = 'Оплата принята'
     void act(chargeId, async () => {
       const view = await payCharge(chargeId, `pay-${chargeId}`)
-      if (view?.paymentStatus === 'MOCK_NO_PROVIDER') message = 'Оплата отмечена в кассе. Платёжный шлюз не подключён: деньги через систему не проводились, чек ждёт подключения кассы'
+      if (view?.paymentStatus === 'MOCK_NO_PROVIDER') message = 'Оплата отмечена в кассе. Это не ответ терминала: внешний платёж подтверждает сотрудник'
     }, () => message)
+  }
+
+  const terminalPay = (row: CashierRow, method: 'CARD' | 'SBP') => {
+    if (!row.charge) return
+    const chargeId = row.charge.chargeId
+    setPaymentChoice(null)
+    void act(chargeId, async () => {
+      await startTerminalPayment(chargeId, method)
+    }, method === 'CARD' ? 'Карта: ждите ответ терминала' : 'QR СБП: ждите ответ терминала')
   }
 
   return (
@@ -203,7 +232,8 @@ export function Cashier({ role, apiOnline, practitioners, localAppointments, loc
                     <td>{row.appointment.type}</td>
                     <td className="nowrap">{amount == null ? (row.charge?.priceMode === 'OPEN' || row.appointment.priceMode === 'OPEN' ? openRange(row) : '—') : formatMoney(amount, row.charge?.currency ?? row.appointment.currency ?? 'RUB')}</td>
                     <td>
-                      <Chip size="small" variant="outlined" label={stateLabels[row.state]} color={row.state === 'PAID' ? 'success' : row.state === 'PENDING' || row.state === 'AWAITING_AMOUNT' ? 'warning' : row.state === 'REFUNDED' ? 'error' : 'default'} />
+                      <Chip size="small" variant="outlined" label={row.state === 'PENDING' && row.charge?.paymentStatus ? terminalStatusLabels[row.charge.paymentStatus] ?? stateLabels[row.state] : stateLabels[row.state]} color={row.state === 'PAID' ? 'success' : row.charge?.paymentStatus && ['CANCELLED', 'FAILED', 'TIMEOUT'].includes(row.charge.paymentStatus) ? 'error' : row.state === 'PENDING' || row.state === 'AWAITING_AMOUNT' ? 'warning' : row.state === 'REFUNDED' ? 'error' : 'default'} />
+                      {row.charge?.failureReason && <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 0.5 }}>{row.charge.failureReason}</Typography>}
                       {row.state === 'VOIDED' && row.charge?.voidReason && <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 0.5 }}>{voidReasonLabels[row.charge.voidReason as VoidReason] ?? row.charge.voidReason}</Typography>}
                       {row.state === 'REFUNDED' && row.charge?.refundReason && <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 0.5 }}>{refundReasonLabels[row.charge.refundReason as RefundReason] ?? row.charge.refundReason}</Typography>}
                     </td>
@@ -213,8 +243,8 @@ export function Cashier({ role, apiOnline, practitioners, localAppointments, loc
                         <Button size="small" variant="contained" disabled={busy !== null} aria-label={`Сохранить сумму ${row.appointment.name} ${row.appointment.time}`} onClick={() => saveAmount(row)}>Сохранить</Button>
                       </Stack>}
                       {row.state === 'NO_CHARGE' && payments && <Button size="small" disabled={busy !== null || row.appointment.amountMinor == null} aria-label={`Выставить счёт ${row.appointment.name} ${row.appointment.time}`} onClick={() => issue(row)}>Выставить счёт</Button>}
-                      {row.state === 'PENDING' && payments && <Button size="small" variant="contained" disabled={busy !== null} aria-label={`Принять оплату ${row.appointment.name} ${row.appointment.time}`} onClick={() => pay(row)}>Принять оплату</Button>}
-                      {apiOnline && mayVoid && (row.state === 'PENDING' || row.state === 'AWAITING_AMOUNT') && <Button size="small" color="warning" disabled={busy !== null} aria-label={`Аннулировать счёт ${row.appointment.name} ${row.appointment.time}`} onClick={() => setClosing({ mode: 'void', row })}>Аннулировать</Button>}
+                      {row.state === 'PENDING' && row.charge?.paymentStatus !== 'PENDING' && payments && <Button size="small" variant="contained" disabled={busy !== null} aria-label={`Принять оплату ${row.appointment.name} ${row.appointment.time}`} onClick={() => pay(row)}>Принять оплату</Button>}
+                      {apiOnline && mayVoid && (row.state === 'AWAITING_AMOUNT' || (row.state === 'PENDING' && row.charge?.paymentStatus !== 'PENDING')) && <Button size="small" color="warning" disabled={busy !== null} aria-label={`Аннулировать счёт ${row.appointment.name} ${row.appointment.time}`} onClick={() => setClosing({ mode: 'void', row })}>Аннулировать</Button>}
                       {apiOnline && mayRefund && row.state === 'PAID' && row.charge?.paymentId && <Button size="small" color="error" disabled={busy !== null} aria-label={`Возврат ${row.appointment.name} ${row.appointment.time}`} onClick={() => setClosing({ mode: 'refund', row })}>Возврат</Button>}
                     </td>
                   </tr>
@@ -224,6 +254,15 @@ export function Cashier({ role, apiOnline, practitioners, localAppointments, loc
           </table>
         )}
       </Box>
+      <Dialog open={paymentChoice !== null} onClose={() => setPaymentChoice(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Способ оплаты</DialogTitle>
+        <DialogContent><Typography color="text.secondary">Терминал подтвердит результат автоматически. Ручная отметка предназначена только для оплаты, уже принятой вне системы.</Typography></DialogContent>
+        <DialogActions sx={{ p: 2, flexWrap: 'wrap', justifyContent: 'flex-start' }}>
+          <Button variant="contained" disabled={busy !== null} onClick={() => paymentChoice && terminalPay(paymentChoice, 'CARD')}>Карта на терминале</Button>
+          <Button variant="contained" disabled={busy !== null} onClick={() => paymentChoice && terminalPay(paymentChoice, 'SBP')}>QR через СБП</Button>
+          <Button color="inherit" disabled={busy !== null} onClick={() => paymentChoice && manualPay(paymentChoice)}>Отметить внешнюю оплату</Button>
+        </DialogActions>
+      </Dialog>
       {closing?.row.charge && <CloseChargeDialog mode={closing.mode} charge={closing.row.charge} subject={`${closing.row.appointment.name}, ${shortDay(closing.row.appointment.date)} ${closing.row.appointment.time}, ${closing.row.appointment.type}`} onClose={() => setClosing(null)} onDone={(message) => { setClosing(null); notify(message); setRevision((value) => value + 1) }} />}
     </>
   )

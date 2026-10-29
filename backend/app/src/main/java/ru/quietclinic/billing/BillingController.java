@@ -116,7 +116,9 @@ public class BillingController {
     payment.providerRef = provider.reference();
     payment.paymentStatus = provider.status();
     payment.fiscalStatus = "QUEUED";
+    payment.method = "MANUAL";
     payment.createdAt = Instant.now();
+    payment.updatedAt = payment.createdAt;
     payments.save(payment);
     charge.status = "PAID";
     // Чек уходит доставщиком outbox через порт кассы; пока касса не подключена — QUEUED.
@@ -142,6 +144,8 @@ public class BillingController {
         charge.status,
         payment == null ? null : payment.id,
         payment == null ? null : payment.paymentStatus,
-        payment == null ? null : payment.fiscalStatus);
+        payment == null ? null : payment.fiscalStatus,
+        payment == null ? null : payment.method,
+        payment == null ? null : payment.failureReason);
   }
 }

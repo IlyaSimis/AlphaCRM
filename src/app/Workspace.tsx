@@ -17,6 +17,7 @@ import { PatientFiles } from '../features/files/PatientFiles'
 import { OutboxPage } from '../features/outbox/OutboxPage'
 import { PatientCard } from '../features/patients/PatientCard'
 import { PatientDialog } from '../features/patients/PatientDialog'
+import { PostgresImportDialog } from '../features/patients/PostgresImportDialog'
 import { PatientsList } from '../features/patients/PatientsList'
 import { RegistryPanel } from '../features/patients/RegistryPanel'
 import { filterPatients } from '../features/patients/search'
@@ -39,7 +40,7 @@ import { Visit } from '../features/visit/Visit'
 import type { VisitTarget } from '../features/visit/visitRules'
 import { formatDay, localToday } from '../shared/dates'
 import { greeting } from '../shared/greeting'
-import { administratorRoles, canManagePrices, canManageRegistry, canSeePatients, canSeeRegistry, canWriteClinical, staffRolesOf } from '../shared/roles'
+import { administratorRoles, canEditPatients, canManagePrices, canManageRegistry, canSeePatients, canSeeRegistry, canWriteClinical, staffRolesOf } from '../shared/roles'
 import { Landscape } from './Landscape'
 import { canOpen, driveView, firstPageOf, pageTitles, serviceOf, servicesFor, startPage, stockSection, type Page, type Service } from './pages'
 import { Sidebar } from './Sidebar'
@@ -74,6 +75,7 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
   const [moving, setMoving] = useState<ScheduleItem | null>(null)
   const [moveError, setMoveError] = useState('')
   const [patientDialog, setPatientDialog] = useState(false)
+  const [patientImport, setPatientImport] = useState(false)
   const [editPatient, setEditPatient] = useState<PatientItem | null>(null)
   const [editError, setEditError] = useState('')
   const [createError, setCreateError] = useState('')
@@ -232,7 +234,7 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
           {page === 'schedule' && canWriteClinical(role) && <Typography className="greeting" sx={{ mb: 1.5 }}>{greeting(staff.fullName)}</Typography>}
           {page === 'schedule' && canWriteClinical(role) && <DashboardWidgets apiOnline={clinic.apiOnline} />}
           {page === 'schedule' && <Schedule role={role} doctorId={doctorId} date={scheduleDate} view={clinic.scheduleView} appointments={scheduleItems} practitioners={practitioners} doctorFilter={doctorFilter} onDoctorFilter={setDoctorFilter} apiOnline={clinic.apiOnline} onDate={clinic.setScheduleDate} onView={clinic.setScheduleView} onBooking={openBooking} onStatus={(item, to) => clinic.changeStatus(item, to, role)} onPatient={openPatientOf} onStartVisit={startVisit} onReschedule={(item) => { setMoveError(''); setMoving(item) }} onCancel={(item) => clinic.cancelBooking(item, role)} waitlistCount={(item) => registry.matches(item.practitionerId, item.date).length} onWaitlist={(item) => { setWaitError(''); setWaitSlot(item) }} />}
-          {page === 'patients' && <PatientsList query={query} setQuery={setQuery} patients={visiblePatients} onPatient={openPatient} onCreate={() => setPatientDialog(true)} />}
+          {page === 'patients' && <PatientsList query={query} setQuery={setQuery} patients={visiblePatients} onPatient={openPatient} onCreate={() => setPatientDialog(true)} onImport={clinic.apiOnline && canEditPatients(role) ? () => setPatientImport(true) : undefined} />}
           {page === 'patient' && selectedPatient && <PatientCard key={selectedPatient.id} patient={selectedPatient} role={role} doctorId={doctorId} apiOnline={clinic.apiOnline} appointments={scheduleItems} practitioners={practitioners} revision={clinic.revision}
             files={<PatientFiles key={selectedPatient.id} patientId={selectedPatient.id} role={role} apiOnline={clinic.apiOnline} notify={clinic.notify} />}
             registry={canSeeRegistry(role) ? <RegistryPanel patient={selectedPatient} sharedWith={sharedPhone(selectedPatient)} admin={canManageRegistry(role)} selfId={staff.id} registry={registry} onOpenPatient={openPatientById} onSave={(input) => clinic.updateRegistry(selectedPatient, input)} /> : undefined}
@@ -278,6 +280,7 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
         setPatientDialog(false)
         setCreateError('')
       }} />}
+      {patientImport && <PostgresImportDialog onClose={() => setPatientImport(false)} onDone={(message) => { void clinic.refreshPatients(); clinic.notify(message) }} />}
       {editPatient && <PatientDialog key={editPatient.id} open mode="edit" initial={{ fullName: editPatient.name, birthDate: editPatient.birthDate, phone: editPatient.phone, secondPhone: editPatient.secondPhone ?? '', email: editPatient.email ?? '', assignedStaffId: editPatient.assignedStaff?.id ?? null }} patients={patientItems} selfId={editPatient.id} administrators={administrators} currentAssigned={editPatient.assignedStaff} error={editError} onClose={() => { setEditPatient(null); setEditError('') }} onSave={async (input) => {
         const error = await clinic.updatePatient(editPatient, input, assignedOf(input.assignedStaffId, editPatient.assignedStaff))
         if (error) {

@@ -18,6 +18,7 @@ import { consentLabels } from './consentLabels'
 import { splitHistory } from './history'
 import { useClinicalHistory } from './useClinicalHistory'
 import { usePatientHistory } from './usePatientHistory'
+import { PatientCalls } from '../telephony/PatientCalls'
 
 type PatientCardProps = {
   patient: PatientItem
@@ -86,6 +87,7 @@ export function PatientCard(props: PatientCardProps) {
           {patient.email && <Info label="E-mail" value={patient.email} />}
           <Info label="Постоянный администратор" value={patient.assignedStaff ? `${patient.assignedStaff.fullName}${patient.assignedStaff.active ? '' : ' · учётная запись отключена'}` : 'не назначен'} />
           <Info label="Предпочтительный канал" value="SMS · нейтральный шаблон" />
+          {patient.phone !== '—' && <PatientCalls patientId={patient.id} apiOnline={apiOnline} />}
           {props.registry}
           <Divider sx={{ mt: 2 }} />
           <Typography sx={{ fontWeight: 700, mt: 2 }}>Ближайшие записи</Typography>

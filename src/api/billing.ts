@@ -1,5 +1,5 @@
 import { failure, apiFetch } from './client'
-import type { ChargeItem, RefundReason, VoidReason } from './types'
+import type { ChargeItem, RefundReason, TerminalPaymentMethod, VoidReason } from './types'
 
 export async function loadCharges(): Promise<ChargeItem[]> {
   const response = await apiFetch(`/billing/charges`)
@@ -25,6 +25,14 @@ export async function payCharge(chargeId: string, idempotencyKey: string) {
   const response = await apiFetch(`/billing/charges/${chargeId}/payments`, { method: 'POST', body: JSON.stringify({ idempotencyKey }) })
   if (!response.ok) throw await failure(response, 'Не удалось провести оплату')
   return response.json()
+}
+
+/** Отправляет сумму на терминал; окончательный статус придёт отдельным уведомлением. */
+export async function startTerminalPayment(chargeId: string, method: TerminalPaymentMethod) {
+  const idempotencyKey = `terminal-${chargeId}-${method}-${crypto.randomUUID()}`
+  const response = await apiFetch(`/billing/charges/${chargeId}/terminal-payments`, { method: 'POST', body: JSON.stringify({ idempotencyKey, method }) })
+  if (!response.ok) throw await failure(response, 'Не удалось отправить оплату на терминал')
+  return response.json() as Promise<{ paymentStatus: string }>
 }
 
 /** Аннулировать неоплаченный счёт — администраторы; причина — код из списка. */

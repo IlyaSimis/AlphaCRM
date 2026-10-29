@@ -133,3 +133,16 @@ clinic:
     api-key: ${CLINIC_ASSISTANT_API_KEY:}
     model: ${CLINIC_ASSISTANT_MODEL:gpt-5.4-nano}
     api-url: ${CLINIC_ASSISTANT_API_URL:https://api.openai.com/v1}
+  terminal:
+    # Имя адаптера банка. Секрет подписи ответов — только на backend; без него webhook отклоняется.
+    provider: ${TERMINAL_PROVIDER:generic}
+    webhook-secret: ${TERMINAL_WEBHOOK_SECRET:}
+  telephony:
+    mango:
+      # Ключи API-коннектора ВАТС. Salt остаётся только на backend и проверяется для каждого webhook.
+      api-key: ${MANGO_API_KEY:}
+      api-salt: ${MANGO_API_SALT:}
+      api-url: ${MANGO_API_URL:https://app.mango-office.ru}
+      default-extension: ${MANGO_DEFAULT_EXTENSION:}
+      line-number: ${MANGO_LINE_NUMBER:}
+      clinic-id: ${MANGO_CLINIC_ID:}

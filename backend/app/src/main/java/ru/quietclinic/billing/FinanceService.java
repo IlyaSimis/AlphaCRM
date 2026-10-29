@@ -166,12 +166,15 @@ class FinanceService {
     var rows = new LinkedHashMap<String, Row>();
     var paid =
         jdbc.queryForList(
-            "select r.created_at as at, c.amount_minor as amount, c.price_mode as mode,"
-                + " a.service_name as service, p.id as practitioner_id, p.full_name as practitioner"
-                + " from payment_record r join charge c on c.id = r.charge_id"
+            "select coalesce(r.completed_at, r.created_at) as at, c.amount_minor as amount,"
+                + " c.price_mode as mode, a.service_name as service, p.id as practitioner_id,"
+                + " p.full_name as practitioner from payment_record r"
+                + " join charge c on c.id = r.charge_id"
                 + " join appointment a on a.id = c.appointment_id"
                 + " join practitioner p on p.id = a.practitioner_id"
-                + " where p.clinic_id = ? and r.created_at >= ? and r.created_at < ?",
+                + " where p.clinic_id = ? and coalesce(r.completed_at, r.created_at) >= ?"
+                + " and coalesce(r.completed_at, r.created_at) < ?"
+                + " and r.payment_status in ('SUCCEEDED', 'MOCK_NO_PROVIDER', 'CONFIRMED')",
             clinicId(),
             start,
             end);

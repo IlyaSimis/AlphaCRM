@@ -155,6 +155,14 @@ DOCTOR;POST;/api/v1/billing/charges/{random}/payments;403;{"idempotencyKey":"rba
 NURSE;POST;/api/v1/billing/charges/{random}/payments;403;{"idempotencyKey":"rbac-{unique}"}
 CASHIER;POST;/api/v1/billing/charges/{random}/payments;ok;{"idempotencyKey":"rbac-{unique}"}
 SUPPORT;POST;/api/v1/billing/charges/{random}/payments;403;{"idempotencyKey":"rbac-{unique}"}
+OWNER;POST;/api/v1/billing/charges/{random}/terminal-payments;ok;{"idempotencyKey":"rbac-{unique}","method":"CARD"}
+SENIOR_ADMINISTRATOR;POST;/api/v1/billing/charges/{random}/terminal-payments;ok;{"idempotencyKey":"rbac-{unique}","method":"CARD"}
+ADMINISTRATOR;POST;/api/v1/billing/charges/{random}/terminal-payments;ok;{"idempotencyKey":"rbac-{unique}","method":"CARD"}
+MANAGER;POST;/api/v1/billing/charges/{random}/terminal-payments;403;{"idempotencyKey":"rbac-{unique}","method":"CARD"}
+DOCTOR;POST;/api/v1/billing/charges/{random}/terminal-payments;403;{"idempotencyKey":"rbac-{unique}","method":"CARD"}
+NURSE;POST;/api/v1/billing/charges/{random}/terminal-payments;403;{"idempotencyKey":"rbac-{unique}","method":"CARD"}
+CASHIER;POST;/api/v1/billing/charges/{random}/terminal-payments;ok;{"idempotencyKey":"rbac-{unique}","method":"CARD"}
+SUPPORT;POST;/api/v1/billing/charges/{random}/terminal-payments;403;{"idempotencyKey":"rbac-{unique}","method":"CARD"}
 OWNER;PUT;/api/v1/billing/charges/{random}/amount;ok;{"amountMinor":100}
 SENIOR_ADMINISTRATOR;PUT;/api/v1/billing/charges/{random}/amount;ok;{"amountMinor":100}
 ADMINISTRATOR;PUT;/api/v1/billing/charges/{random}/amount;ok;{"amountMinor":100}

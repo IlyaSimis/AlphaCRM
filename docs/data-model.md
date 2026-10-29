@@ -406,10 +406,17 @@ CHECK `patient_file_signed_complete`: у `SIGNED_LOCKED` заполнены хе
 | `id` | UUID | PK | |
 | `idempotency_key` | VARCHAR(255) | NN, U | повтор с тем же ключом не создаёт второй платёж |
 | `charge_id` | UUID | FK → `charge`, NN | |
-| `provider_ref` | VARCHAR(255) | NN | ссылка платёжного адаптера (сейчас — безопасный mock) |
-| `payment_status` | VARCHAR(40) | NN | ответ адаптера |
+| `provider_ref` | VARCHAR(255) | NN, U | ссылка платёжного адаптера или терминала |
+| `payment_status` | VARCHAR(40) | NN | терминал: `PENDING` → `SUCCEEDED` / `CANCELLED` / `FAILED` / `TIMEOUT`; ручная отметка — `MOCK_NO_PROVIDER` |
 | `fiscal_status` | VARCHAR(40) | NN | `QUEUED` — чек ждёт онлайн-кассу; `SENT_TO_CASHBOX` — передан в кассу (`CLINIC_CASHBOX_URL`). Сама CRM чек не печатает |
-| `created_at` | TIMESTAMPTZ | NN | |
+| `method` | VARCHAR(16) | NN, default `MANUAL` | `CARD`, `SBP` или `MANUAL` |
+| `created_at`, `updated_at` | TIMESTAMPTZ | NN | создание и последний ответ |
+| `completed_at` | TIMESTAMPTZ | | финальный ответ терминала; используется как время оплаты |
+| `failure_reason` | VARCHAR(255) | | машинная причина отмены/ошибки без данных карты |
+
+#### `terminal_payment_event` — принятые ответы терминала
+
+`provider + event_id` уникальны; `payment_id` ссылается на `payment_record`, `received_at` фиксирует получение. Этот журнал не содержит PAN, QR-пayload или персональных данных.
 
 #### `refund_record` — возврат оплаты
 
@@ -424,7 +431,7 @@ CHECK `patient_file_signed_complete`: у `SIGNED_LOCKED` заполнены хе
 | `fiscal_status` | VARCHAR(40) | NN | чек возврата: `QUEUED` → `SENT_TO_CASHBOX` |
 | `created_by`, `created_at` | | NN | |
 
-Отчёт о продажах (`GET /finance/sales`) считает оплаты по `payment_record.created_at` и вычитает возвраты по `refund_record.created_at`.
+Отчёт о продажах (`GET /finance/sales`) учитывает только успешные/вручную подтверждённые оплаты по `coalesce(payment_record.completed_at, payment_record.created_at)` и вычитает возвраты по `refund_record.created_at`. Ожидание, отмена, ошибка и таймаут терминала в выручку не попадают.
 
 ### platform — доменные события
 

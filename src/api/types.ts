@@ -132,6 +132,8 @@ export type ServiceItem = { id: string; name: string; durationMinutes: number; p
 /** Норма расхода услуги: позиция склада и количество на один приём. */
 export type ServiceNorm = { itemId: string; quantity: number }
 
+export type TerminalPaymentMethod = 'CARD' | 'SBP'
+
 export type ChargeItem = {
   chargeId: string
   appointmentId: string
@@ -141,7 +143,9 @@ export type ChargeItem = {
   status: 'AWAITING_AMOUNT' | 'PENDING' | 'PAID' | 'VOIDED' | 'REFUNDED' | string
   createdAt: string
   paymentId?: string | null
-  paymentStatus?: string | null
+  paymentStatus?: 'PENDING' | 'SUCCEEDED' | 'CANCELLED' | 'FAILED' | 'TIMEOUT' | 'MOCK_NO_PROVIDER' | string | null
+  paymentMethod?: 'CARD' | 'SBP' | 'MANUAL' | string | null
+  failureReason?: string | null
   priceMode?: PriceMode
   minMinor?: number | null
   maxMinor?: number | null

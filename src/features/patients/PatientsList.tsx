@@ -1,5 +1,5 @@
-import { AddRounded, ChevronRightRounded, PersonSearchRounded, SearchRounded, ShieldOutlined } from '@mui/icons-material'
-import { Avatar, Box, Button, Chip, InputAdornment, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from '@mui/material'
+import { AddRounded, ChevronRightRounded, CloudDownloadRounded, PersonSearchRounded, SearchRounded, ShieldOutlined } from '@mui/icons-material'
+import { Avatar, Box, Button, Chip, InputAdornment, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from '@mui/material'
 import type { PatientItem } from '../../api/types'
 import { initialsOf } from '../../shared/text'
 import { consentLabels } from './consentLabels'
@@ -10,9 +10,10 @@ type PatientsListProps = {
   patients: PatientItem[]
   onPatient: (patient: PatientItem) => void
   onCreate: () => void
+  onImport?: () => void
 }
 
-export function PatientsList({ query, setQuery, patients, onPatient, onCreate }: PatientsListProps) {
+export function PatientsList({ query, setQuery, patients, onPatient, onCreate, onImport }: PatientsListProps) {
   return (
     <>
       <Box className="section-intro">
@@ -20,7 +21,10 @@ export function PatientsList({ query, setQuery, patients, onPatient, onCreate }:
           <Typography variant="h4" sx={{ fontWeight: 750 }}>Пациенты</Typography>
           <Typography sx={{ color: 'text.secondary' }}>Все пациенты, доступные вашей роли</Typography>
         </Box>
-        <Button variant="contained" startIcon={<AddRounded />} onClick={onCreate}>Новый пациент</Button>
+        <Stack direction="row" spacing={1}>
+          {onImport && <Button variant="outlined" startIcon={<CloudDownloadRounded />} onClick={onImport}>Импорт PostgreSQL</Button>}
+          <Button variant="contained" startIcon={<AddRounded />} onClick={onCreate}>Новый пациент</Button>
+        </Stack>
       </Box>
       <TextField
         fullWidth

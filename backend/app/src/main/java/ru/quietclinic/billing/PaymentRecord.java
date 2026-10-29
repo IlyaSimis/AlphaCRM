@@ -28,7 +28,17 @@ class PaymentRecord {
   String fiscalStatus;
 
   @Column(nullable = false)
+  String method;
+
+  @Column(nullable = false)
   Instant createdAt;
+
+  Instant completedAt;
+
+  @Column(nullable = false)
+  Instant updatedAt;
+
+  String failureReason;
 
   protected PaymentRecord() {}
 }

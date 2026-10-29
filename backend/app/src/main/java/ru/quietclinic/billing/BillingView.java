@@ -9,4 +9,6 @@ record BillingView(
     String chargeStatus,
     UUID paymentId,
     String paymentStatus,
-    String fiscalStatus) {}
+    String fiscalStatus,
+    String paymentMethod,
+    String failureReason) {}

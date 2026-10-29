@@ -64,6 +64,16 @@ services:
       CLINIC_ASSISTANT_API_KEY: ${CLINIC_ASSISTANT_API_KEY:-}
       CLINIC_ASSISTANT_MODEL: ${CLINIC_ASSISTANT_MODEL:-gpt-5.4-nano}
       CLINIC_ASSISTANT_API_URL: ${CLINIC_ASSISTANT_API_URL:-https://api.openai.com/v1}
+      # Mango Office: исходящие callback и подписанные webhook о звонках.
+      MANGO_API_KEY: ${MANGO_API_KEY:-}
+      MANGO_API_SALT: ${MANGO_API_SALT:-}
+      MANGO_API_URL: ${MANGO_API_URL:-https://app.mango-office.ru}
+      MANGO_DEFAULT_EXTENSION: ${MANGO_DEFAULT_EXTENSION:-}
+      MANGO_LINE_NUMBER: ${MANGO_LINE_NUMBER:-}
+      MANGO_CLINIC_ID: ${MANGO_CLINIC_ID:-}
+      # Терминал: секрет подписи ответов адаптера банка.
+      TERMINAL_PROVIDER: ${TERMINAL_PROVIDER:-generic}
+      TERMINAL_WEBHOOK_SECRET: ${TERMINAL_WEBHOOK_SECRET:-}
     volumes:
       - quiet-clinic-drive:/var/lib/alphacrm/drive
     depends_on:

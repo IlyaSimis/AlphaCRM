@@ -77,6 +77,7 @@ flowchart TB
     insights["insights<br/>персональный дашборд"]
     workspace["workspace<br/>личные задачи, заметки, произвольные поля и представления"]
     assistant["assistant<br/>навигация по разрешённым страницам"]
+    telephony["telephony<br/>Mango callback, журнал звонков"]
     platform["platform<br/>ошибки, шифрование, KMS, clinicId(),<br/>разрешения ролей, доменные события"]
 
     scheduling -->|"CareRelationshipService"| clinical
