@@ -41,3 +41,7 @@ databaseChangeLog:
       file: db/changelog/020-terminal-payments.sql
   - include:
       file: db/changelog/021-patient-profile.sql
+  - include:
+      file: db/changelog/022-patient-privacy.sql
+  - include:
+      file: db/changelog/023-patient-contracts.sql

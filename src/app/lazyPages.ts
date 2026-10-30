@@ -9,6 +9,8 @@ export const SalesPage = lazy(() => import('../features/finance/SalesPage').then
 export const ContractsPage = lazy(() => import('../features/hr/HrPages').then((module) => ({ default: module.ContractsPage })))
 export const MyContractPage = lazy(() => import('../features/hr/HrPages').then((module) => ({ default: module.MyContractPage })))
 export const SignedDocuments = lazy(() => import('../features/documents/SignedDocuments').then((module) => ({ default: module.SignedDocuments })))
+export const PatientContracts = lazy(() => import('../features/contracts/PatientContracts').then((module) => ({ default: module.PatientContracts })))
+export const ContractTemplatesPage = lazy(() => import('../features/contracts/ContractTemplatesPage').then((module) => ({ default: module.ContractTemplatesPage })))
 export const PatientFiles = lazy(() => import('../features/files/PatientFiles').then((module) => ({ default: module.PatientFiles })))
 export const OutboxPage = lazy(() => import('../features/outbox/OutboxPage').then((module) => ({ default: module.OutboxPage })))
 export const PatientCard = lazy(() => import('../features/patients/PatientCard').then((module) => ({ default: module.PatientCard })))

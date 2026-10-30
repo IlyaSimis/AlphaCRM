@@ -17,9 +17,11 @@ import org.springframework.stereotype.Component;
 @Component
 class NoticeSource {
   private final JdbcTemplate jdbc;
+  private final ru.quietclinic.patients.PatientContactGateway patientContacts;
 
-  NoticeSource(JdbcTemplate jdbc) {
+  NoticeSource(JdbcTemplate jdbc, ru.quietclinic.patients.PatientContactGateway patientContacts) {
     this.jdbc = jdbc;
+    this.patientContacts = patientContacts;
   }
 
   Optional<AppointmentNotice> load(UUID appointmentId) {
@@ -70,11 +72,6 @@ class NoticeSource {
   }
 
   private String telegramChatId(UUID patientId) {
-    var values =
-        jdbc.queryForList(
-            "select contact_value from patient_contact where patient_id = ? and type = 'TELEGRAM'",
-            String.class,
-            patientId);
-    return values.isEmpty() ? null : values.get(0);
+    return patientContacts.value(patientId, "TELEGRAM").orElse(null);
   }
 }

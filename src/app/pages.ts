@@ -3,24 +3,25 @@ import { can } from '../shared/permissions'
 
 export type Page =
   | 'today' | 'workspace' | 'analytics' | 'hr-me' | 'staff' | 'hr' | 'audit' | 'break-glass' | 'outbox'
-  | 'schedule' | 'patients' | 'patient' | 'visit' | 'registry' | 'documents' | 'hours'
+  | 'schedule' | 'patients' | 'patient' | 'visit' | 'registry' | 'documents' | 'contract-templates' | 'hours'
   | 'stock-balances' | 'stock-items' | 'stock-documents' | 'stock-marking' | 'stock-norms'
   | 'cashier' | 'sales' | 'prices'
   | 'drive' | 'drive-shared' | 'drive-trash'
 
 /** Сервис — вкладка верхней панели; его разделы — в боковом меню. */
-export type Service = 'dashboards' | 'management' | 'patients' | 'inventory' | 'finance' | 'drive'
+export type Service = 'dashboards' | 'management' | 'patients' | 'documents' | 'inventory' | 'finance' | 'drive'
 
 export const serviceTitles: Record<Service, string> = {
   dashboards: 'Дашборды',
   management: 'Управление',
   patients: 'База данных пациентов',
+  documents: 'Документы',
   inventory: 'Склад',
   finance: 'Финансы',
   drive: 'Диск',
 }
 
-export const services: Service[] = ['dashboards', 'management', 'patients', 'inventory', 'finance', 'drive']
+export const services: Service[] = ['dashboards', 'management', 'patients', 'documents', 'inventory', 'finance', 'drive']
 
 export const pageTitles: Record<Page, string> = {
   today: 'Сегодня',
@@ -38,6 +39,7 @@ export const pageTitles: Record<Page, string> = {
   visit: 'Приём пациента',
   registry: 'Регистратура',
   documents: 'Подписанные документы',
+  'contract-templates': 'Шаблоны договоров',
   hours: 'График врачей',
   'stock-balances': 'Остатки',
   'stock-items': 'Номенклатура',
@@ -62,6 +64,9 @@ export const serviceSections: Record<Service, Array<{ label: string; pages: Page
   ],
   patients: [
     { label: 'РАБОТА С ПАЦИЕНТАМИ', pages: ['schedule', 'patients', 'registry', 'documents'] },
+  ],
+  documents: [
+    { label: 'ДОГОВОРЫ', pages: ['contract-templates'] },
   ],
   inventory: [
     { label: 'СКЛАД', pages: ['stock-balances', 'stock-items', 'stock-documents'] },
@@ -99,6 +104,7 @@ function allowed(page: Page, role: Role): boolean {
     case 'visit': return canWriteClinical(role)
     case 'registry': return canSeeRegistry(role)
     case 'documents': return canSeeSignedDocuments(role)
+    case 'contract-templates': return canSeeStaff(role) && can(role, 'clinical.patient.read', 'clinical.patient.contacts-read')
     case 'hours': return can(role, 'schedule.practitioner.manage')
     case 'stock-balances': return can(role, 'inventory.stock.read')
     case 'stock-items': return can(role, 'inventory.item.read')

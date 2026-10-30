@@ -9,13 +9,12 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "patient")
@@ -47,10 +46,11 @@ class Patient {
    */
   UUID assignedStaffId;
 
-  /** Адрес, документы, работа, договор, представители и настройки уведомлений. */
-  @JdbcTypeCode(SqlTypes.JSON)
-  @Column(columnDefinition = "jsonb")
-  PatientProfile profile;
+  /** В БД — только AES-GCM шифртекст; открытый документ существует лишь в памяти сервиса. */
+  @Column(name = "profile", columnDefinition = "text")
+  String profileEncrypted;
+
+  @Transient PatientProfile profile;
 
   @OneToMany(mappedBy = "patient", cascade = CascadeType.ALL, orphanRemoval = true)
   List<Contact> contacts = new ArrayList<>();

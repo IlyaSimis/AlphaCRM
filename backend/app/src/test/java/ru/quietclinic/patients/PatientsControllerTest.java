@@ -256,7 +256,10 @@ class PatientsControllerTest {
             "select contact_value from patient_contact where patient_id = ? and type = 'TELEGRAM'",
             String.class,
             java.util.UUID.fromString(id));
-    org.assertj.core.api.Assertions.assertThat(stored).isEqualTo("987654321");
+    org.assertj.core.api.Assertions.assertThat(stored)
+        .isNotEqualTo("987654321")
+        .doesNotContain("987654321")
+        .startsWith("dev-v1.");
     mvc.perform(get("/api/v1/patients/" + id).with(staff.doctor(StaffSessions.PETROV)))
         .andExpect(content().string(not(containsString("987654321"))));
 
@@ -377,7 +380,12 @@ class PatientsControllerTest {
                 "select contact_value from patient_contact where patient_id = ?",
                 String.class,
                 java.util.UUID.fromString(id)))
-        .containsExactly("+70000000301");
+        .singleElement()
+        .satisfies(
+            value ->
+                org.assertj.core.api.Assertions.assertThat(value)
+                    .doesNotContain("70000000301")
+                    .startsWith("dev-v1."));
     org.assertj.core.api.Assertions.assertThat(
             jdbc.queryForObject(
                 "select reason from audit_event where action = 'PATIENT_UPDATED'"
@@ -513,6 +521,14 @@ class PatientsControllerTest {
             .getResponse()
             .getContentAsString();
     String id = JsonPath.read(created, "$.id");
+    var storedProfile =
+        jdbc.queryForObject(
+            "select profile from patient where id = ?",
+            String.class,
+            java.util.UUID.fromString(id));
+    org.assertj.core.api.Assertions.assertThat(storedProfile)
+        .startsWith("dev-v1.")
+        .doesNotContain("4523 293608", "123-456-789 01", "Борис Симис", "После 18:00");
     java.util.Map<String, Object> profile = JsonPath.read(created, "$.profile");
     org.assertj.core.api.Assertions.assertThat(profile)
         .containsEntry("lastName", "Симис")

@@ -13,8 +13,8 @@ import { canEditPatients, canManagePrices, canManageRegistry, canSeePatients, ca
 import type { ClinicData } from './useClinicData'
 import { driveView, stockSection, type Page } from './pages'
 import {
-  Analytics, AuditLog, BreakGlassLog, Cashier, ContractsPage, DrivePage, InventoryPage, MyContractPage,
-  OutboxPage, PatientCard, PatientFiles, PatientsList, RegistryPage, RegistryPanel, SalesPage,
+  Analytics, AuditLog, BreakGlassLog, Cashier, ContractsPage, ContractTemplatesPage, DrivePage, InventoryPage, MyContractPage,
+  OutboxPage, PatientCard, PatientContracts, PatientFiles, PatientsList, RegistryPage, RegistryPanel, SalesPage,
   SettingsPage, SignedDocuments, StaffPage, Visit, WorkspacePage,
 } from './lazyPages'
 
@@ -76,10 +76,14 @@ export function WorkspaceContent(props: WorkspaceContentProps) {
       {page === 'schedule' && <Schedule role={role} doctorId={doctorId} date={scheduleDate} view={clinic.scheduleView} appointments={scheduleItems} practitioners={practitioners} doctorFilter={doctorFilter} onDoctorFilter={onDoctorFilter} apiOnline={clinic.apiOnline} onDate={clinic.setScheduleDate} onView={clinic.setScheduleView} onBooking={onOpenBooking} onStatus={(item, to) => clinic.changeStatus(item, to, role)} onPatient={onOpenPatientOf} onStartVisit={onStartVisit} onReschedule={onReschedule} onCancel={(item) => clinic.cancelBooking(item, role)} waitlistCount={(item) => registry.matches(item.practitionerId, item.date).length} onWaitlist={onWaitlist} />}
       {page === 'patients' && <PatientsList query={query} setQuery={onQuery} patients={visiblePatients} onPatient={onOpenPatient} onCreate={onCreatePatient} onImport={clinic.apiOnline && canEditPatients(role) ? onImportPatients : undefined} />}
       {page === 'patient' && selectedPatient && <PatientCard key={selectedPatient.id} patient={selectedPatient} role={role} doctorId={doctorId} apiOnline={clinic.apiOnline} appointments={scheduleItems} practitioners={practitioners} revision={clinic.revision}
-        files={<PatientFiles key={selectedPatient.id} patientId={selectedPatient.id} role={role} apiOnline={clinic.apiOnline} notify={clinic.notify} />}
+        files={<Box>
+          <PatientContracts patientId={selectedPatient.id} role={role} apiOnline={clinic.apiOnline} services={clinic.services} notify={clinic.notify} />
+          <PatientFiles patientId={selectedPatient.id} role={role} apiOnline={clinic.apiOnline} notify={clinic.notify} />
+        </Box>}
         registry={canSeeRegistry(role) ? <RegistryPanel patient={selectedPatient} sharedWith={sharedPhone(selectedPatient)} admin={canManageRegistry(role)} selfId={staff.id} registry={registry} onOpenPatient={onOpenPatientById} onSave={(input) => clinic.updateRegistry(selectedPatient, input)} /> : undefined}
         onEdit={() => onEditPatient(selectedPatient)} onBack={() => onNavigate('patients')} onCancel={(item) => clinic.cancelBooking(item, role)} onReschedule={onReschedule} onOpenEncounter={(encounter) => onOpenEncounter(selectedPatient, encounter)} onGrantConsent={(input) => clinic.grantConsent(selectedPatient, input)} onRevokeConsent={(consentId) => clinic.revokeConsent(selectedPatient, consentId)} />}
       {page === 'documents' && <SignedDocuments role={role} apiOnline={clinic.apiOnline} practitioners={practitioners} />}
+      {page === 'contract-templates' && <ContractTemplatesPage role={role} apiOnline={clinic.apiOnline} notify={clinic.notify} />}
       {page === 'registry' && <RegistryPage staff={staff} registry={registry} patients={patientItems} practitioners={practitioners} services={clinic.services} />}
       {page === 'analytics' && <Analytics apiOnline={clinic.apiOnline} anchor={scheduleDate} practitioners={practitioners} scheduleItems={scheduleItems} />}
       {page === 'audit' && <AuditLog apiOnline={clinic.apiOnline} />}

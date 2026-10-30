@@ -28,27 +28,30 @@ class TelephonyService {
   private final JsonMapper json;
   private final MangoGateway mango;
   private final AuditService audit;
+  private final ru.quietclinic.patients.PatientContactGateway patientContacts;
 
-  TelephonyService(JdbcTemplate jdbc, JsonMapper json, MangoGateway mango, AuditService audit) {
+  TelephonyService(
+      JdbcTemplate jdbc,
+      JsonMapper json,
+      MangoGateway mango,
+      AuditService audit,
+      ru.quietclinic.patients.PatientContactGateway patientContacts) {
     this.jdbc = jdbc;
     this.json = json;
     this.mango = mango;
     this.audit = audit;
+    this.patientContacts = patientContacts;
   }
 
   CallView start(UUID patientId, String requestedExtension) {
     requirePermission(Permission.PATIENT_CONTACTS_READ);
     if (!mango.configured())
       throw conflict("TELEPHONY_NOT_CONFIGURED", "Mango integration is not configured");
-    var phones =
-        jdbc.queryForList(
-            "select c.contact_value from patient p join patient_contact c on c.patient_id = p.id"
-                + " where p.id = ? and p.clinic_id = ? and c.type = 'PHONE'",
-            String.class,
-            patientId,
-            clinicId());
-    if (phones.isEmpty()) throw notFound("PATIENT_NOT_FOUND", "Patient not found");
-    var phone = normalize(phones.get(0));
+    var phone =
+        normalize(
+            patientContacts
+                .value(patientId, clinicId(), "PHONE")
+                .orElseThrow(() -> notFound("PATIENT_NOT_FOUND", "Patient not found")));
     if (phone.isEmpty()) throw conflict("PATIENT_PHONE_MISSING", "Patient has no callable phone");
     var extension =
         requestedExtension == null || requestedExtension.isBlank()
@@ -252,20 +255,7 @@ class TelephonyService {
   private UUID uniquePatient(String phone) {
     var normalized = normalize(phone);
     if (normalized.isEmpty()) return null;
-    var rows =
-        jdbc.query(
-            "select p.id, c.contact_value from patient p"
-                + " join patient_contact c on c.patient_id = p.id"
-                + " where p.clinic_id = ? and c.type in ('PHONE', 'SECOND_PHONE')",
-            (rs, row) ->
-                new PhoneRow(rs.getObject("id", UUID.class), rs.getString("contact_value")),
-            clinicId());
-    var matches =
-        rows.stream()
-            .filter(row -> normalize(row.phone).equals(normalized))
-            .map(PhoneRow::id)
-            .distinct()
-            .toList();
+    var matches = patientContacts.exactPhoneOwners(clinicId(), normalized);
     return matches.size() == 1 ? matches.get(0) : null;
   }
 
@@ -297,6 +287,4 @@ class TelephonyService {
   }
 
   private record CallRow(UUID id, UUID patientId, int sequence) {}
-
-  private record PhoneRow(UUID id, String phone) {}
 }

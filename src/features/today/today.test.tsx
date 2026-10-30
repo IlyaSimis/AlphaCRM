@@ -101,7 +101,7 @@ describe('«Сегодня» — домашняя страница', () => {
     renderApp()
     await enterDemo(user, 'ADMINISTRATOR')
     const tabs = screen.getByRole('tablist', { name: 'Сервисы' })
-    expect(within(tabs).getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Дашборды', 'Управление', 'База данных пациентов', 'Склад', 'Финансы', 'Диск'])
+    expect(within(tabs).getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Дашборды', 'Управление', 'База данных пациентов', 'Документы', 'Склад', 'Финансы', 'Диск'])
     expect(within(tabs).getByRole('tab', { name: 'Дашборды' })).toHaveAttribute('aria-selected', 'true')
     const overview = within(sidebar()).getByRole('navigation', { name: 'Обзор' })
     expect(within(overview).getAllByRole('button').map((button) => button.textContent)).toEqual(['Сегодня', 'Моё пространство', 'Аналитика', 'Мои условия работы'])

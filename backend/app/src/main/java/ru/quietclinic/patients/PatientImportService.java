@@ -28,16 +28,22 @@ class PatientImportService {
   private final PatientRepository patients;
   private final ContactRepository contacts;
   private final AuditService audit;
+  private final PatientPrivacyService privacy;
+  private final ContactTokenService tokens;
 
   PatientImportService(
       PostgresPatientReader reader,
       PatientRepository patients,
       ContactRepository contacts,
-      AuditService audit) {
+      AuditService audit,
+      PatientPrivacyService privacy,
+      ContactTokenService tokens) {
     this.reader = reader;
     this.patients = patients;
     this.contacts = contacts;
     this.audit = audit;
+    this.privacy = privacy;
+    this.tokens = tokens;
   }
 
   @Transactional(readOnly = true)
@@ -74,9 +80,11 @@ class PatientImportService {
 
   private Processed process(ImportRequest request, boolean save) {
     var existing = patients.findByClinicIdOrderByFullName(clinicId());
+    existing.forEach(privacy::decrypt);
     var phones = new HashMap<String, Patient>();
     for (var contact :
         contacts.findByTypeInAndPatientClinicId(PhoneIndex.PHONE_TYPES, clinicId())) {
+      privacy.decrypt(contact);
       var key = normalizePhone(contact.value);
       if (!key.isEmpty()) phones.putIfAbsent(key, contact.patient);
     }
@@ -143,7 +151,12 @@ class PatientImportService {
         candidates.add(patient);
       }
     }
-    if (save) patients.saveAll(candidates);
+    if (save) {
+      candidates.forEach(privacy::encrypt);
+      patients.saveAll(candidates);
+      patients.flush();
+      candidates.forEach(tokens::rebuild);
+    }
     return new Processed(number, newCount, duplicates, errors, rows);
   }
 

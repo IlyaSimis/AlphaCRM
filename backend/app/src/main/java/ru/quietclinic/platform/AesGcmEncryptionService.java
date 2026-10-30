@@ -19,6 +19,10 @@ class AesGcmEncryptionService implements EncryptionService {
   }
 
   public String encrypt(String plaintext) {
+    return encrypt(plaintext, null);
+  }
+
+  public String encrypt(String plaintext, String aad) {
     if (plaintext == null) return null;
     try {
       var nonce = new byte[12];
@@ -28,6 +32,7 @@ class AesGcmEncryptionService implements EncryptionService {
           Cipher.ENCRYPT_MODE,
           new SecretKeySpec(kms.dataKey(), "AES"),
           new GCMParameterSpec(128, nonce));
+      updateAad(cipher, aad);
       var encrypted = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
       return kms.keyVersion()
           + "."
@@ -44,17 +49,24 @@ class AesGcmEncryptionService implements EncryptionService {
   }
 
   public String decrypt(String ciphertext) {
+    return decrypt(ciphertext, null);
+  }
+
+  public String decrypt(String ciphertext, String aad) {
     if (ciphertext == null) return null;
     try {
-      var encoded = ciphertext.substring(ciphertext.indexOf('.') + 1);
-      var packed = Base64.getUrlDecoder().decode(encoded);
+      var separator = ciphertext.indexOf('.');
+      if (separator < 1) throw new IllegalArgumentException("Missing key version");
+      var version = ciphertext.substring(0, separator);
+      var packed = Base64.getUrlDecoder().decode(ciphertext.substring(separator + 1));
       var nonce = java.util.Arrays.copyOfRange(packed, 0, 12);
       var encrypted = java.util.Arrays.copyOfRange(packed, 12, packed.length);
       var cipher = Cipher.getInstance("AES/GCM/NoPadding");
       cipher.init(
           Cipher.DECRYPT_MODE,
-          new SecretKeySpec(kms.dataKey(), "AES"),
+          new SecretKeySpec(kms.dataKey(version), "AES"),
           new GCMParameterSpec(128, nonce));
+      updateAad(cipher, aad);
       return new String(cipher.doFinal(encrypted), StandardCharsets.UTF_8);
     } catch (Exception ex) {
       throw new IllegalStateException("Decryption failed", ex);
@@ -90,16 +102,35 @@ class AesGcmEncryptionService implements EncryptionService {
   public byte[] decryptBytes(byte[] ciphertext) {
     if (ciphertext == null) return null;
     try {
-      var offset = 1 + (ciphertext[0] & 0xff);
+      var versionLength = ciphertext[0] & 0xff;
+      var version = new String(ciphertext, 1, versionLength, StandardCharsets.UTF_8);
+      var offset = 1 + versionLength;
       var nonce = java.util.Arrays.copyOfRange(ciphertext, offset, offset + 12);
       var cipher = Cipher.getInstance("AES/GCM/NoPadding");
       cipher.init(
           Cipher.DECRYPT_MODE,
-          new SecretKeySpec(kms.dataKey(), "AES"),
+          new SecretKeySpec(kms.dataKey(version), "AES"),
           new GCMParameterSpec(128, nonce));
       return cipher.doFinal(ciphertext, offset + 12, ciphertext.length - offset - 12);
     } catch (Exception ex) {
       throw new IllegalStateException("Decryption failed", ex);
     }
+  }
+
+  public String blindIndex(String purpose, String normalizedValue) {
+    try {
+      var mac = javax.crypto.Mac.getInstance("HmacSHA256");
+      mac.init(new SecretKeySpec(kms.indexKey(), "HmacSHA256"));
+      mac.update(purpose.getBytes(StandardCharsets.UTF_8));
+      mac.update((byte) 0);
+      return java.util.HexFormat.of()
+          .formatHex(mac.doFinal(normalizedValue.getBytes(StandardCharsets.UTF_8)));
+    } catch (Exception ex) {
+      throw new IllegalStateException("Blind index failed", ex);
+    }
+  }
+
+  private static void updateAad(Cipher cipher, String aad) {
+    if (aad != null) cipher.updateAAD(aad.getBytes(StandardCharsets.UTF_8));
   }
 }

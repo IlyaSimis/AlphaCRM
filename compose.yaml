@@ -37,6 +37,8 @@ services:
       DATABASE_USER: ${POSTGRES_USER:-quiet_clinic}
       DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?Задайте POSTGRES_PASSWORD в .env}
       CLINIC_DEV_KMS_KEY: ${CLINIC_KMS_KEY:?Задайте CLINIC_KMS_KEY в .env (scripts/init-env.sh)}
+      CLINIC_KMS_KEY_VERSION: ${CLINIC_KMS_KEY_VERSION:-dev-v1}
+      CLINIC_KMS_KEYS: ${CLINIC_KMS_KEYS:-}
       # Пустая база: клиника и её администратор admin. Пароль обязателен (scripts/init-env.sh).
       CLINIC_NAME: ${CLINIC_NAME:-AlphaCRM}
       CLINIC_ADMIN_NAME: ${CLINIC_ADMIN_NAME:-Администратор}
@@ -60,6 +62,8 @@ services:
       # Корпоративный диск: зашифрованные файлы в томе quiet-clinic-drive.
       CLINIC_DRIVE_STORAGE_DIR: /var/lib/alphacrm/drive
       CLINIC_DRIVE_QUOTA_BYTES: ${CLINIC_DRIVE_QUOTA_BYTES:-10737418240}
+      # PDF договоров: опциональный путь к LibreOffice внутри backend-контейнера.
+      CLINIC_CONTRACT_LIBREOFFICE_BINARY: ${CLINIC_CONTRACT_LIBREOFFICE_BINARY:-}
       # ИИ-навигатор. Пустой ключ — локальный поиск работает, обращения к модели выключены.
       CLINIC_ASSISTANT_API_KEY: ${CLINIC_ASSISTANT_API_KEY:-}
       CLINIC_ASSISTANT_MODEL: ${CLINIC_ASSISTANT_MODEL:-gpt-5.4-nano}

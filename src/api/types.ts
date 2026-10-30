@@ -109,6 +109,26 @@ export type PatientFileItem = {
   signedAt?: string | null
 }
 
+export type ContractTemplateItem = {
+  id: string
+  name: string
+  originalName: string
+  version: number
+  placeholders: string[]
+  createdAt: string
+}
+
+export type PatientContractItem = {
+  id: string
+  patientId: string
+  contractNumber: string
+  templateName: string
+  serviceName?: string | null
+  pdfAvailable: boolean
+  createdAt: string
+  createdByName?: string | null
+}
+
 /** Поля регистратуры. telegramChatId: пусто — не менять; removeTelegram — отключить Telegram. */
 export type RegistryInput = { referralSource: string | null; registryNote: string | null; telegramChatId?: string | null; removeTelegram?: boolean }
 

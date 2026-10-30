@@ -51,6 +51,9 @@ logging:
 
 clinic:
   dev-kms-key: ${CLINIC_DEV_KMS_KEY:local-dev-key-change-me}
+  # Текущая версия для новых записей; прежние версии перечисляются через запятую: v2=secret,v3=secret.
+  kms-key-version: ${CLINIC_KMS_KEY_VERSION:dev-v1}
+  kms-keys: ${CLINIC_KMS_KEYS:}
   # Пустая база: клиника и её администратор admin (см. ClinicBootstrap). Пароля в коде нет.
   name: ${CLINIC_NAME:AlphaCRM}
   # ФИО начального администратора — данные, поэтому по-русски и в конфигурации, а не в коде.
@@ -128,6 +131,9 @@ clinic:
     keep-versions: ${CLINIC_DRIVE_KEEP_VERSIONS:20}
     trash-days: ${CLINIC_DRIVE_TRASH_DAYS:30}
     max-link-days: ${CLINIC_DRIVE_MAX_LINK_DAYS:30}
+  contracts:
+    # Необязательный PDF: путь к LibreOffice. Пусто — договоры формируются и скачиваются в DOCX.
+    libreoffice-binary: ${CLINIC_CONTRACT_LIBREOFFICE_BINARY:}
   assistant:
     # OpenAI-compatible API. Ключ только на backend; пусто — доступен локальный поиск без модели.
     api-key: ${CLINIC_ASSISTANT_API_KEY:}

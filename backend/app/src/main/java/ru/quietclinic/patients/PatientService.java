@@ -32,22 +32,29 @@ class PatientService {
   private final ContactRepository contacts;
   private final AuditService audit;
   private final JdbcTemplate jdbc;
+  private final PatientPrivacyService privacy;
+  private final ContactTokenService tokens;
 
   PatientService(
       PatientRepository patients,
       ContactRepository contacts,
       AuditService audit,
-      JdbcTemplate jdbc) {
+      JdbcTemplate jdbc,
+      PatientPrivacyService privacy,
+      ContactTokenService tokens) {
     this.patients = patients;
     this.contacts = contacts;
     this.audit = audit;
     this.jdbc = jdbc;
+    this.privacy = privacy;
+    this.tokens = tokens;
   }
 
   /** Карточки, у которых совпадает основной или второй телефон, — предупреждение регистратуре. */
   private PhoneIndex phoneIndex() {
-    return new PhoneIndex(
-        contacts.findByTypeInAndPatientClinicId(PhoneIndex.PHONE_TYPES, clinicId()));
+    var rows = contacts.findByTypeInAndPatientClinicId(PhoneIndex.PHONE_TYPES, clinicId());
+    rows.forEach(privacy::decrypt);
+    return new PhoneIndex(rows);
   }
 
   /** Сотрудники своей клиники по id — для подписи постоянного администратора. */
@@ -131,9 +138,14 @@ class PatientService {
           .findTop20ByClinicIdAndFullNameContainingIgnoreCaseOrderByFullName(
               clinicId(), query.trim())
           .forEach(p -> matches.put(p.id, p));
-      // Телефоны сравниваем по цифрам в уже загруженном индексе клиники: формат и 8/+7 не важны.
+      // HMAC префикса ищет без открытого номера; старый индекс охватывает ещё не мигрированные
+      // строки.
+      patients
+          .findAllById(tokens.phoneMatches(clinicId(), query))
+          .forEach(p -> matches.putIfAbsent(p.id, p));
       index.matching(query).forEach(p -> matches.putIfAbsent(p.id, p));
     }
+    matches.values().forEach(privacy::decrypt);
     var result =
         matches.values().stream()
             .sorted(
@@ -162,7 +174,9 @@ class PatientService {
     patient.clinicId = clinicId();
     patient.update(request.details());
     patient.consents.add(new Consent(patient, request.consentVersion(), request.consentBasis()));
-    patients.save(patient);
+    privacy.encrypt(patient);
+    patients.saveAndFlush(patient);
+    tokens.rebuild(patient);
     audit.record(actorId(), "PATIENT_CREATED", "PATIENT", patient.id, "ALLOWED", "registration");
     return view(patient);
   }
@@ -185,7 +199,9 @@ class PatientService {
     var patient = find(id);
     checkAssignable(request.assignedStaffId(), patient.assignedStaffId);
     var changed = patient.update(request.details());
-    patients.save(patient);
+    privacy.encrypt(patient);
+    patients.saveAndFlush(patient);
+    tokens.rebuild(patient);
     // В аудит пишутся только имена изменённых полей, без значений.
     audit.record(
         actorId(),
@@ -232,7 +248,9 @@ class PatientService {
         request.telegramChatId(), Boolean.TRUE.equals(request.removeTelegram()))) {
       changed.add("telegram");
     }
+    privacy.encrypt(patient);
     patients.saveAndFlush(patient);
+    tokens.rebuild(patient);
     audit.record(
         actorId(),
         "PATIENT_REGISTRY_UPDATED",
@@ -244,8 +262,11 @@ class PatientService {
   }
 
   private Patient find(UUID id) {
-    return patients
-        .findByIdAndClinicId(id, clinicId())
-        .orElseThrow(() -> notFound("PATIENT_NOT_FOUND", "Patient not found"));
+    var patient =
+        patients
+            .findByIdAndClinicId(id, clinicId())
+            .orElseThrow(() -> notFound("PATIENT_NOT_FOUND", "Patient not found"));
+    privacy.decrypt(patient);
+    return patient;
   }
 }

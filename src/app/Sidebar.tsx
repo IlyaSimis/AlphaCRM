@@ -21,6 +21,7 @@ const pageIcons: Partial<Record<Page, ReactNode>> = {
   patients: <PeopleAltRounded />,
   registry: <ContactPhoneRounded />,
   documents: <ArticleRounded />,
+  'contract-templates': <DescriptionRounded />,
   hours: <EventNoteRounded />,
   'stock-balances': <Inventory2Rounded />,
   'stock-items': <ListAltRounded />,

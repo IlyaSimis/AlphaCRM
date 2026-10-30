@@ -31,11 +31,20 @@ public class TelegramPatients {
   private final PatientRepository patients;
   private final ContactRepository contacts;
   private final AuditService audit;
+  private final PatientPrivacyService privacy;
+  private final ContactTokenService tokens;
 
-  TelegramPatients(PatientRepository patients, ContactRepository contacts, AuditService audit) {
+  TelegramPatients(
+      PatientRepository patients,
+      ContactRepository contacts,
+      AuditService audit,
+      PatientPrivacyService privacy,
+      ContactTokenService tokens) {
     this.patients = patients;
     this.contacts = contacts;
     this.audit = audit;
+    this.privacy = privacy;
+    this.tokens = tokens;
   }
 
   /** Самая новая карточка клиники с этим chat id. */
@@ -48,7 +57,13 @@ public class TelegramPatients {
   @Transactional(readOnly = true)
   public Optional<TelegramPatient> find(UUID patientId) {
     requireRole(ROLE);
-    return patients.findByIdAndClinicId(patientId, clinicId()).map(TelegramPatient::of);
+    return patients
+        .findByIdAndClinicId(patientId, clinicId())
+        .map(
+            patient -> {
+              privacy.decrypt(patient);
+              return TelegramPatient.of(patient);
+            });
   }
 
   /**
@@ -74,6 +89,7 @@ public class TelegramPatients {
     var alreadyLinked = linked(request.chatId());
     var existing =
         contacts.findByTypeInAndPatientClinicId(PhoneIndex.PHONE_TYPES, clinicId()).stream()
+            .peek(privacy::decrypt)
             .filter(c -> PhoneIndex.normalize(c.value).equals(phoneKey))
             .map(c -> c.patient)
             .filter(p -> request.birthDate().equals(p.birthDate))
@@ -95,7 +111,9 @@ public class TelegramPatients {
         audit.record(
             actorId(), "PATIENT_CONSENT_CHANGED", "CONSENT", consent.id, "ALLOWED", "granted");
       }
-      patients.save(patient);
+      privacy.encrypt(patient);
+      patients.saveAndFlush(patient);
+      tokens.rebuild(patient);
       return patient.id;
     }
     var patient = new Patient(name, request.birthDate());
@@ -104,18 +122,19 @@ public class TelegramPatients {
         new PatientDetails(name, request.birthDate(), request.phone(), null, null, null));
     patient.updateTelegram(request.chatId(), false);
     patient.consents.add(new Consent(patient, request.consentVersion().trim(), CONSENT_BASIS));
-    patients.save(patient);
+    privacy.encrypt(patient);
+    patients.saveAndFlush(patient);
+    tokens.rebuild(patient);
     audit.record(actorId(), "PATIENT_CREATED", "PATIENT", patient.id, "ALLOWED", REASON);
     return patient.id;
   }
 
   /** Карточки клиники с этим chat id, новые сверху. */
   private List<Patient> linked(String chatId) {
-    return contacts
-        .findByTypeAndValueAndPatientClinicId(Patient.TELEGRAM, chatId.trim(), clinicId())
-        .stream()
-        .map(c -> c.patient)
-        .distinct()
+    var result = patients.findAllById(tokens.telegramMatches(clinicId(), chatId));
+    result.removeIf(patient -> !clinicId().equals(patient.clinicId));
+    result.forEach(privacy::decrypt);
+    return result.stream()
         .sorted(Comparator.comparing((Patient p) -> p.createdAt).reversed())
         .toList();
   }

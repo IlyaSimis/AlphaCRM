@@ -1,4 +1,4 @@
-import { AdminPanelSettingsRounded, AutoAwesomeRounded, DashboardRounded, FolderSharedRounded, Inventory2Rounded, LogoutRounded, MenuRounded, PaymentsRounded, PeopleAltRounded } from '@mui/icons-material'
+import { AdminPanelSettingsRounded, AutoAwesomeRounded, DashboardRounded, DescriptionRounded, FolderSharedRounded, Inventory2Rounded, LogoutRounded, MenuRounded, PaymentsRounded, PeopleAltRounded } from '@mui/icons-material'
 import { Box, Button, Chip, IconButton, Tab, Tabs, Typography } from '@mui/material'
 import type { ReactElement } from 'react'
 import { serviceTitles, type Service } from './pages'
@@ -7,6 +7,7 @@ const serviceIcons: Record<Service, ReactElement> = {
   dashboards: <DashboardRounded />,
   management: <AdminPanelSettingsRounded />,
   patients: <PeopleAltRounded />,
+  documents: <DescriptionRounded />,
   inventory: <Inventory2Rounded />,
   finance: <PaymentsRounded />,
   drive: <FolderSharedRounded />,
