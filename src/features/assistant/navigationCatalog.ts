@@ -55,7 +55,7 @@ export function navigationCatalog(role: Role): NavigationDestination[] {
   if (!base.some((item) => item.page === 'workspace')) return base
   const index = base.findIndex((item) => item.page === 'workspace') + 1
   base.splice(index, 0,
-    { id: 'workspace-overdue', page: 'workspace', title: 'Просроченные задачи', description: 'Моё пространство с фильтром просроченных записей', keywords: ['просроченные', 'долги', 'срок прошёл', 'задачи'], workspaceIntent: { due: 'overdue' } },
+    { id: 'workspace-overdue', page: 'workspace', title: 'Просроченные задачи', description: 'Дашборды с фильтром просроченных записей', keywords: ['просроченные', 'долги', 'срок прошёл', 'задачи'], workspaceIntent: { due: 'overdue' } },
     { id: 'workspace-today', page: 'workspace', title: 'Задачи на сегодня', description: 'Личные задачи и записи со сроком сегодня', keywords: ['на сегодня', 'сегодняшние задачи', 'план дня'], workspaceIntent: { due: 'today' } },
     { id: 'workspace-notes', page: 'workspace', title: 'Мои заметки', description: 'Личные записи типа «Заметка»', keywords: ['заметки', 'мои записи', 'тексты'], workspaceIntent: { type: 'Заметка' } },
   )

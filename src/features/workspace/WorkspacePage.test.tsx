@@ -13,7 +13,7 @@ describe('workspace page', () => {
     expect(localStorage.getItem('alphacrm.workspace.staff-test')).toContain('Свободная задача пользователя')
   })
 
-  it('shows checklist items in both layouts and puts saved tags into the filter without saved views', async () => {
+  it('opens the board by default, toggles checklist items in cards and saves a tag without Enter', async () => {
     localStorage.setItem('alphacrm.workspace.staff-test', JSON.stringify({ items: [{
       id: 'task-1', title: 'Составная задача', type: 'Задача', body: '', status: 'В работе', color: 'blue', completed: false,
       dueAt: null, remindAt: null, patientId: null, appointmentId: null, tags: ['срочно'], fields: [],
@@ -23,22 +23,35 @@ describe('workspace page', () => {
     const user = userEvent.setup()
     render(<WorkspacePage apiOnline={false} selfId="staff-test" patients={[]} appointments={[]} notify={vi.fn()} />)
 
-    const list = screen.getByRole('region', { name: 'Список задач' })
-    expect(within(list).getByRole('list', { name: 'Пункты: Составная задача' })).toHaveTextContent('Подготовить документы')
-    await user.click(screen.getByRole('button', { name: 'Доска' }))
     const board = screen.getByRole('region', { name: 'Доска задач' })
+    expect(screen.queryByRole('region', { name: 'Список задач' })).not.toBeInTheDocument()
     expect(within(board).getByText('Подготовить документы')).toBeInTheDocument()
     expect(within(board).getByText('Проверить результат')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Сохранить вид' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Сбросить' })).not.toBeInTheDocument()
 
-    await user.click(within(board).getByRole('button', { name: 'Составная задача' }))
-    await user.type(screen.getByLabelText('Теги'), 'новый{enter}')
+    const checklistItem = within(board).getByRole('checkbox', { name: 'Подпункт: Подготовить документы' })
+    expect(checklistItem).not.toBeChecked()
+    await user.click(checklistItem)
+    expect(checklistItem).toBeChecked()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    await waitFor(() => {
+      const stored = JSON.parse(localStorage.getItem('alphacrm.workspace.staff-test')!)
+      expect(stored.items[0].checklist[0].done).toBe(true)
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Список' }))
+    const list = screen.getByRole('region', { name: 'Список задач' })
+    expect(within(list).getByRole('list', { name: 'Пункты: Составная задача' })).toHaveTextContent('Подготовить документы')
+    await user.click(screen.getByRole('button', { name: 'Доска' }))
+
+    await user.click(screen.getByRole('button', { name: 'Составная задача' }))
+    await user.type(screen.getByLabelText('Теги'), 'новый')
     await user.click(screen.getByRole('button', { name: 'Сохранить' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     await user.click(screen.getByRole('combobox', { name: 'Тег' }))
     expect(screen.getByRole('option', { name: 'срочно' })).toBeInTheDocument()
     await user.click(screen.getByRole('option', { name: 'новый' }))
-    expect(within(board).getByRole('button', { name: 'Составная задача' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Составная задача' })).toBeInTheDocument()
   })
 })

@@ -20,6 +20,7 @@ type WorkspaceItemDialogProps = {
 /** Одна форма для любой записи: все дополнительные блоки необязательны и добавляются по желанию. */
 export function WorkspaceItemDialog({ item, preset, patients, appointments, onClose, onSave }: WorkspaceItemDialogProps) {
   const [draft, setDraft] = useState<WorkspaceItemInput>(() => item ? inputOf(item) : blankWorkspaceItem(preset))
+  const [tagInput, setTagInput] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const patch = <K extends keyof WorkspaceItemInput>(key: K, value: WorkspaceItemInput[K]) => setDraft((current) => ({ ...current, [key]: value }))
@@ -31,10 +32,11 @@ export function WorkspaceItemDialog({ item, preset, patients, appointments, onCl
       setError('Введите название')
       return
     }
+    const tags = [...new Set([...draft.tags, tagInput].map((tag) => tag.trim()).filter(Boolean))]
     setSaving(true)
     setError('')
     try {
-      await onSave({ ...draft, title: draft.title.trim(), type: draft.type.trim() || 'Запись', status: draft.status.trim() || 'Без статуса' })
+      await onSave({ ...draft, title: draft.title.trim(), type: draft.type.trim() || 'Запись', status: draft.status.trim() || 'Без статуса', tags })
     } catch (reason) {
       setError((reason as Error).message)
       setSaving(false)
@@ -57,7 +59,7 @@ export function WorkspaceItemDialog({ item, preset, patients, appointments, onCl
             <TextField type="datetime-local" label="Время напоминания" value={workspaceDateInput(draft.remindAt)} onChange={(event) => patch('remindAt', workspaceInstant(event.target.value))} slotProps={{ inputLabel: { shrink: true } }} helperText="Напоминание появится в личном списке" />
           </Box>
           <TextField fullWidth multiline minRows={4} label="Текст" placeholder="Свободный текст, ссылки, план — без обязательной структуры" value={draft.body} onChange={(event) => patch('body', event.target.value)} slotProps={{ htmlInput: { maxLength: 30000 } }} />
-          <Autocomplete<string, true, false, true> multiple freeSolo options={[]} value={draft.tags} onChange={(_, value) => patch('tags', value.map((tag) => tag.trim()).filter(Boolean))} renderValue={(value, getItemProps) => value.map((tag, index) => <Chip {...getItemProps({ index })} key={`${tag}-${index}`} size="small" label={tag} />)} renderInput={(params) => <TextField {...params} label="Теги" placeholder="Введите и нажмите Enter" />} />
+          <Autocomplete<string, true, false, true> multiple freeSolo options={[]} value={draft.tags} inputValue={tagInput} onInputChange={(_, value) => setTagInput(value)} onChange={(_, value) => { patch('tags', value.map((tag) => tag.trim()).filter(Boolean)); setTagInput('') }} renderValue={(value, getItemProps) => value.map((tag, index) => <Chip {...getItemProps({ index })} key={`${tag}-${index}`} size="small" label={tag} />)} renderInput={(params) => <TextField {...params} label="Теги" placeholder="Введите тег и сохраните запись" />} />
           {(patients.length > 0 || appointments.length > 0) && <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
             {patients.length > 0 && <Autocomplete options={patients} value={patient} getOptionLabel={(option) => option.name} isOptionEqualToValue={(left, right) => left.id === right.id} onChange={(_, value) => { patch('patientId', value?.id ?? null); if (!value) patch('appointmentId', null) }} renderInput={(params) => <TextField {...params} label="Пациент — необязательно" />} />}
             {appointments.length > 0 && <Autocomplete options={appointments.filter((entry) => !draft.patientId || entry.patientId === draft.patientId)} value={appointment} getOptionLabel={(option) => `${option.date} ${option.time} · ${option.name}`} isOptionEqualToValue={(left, right) => left.id === right.id} onChange={(_, value) => { patch('appointmentId', value?.id ?? null); if (value?.patientId) patch('patientId', value.patientId) }} renderInput={(params) => <TextField {...params} label="Запись в расписании — необязательно" />} />}

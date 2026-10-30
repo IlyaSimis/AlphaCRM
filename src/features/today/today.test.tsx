@@ -57,7 +57,7 @@ describe('«Сегодня»', () => {
     expect(await screen.findByText('ЗАДАЧИ НА СЕГОДНЯ')).toBeInTheDocument()
     await openPage(user, 'Сегодня')
     await user.click(await screen.findByRole('button', { name: 'Открыть заметку: Идеи для клиники' }))
-    expect(await screen.findByRole('heading', { name: 'Моё пространство', level: 4 })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Дашборды', level: 4 })).toBeInTheDocument()
   })
 
   it('shows all of today’s appointments in a table and excludes cancelled ones', async () => {
@@ -121,10 +121,10 @@ describe('«Сегодня» — домашняя страница', () => {
     renderApp()
     await enterDemo(user, 'ADMINISTRATOR')
     const tabs = screen.getByRole('tablist', { name: 'Сервисы' })
-    expect(within(tabs).getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Дашборды', 'Управление', 'База данных пациентов', 'Документы', 'Склад', 'Финансы', 'Диск'])
-    expect(within(tabs).getByRole('tab', { name: 'Дашборды' })).toHaveAttribute('aria-selected', 'true')
+    expect(within(tabs).getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Мое пространство', 'Управление', 'База данных пациентов', 'Документы', 'Склад', 'Финансы', 'Диск'])
+    expect(within(tabs).getByRole('tab', { name: 'Мое пространство' })).toHaveAttribute('aria-selected', 'true')
     const overview = within(sidebar()).getByRole('navigation', { name: 'Обзор' })
-    expect(within(overview).getAllByRole('button').map((button) => button.textContent)).toEqual(['Сегодня', 'Моё пространство', 'Аналитика', 'Мои условия работы'])
+    expect(within(overview).getAllByRole('button').map((button) => button.textContent)).toEqual(['Сегодня', 'Дашборды', 'Аналитика', 'Мои условия работы'])
     expect(within(sidebar()).queryByRole('navigation', { name: 'Управление' })).not.toBeInTheDocument()
     expect(within(overview).getByRole('button', { name: 'Сегодня' })).toHaveClass('active')
     await user.click(within(tabs).getByRole('tab', { name: 'Управление' }))
@@ -143,13 +143,13 @@ describe('«Сегодня» — домашняя страница', () => {
     await openPage(user, 'Пациенты')
     await user.click(screen.getByText('Анна Михайлова'))
     expect(within(sidebar()).getByRole('button', { name: 'Пациенты' })).toHaveClass('active')
-    await user.click(within(tabs).getByRole('tab', { name: 'Дашборды' }))
+    await user.click(within(tabs).getByRole('tab', { name: 'Мое пространство' }))
     await user.click(within(tabs).getByRole('tab', { name: 'База данных пациентов' }))
     expect(within(sidebar()).getByRole('button', { name: 'Пациенты' })).toHaveClass('active')
 
     await user.click(within(sidebar()).getByRole('button', { name: 'На главную' }))
     expect(screen.getByRole('heading', { name: '20 октября 2026, вторник', level: 4 })).toBeInTheDocument()
-    expect(within(tabs).getByRole('tab', { name: 'Дашборды' })).toHaveAttribute('aria-selected', 'true')
+    expect(within(tabs).getByRole('tab', { name: 'Мое пространство' })).toHaveAttribute('aria-selected', 'true')
     // Повторное нажатие на уже открытой «Сегодня» ничего не ломает.
     await user.click(within(sidebar()).getByRole('button', { name: 'На главную' }))
     expect(screen.getByRole('heading', { name: '20 октября 2026, вторник', level: 4 })).toBeInTheDocument()
@@ -162,7 +162,7 @@ describe('«Сегодня» — домашняя страница', () => {
     expect(within(content()).queryByText('Администратор песочницы')).not.toBeInTheDocument()
   })
 
-  it('the doctor starts with the schedule; «Дашборды» hold only his own terms; the AlphaCRM button returns to the schedule and keeps open visits', async () => {
+  it('the doctor starts with the schedule; «Мое пространство» hold only his own terms; the AlphaCRM button returns to the schedule and keeps open visits', async () => {
     goOffline()
     const user = userEvent.setup()
     renderApp()

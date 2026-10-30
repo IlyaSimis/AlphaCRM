@@ -12,7 +12,7 @@ export type Page =
 export type Service = 'dashboards' | 'management' | 'patients' | 'documents' | 'inventory' | 'finance' | 'drive'
 
 export const serviceTitles: Record<Service, string> = {
-  dashboards: 'Дашборды',
+  dashboards: 'Мое пространство',
   management: 'Управление',
   patients: 'База данных пациентов',
   documents: 'Документы',
@@ -25,7 +25,7 @@ export const services: Service[] = ['dashboards', 'management', 'patients', 'doc
 
 export const pageTitles: Record<Page, string> = {
   today: 'Сегодня',
-  workspace: 'Моё пространство',
+  workspace: 'Дашборды',
   analytics: 'Аналитика',
   staff: 'Сотрудники',
   hr: 'Ставки и условия',

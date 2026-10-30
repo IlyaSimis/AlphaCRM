@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AddRounded, ArchiveRounded, CheckCircleOutlineRounded, NotificationsActiveRounded, NoteAddRounded, RadioButtonUncheckedRounded, RestoreRounded, ViewKanbanRounded, ViewListRounded } from '@mui/icons-material'
-import { Alert, Box, Button, Chip, IconButton, MenuItem, Stack, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material'
+import { Alert, Box, Button, Checkbox, Chip, IconButton, MenuItem, Stack, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material'
 import { archiveWorkspaceItem, createWorkspaceItem, loadWorkspaceItems, updateWorkspaceItem } from '../../api/workspace'
 import type { PatientItem, ScheduleItem, WorkspaceFilter, WorkspaceItem, WorkspaceItemInput } from '../../api/types'
 import { formatClinicMoment } from '../../shared/clinicTime'
@@ -111,6 +111,20 @@ export function WorkspacePage({ apiOnline, selfId, patients, appointments, notif
     } catch (reason) { setError((reason as Error).message) }
   }
 
+  const toggleChecklist = async (item: WorkspaceItem, index: number, done: boolean) => {
+    try {
+      const checklist = item.checklist.map((entry, at) => at === index ? { ...entry, done } : entry)
+      const input = { ...inputOf(item), checklist }
+      if (apiOnline) {
+        const saved = normalizeItem(await updateWorkspaceItem(item.id, input))
+        setItems((current) => current.map((entry) => entry.id === saved.id ? saved : entry))
+      } else {
+        const now = new Date().toISOString()
+        setItems((current) => current.map((entry) => entry.id === item.id ? { ...entry, checklist, updatedAt: now } : entry))
+      }
+    } catch (reason) { setError((reason as Error).message) }
+  }
+
   const setArchive = async (item: WorkspaceItem, value: boolean) => {
     try {
       if (apiOnline) await archiveWorkspaceItem(item.id, value)
@@ -140,7 +154,7 @@ export function WorkspacePage({ apiOnline, selfId, patients, appointments, notif
   return (
     <>
       <Box className="section-intro">
-        <Box><Typography variant="h4" sx={{ fontWeight: 750 }}>Моё пространство</Typography><Typography sx={{ color: 'text.secondary' }}>Задачи, заметки и записи в вашей системе — без обязательных сценариев и полей.</Typography></Box>
+        <Box><Typography variant="h4" sx={{ fontWeight: 750 }}>Дашборды</Typography><Typography sx={{ color: 'text.secondary' }}>Задачи, заметки и записи в вашей системе — без обязательных сценариев и полей.</Typography></Box>
         {!archived && <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}><Button variant="outlined" startIcon={<NoteAddRounded />} onClick={() => setEditor({ item: null, preset: 'Заметка' })}>Заметка</Button><Button variant="contained" startIcon={<AddRounded />} onClick={() => setEditor({ item: null })}>Создать</Button></Stack>}
       </Box>
       <Alert severity="info" sx={{ mb: 2 }}>Это личные рабочие записи, а не медицинская документация. Клинические заметки и документы остаются в защищённой карточке пациента.</Alert>
@@ -167,9 +181,9 @@ export function WorkspacePage({ apiOnline, selfId, patients, appointments, notif
       </Box>
 
       {loading ? <Typography sx={{ color: 'text.secondary' }}>Загрузка…</Typography> : visible.length === 0 ? <Box className="panel" sx={{ p: 4, textAlign: 'center' }}><Typography variant="h6">{archived ? 'Архив пуст' : 'Здесь пока ничего нет'}</Typography><Typography sx={{ color: 'text.secondary', mt: 1 }}>{archived ? 'Архивированные записи можно восстановить.' : 'Создайте запись или измените фильтры — структура полностью ваша.'}</Typography></Box> : filter.display === 'list' ? (
-        <Stack component="section" aria-label="Список задач" spacing={1.2}>{visible.map((item) => <WorkspaceCard key={item.id} item={item} patientName={patientName(item.patientId)} archived={archived} onOpen={() => setEditor({ item })} onToggle={() => void toggle(item)} onArchive={() => void setArchive(item, !archived)} />)}</Stack>
+        <Stack component="section" aria-label="Список задач" spacing={1.2}>{visible.map((item) => <WorkspaceCard key={item.id} item={item} patientName={patientName(item.patientId)} archived={archived} onOpen={() => setEditor({ item })} onToggle={() => void toggle(item)} onToggleChecklist={(index, done) => void toggleChecklist(item, index, done)} onArchive={() => void setArchive(item, !archived)} />)}</Stack>
       ) : (
-        <Box component="section" aria-label="Доска задач" className="workspace-board">{statuses.map((status) => <Box component="section" className="workspace-board-column" key={status}><Typography className="panel-label" sx={{ p: 1.5 }}>{status} · {visible.filter((item) => item.status === status).length}</Typography><Stack spacing={1}>{visible.filter((item) => item.status === status).map((item) => <WorkspaceCard key={item.id} item={item} patientName={patientName(item.patientId)} archived={archived} compact onOpen={() => setEditor({ item })} onToggle={() => void toggle(item)} onArchive={() => void setArchive(item, !archived)} />)}</Stack></Box>)}</Box>
+        <Box component="section" aria-label="Доска задач" className="workspace-board">{statuses.map((status) => <Box component="section" className="workspace-board-column" key={status}><Typography className="panel-label" sx={{ p: 1.5 }}>{status} · {visible.filter((item) => item.status === status).length}</Typography><Stack spacing={1}>{visible.filter((item) => item.status === status).map((item) => <WorkspaceCard key={item.id} item={item} patientName={patientName(item.patientId)} archived={archived} compact onOpen={() => setEditor({ item })} onToggle={() => void toggle(item)} onToggleChecklist={(index, done) => void toggleChecklist(item, index, done)} onArchive={() => void setArchive(item, !archived)} />)}</Stack></Box>)}</Box>
       )}
 
       {editor && <WorkspaceItemDialog item={editor.item} preset={editor.preset} patients={patients} appointments={appointments} onClose={() => setEditor(null)} onSave={save} />}
@@ -177,8 +191,8 @@ export function WorkspacePage({ apiOnline, selfId, patients, appointments, notif
   )
 }
 
-type CardProps = { item: WorkspaceItem; patientName?: string | null; archived: boolean; compact?: boolean; onOpen: () => void; onToggle: () => void; onArchive: () => void }
-function WorkspaceCard({ item, patientName, archived, compact, onOpen, onToggle, onArchive }: CardProps) {
+type CardProps = { item: WorkspaceItem; patientName?: string | null; archived: boolean; compact?: boolean; onOpen: () => void; onToggle: () => void; onToggleChecklist: (index: number, done: boolean) => void; onArchive: () => void }
+function WorkspaceCard({ item, patientName, archived, compact, onOpen, onToggle, onToggleChecklist, onArchive }: CardProps) {
   const checklistDone = item.checklist.filter((entry) => entry.done).length
   return (
     <Box className={`panel workspace-card workspace-card--${item.color} ${item.completed ? 'completed' : ''}`} sx={{ p: compact ? 1.2 : 1.5 }}>
@@ -189,7 +203,7 @@ function WorkspaceCard({ item, patientName, archived, compact, onOpen, onToggle,
           {item.body && !compact && <Typography sx={{ color: 'text.secondary', fontSize: 14, mt: 0.5, whiteSpace: 'pre-wrap', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{item.body}</Typography>}
           {item.checklist.length > 0 && <Stack component="ul" aria-label={`Пункты: ${item.title}`} spacing={0.35} sx={{ mt: 1, mb: 0, pl: 0, listStyle: 'none' }}>
             {item.checklist.map((entry, index) => <Stack component="li" direction="row" spacing={0.6} key={`${entry.text}-${index}`} sx={{ alignItems: 'center' }}>
-              {entry.done ? <CheckCircleOutlineRounded color="primary" sx={{ fontSize: 17 }} /> : <RadioButtonUncheckedRounded color="action" sx={{ fontSize: 17 }} />}
+              <Checkbox size="small" checked={entry.done} disabled={archived} onChange={(event) => onToggleChecklist(index, event.target.checked)} slotProps={{ input: { 'aria-label': `Подпункт: ${entry.text || `Пункт ${index + 1}`}` } }} sx={{ p: 0.25 }} />
               <Typography sx={{ fontSize: 13, color: entry.done ? 'text.secondary' : 'text.primary', textDecoration: entry.done ? 'line-through' : 'none' }}>{entry.text || `Пункт ${index + 1}`}</Typography>
             </Stack>)}
           </Stack>}

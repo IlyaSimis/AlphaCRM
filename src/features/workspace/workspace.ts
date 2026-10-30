@@ -2,7 +2,7 @@ import type { WorkspaceFilter, WorkspaceItem, WorkspaceItemInput } from '../../a
 import { clinicInstant, clinicParts } from '../../shared/clinicTime'
 import { localToday, shiftDate } from '../../shared/dates'
 
-export const emptyWorkspaceFilter: WorkspaceFilter = { query: '', type: '', status: '', tag: '', due: 'all', sort: 'due', display: 'list' }
+export const emptyWorkspaceFilter: WorkspaceFilter = { query: '', type: '', status: '', tag: '', due: 'all', sort: 'due', display: 'board' }
 
 export function blankWorkspaceItem(type = 'Задача'): WorkspaceItemInput {
   return { title: '', type, body: '', status: type === 'Заметка' ? 'Заметки' : 'К выполнению', color: type === 'Заметка' ? 'blue' : 'green', completed: false, dueAt: null, remindAt: null, patientId: null, appointmentId: null, tags: [], fields: [], checklist: [] }

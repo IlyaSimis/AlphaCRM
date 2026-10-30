@@ -14,7 +14,7 @@ describe('AI navigator', () => {
     await user.type(screen.getByLabelText('Что открыть?'), 'просроченные задачи')
     await user.click(screen.getByRole('button', { name: 'Открыть раздел' }))
 
-    expect(await screen.findByRole('heading', { name: 'Моё пространство', level: 4 })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Дашборды', level: 4 })).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Срок' })).toHaveTextContent('Просрочено')
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'ИИ-навигатор' })).not.toBeInTheDocument())
   })
