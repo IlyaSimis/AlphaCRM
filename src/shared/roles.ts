@@ -16,11 +16,12 @@ export const roleLabels: Record<StaffRole, string> = {
   MANAGER: 'Менеджер',
   DOCTOR: 'Врач',
   NURSE: 'Медперсонал',
+  SENIOR_NURSE: 'Старший медперсонал',
   CASHIER: 'Кассир',
   SUPPORT: 'Техподдержка',
 }
 
-export const staffRoles: StaffRole[] = ['OWNER', 'SENIOR_ADMINISTRATOR', 'ADMINISTRATOR', 'MANAGER', 'DOCTOR', 'NURSE', 'CASHIER', 'SUPPORT']
+export const staffRoles: StaffRole[] = ['OWNER', 'SENIOR_ADMINISTRATOR', 'ADMINISTRATOR', 'MANAGER', 'DOCTOR', 'NURSE', 'SENIOR_NURSE', 'CASHIER', 'SUPPORT']
 
 /** Роли, которые могут быть постоянным администратором пациента. */
 export const administratorRoles: StaffRole[] = ['OWNER', 'SENIOR_ADMINISTRATOR', 'ADMINISTRATOR']

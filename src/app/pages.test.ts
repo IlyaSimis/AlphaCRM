@@ -35,26 +35,30 @@ describe('services and pages by role', () => {
     expect(sectionsFor('management', 'ADMINISTRATOR').map((section) => section.label)).toEqual(['УПРАВЛЕНИЕ'])
   })
 
-  it('a cashier has no inventory service; every role has a personal workspace', () => {
-    expect(servicesFor('CASHIER')).toEqual(['dashboards', 'patients', 'finance', 'drive'])
-    expect(navigationFor('CASHIER')).toEqual(['today', 'workspace', 'hr-me', 'schedule', 'patients', 'registry', 'cashier', 'drive', 'drive-shared', 'drive-trash'])
-    expect(servicesFor('DOCTOR')).toEqual(['dashboards', 'patients', 'inventory', 'drive'])
+  it('a cashier and a doctor have documents but no inventory; every role has a personal workspace', () => {
+    expect(servicesFor('CASHIER')).toEqual(['dashboards', 'patients', 'documents', 'finance', 'drive'])
+    expect(navigationFor('CASHIER')).toEqual(['today', 'workspace', 'hr-me', 'schedule', 'patients', 'registry', 'contract-templates', 'cashier', 'drive', 'drive-shared', 'drive-trash'])
+    expect(servicesFor('DOCTOR')).toEqual(['dashboards', 'patients', 'documents', 'drive'])
     expect(sectionsFor('dashboards', 'DOCTOR').flatMap((section) => section.pages)).toEqual(['workspace', 'hr-me'])
-    expect(sectionsFor('inventory', 'DOCTOR').flatMap((section) => section.pages)).toEqual(['stock-balances', 'stock-items'])
+    expect(sectionsFor('documents', 'DOCTOR').flatMap((section) => section.pages)).toEqual(['contract-templates'])
+    expect(sectionsFor('inventory', 'DOCTOR')).toEqual([])
     expect(canOpen('cashier', 'DOCTOR')).toBe(false)
     expect(canOpen('visit', 'DOCTOR')).toBe(true)
     expect(canOpen('visit', 'ADMINISTRATOR')).toBe(false)
     expect(canOpen('documents', 'ADMINISTRATOR')).toBe(false)
   })
 
-  it('manager sees contract templates and prices read-only, nurse works with stock, support has no patients', () => {
+  it('medical staff works with stock and contracts; support has documents but no patients or stock', () => {
     expect(sectionsFor('finance', 'MANAGER').flatMap((section) => section.pages)).toEqual(['cashier', 'sales', 'prices'])
     expect(sectionsFor('documents', 'MANAGER').flatMap((section) => section.pages)).toEqual(['contract-templates'])
     expect(canOpen('outbox', 'MANAGER')).toBe(false)
     expect(sectionsFor('management', 'MANAGER').flatMap((section) => section.pages)).toEqual(['staff', 'hours', 'audit'])
-    expect(sectionsFor('inventory', 'NURSE').flatMap((section) => section.pages)).toEqual(['stock-balances', 'stock-items', 'stock-documents', 'stock-marking', 'stock-norms'])
-    expect(canOpen('contract-templates', 'NURSE')).toBe(false)
-    expect(servicesFor('SUPPORT')).toEqual(['dashboards', 'management', 'patients', 'inventory', 'drive'])
+    for (const role of ['NURSE', 'SENIOR_NURSE'] as const) {
+      expect(sectionsFor('inventory', role).flatMap((section) => section.pages)).toEqual(['stock-balances', 'stock-items', 'stock-documents', 'stock-marking', 'stock-norms'])
+      expect(canOpen('contract-templates', role)).toBe(true)
+    }
+    expect(servicesFor('SUPPORT')).toEqual(['dashboards', 'management', 'patients', 'documents', 'drive'])
+    expect(sectionsFor('documents', 'SUPPORT').flatMap((section) => section.pages)).toEqual(['contract-templates'])
     expect(canOpen('patient', 'SUPPORT')).toBe(false)
   })
 

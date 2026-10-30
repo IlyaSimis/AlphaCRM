@@ -125,7 +125,7 @@ erDiagram
 | `full_name` | VARCHAR(255) | NN | ФИО — данные, как ввёл администратор |
 | `username` | VARCHAR(80) | NN, U | логин, уникален во всей установке, хранится в нижнем регистре |
 | `password_hash` | VARCHAR(100) | NN | bcrypt со своей солью. Пароля в открытом виде нет нигде |
-| `role` | VARCHAR(40) | NN, CHECK | основная роль: `OWNER`, `SENIOR_ADMINISTRATOR`, `ADMINISTRATOR`, `MANAGER`, `DOCTOR`, `NURSE`, `CASHIER`, `SUPPORT`; у врача — `DOCTOR`, иначе старшая из ролей. Все роли — в `staff_role`. Разрешения ролей в базе не хранятся — они в коде (`RolePermissions`) |
+| `role` | VARCHAR(40) | NN, CHECK | основная роль: `OWNER`, `SENIOR_ADMINISTRATOR`, `ADMINISTRATOR`, `MANAGER`, `DOCTOR`, `NURSE`, `SENIOR_NURSE`, `CASHIER`, `SUPPORT`; у врача — `DOCTOR`, иначе старшая из ролей. Все роли — в `staff_role`. Разрешения ролей в базе не хранятся — они в коде (`RolePermissions`) |
 | `practitioner_id` | UUID | FK → `practitioner`, U | только у `DOCTOR`, у остальных `NULL` (CHECK) |
 | `active` | BOOLEAN | NN | `false` — войти нельзя, открытые сессии перестают действовать |
 | `must_change_password` | BOOLEAN | NN, default `false` | временный пароль: до смены API отвечает `403 PASSWORD_CHANGE_REQUIRED` |
@@ -670,6 +670,7 @@ CHECK `patient_file_signed_complete`: у `SIGNED_LOCKED` заполнены хе
 | `018-assistant-commercial.sql` | 040 | исторические схемы `commercial` и `assistant`; текущее приложение их не использует, миграция сохранена для совместимости |
 | `022-patient-privacy.sql` | 092, 093 | профиль пациента переведён в TEXT для шифртекста, расширено хранение контактов, добавлены HMAC-индексы `patient_contact_token` |
 | `023-patient-contracts.sql` | 094 | версии DOCX-шаблонов, счётчик номеров и неизменяемые зашифрованные договоры пациентов |
+| `024-senior-nurse.sql` | 095 | роль `SENIOR_NURSE` в CHECK `staff_user.role` и `staff_role.role` |
 
 Как добавить изменение:
 
@@ -703,7 +704,7 @@ CHECK `patient_file_signed_complete`: у `SIGNED_LOCKED` заполнены хе
 
 **Почему запись хранит название услуги строкой, а не `service_id`?** Это снимок: переименование, смена цены или выключение услуги не должны менять прошлые записи, счёт и кассу.
 
-**Как убрать услугу?** Выключить (`POST /api/v1/services/{id}/deactivate` или кнопка «Выключить» на странице «График и цены»). Строка остаётся: на неё могут ссылаться ожидания, и её можно включить снова.
+**Как убрать услугу?** Через API выключить (`POST /api/v1/services/{id}/deactivate`). Строка остаётся: на неё могут ссылаться ожидания, и её можно включить снова. Кнопок включения и выключения в интерфейсе услуг нет.
 
 **Куда делась колонка `registry_task.kind`?** Миграция 021 перенесла её значения в `title` («Перезвонить», «Обновить согласие») и удалила колонку. Задачи не потерялись.
 

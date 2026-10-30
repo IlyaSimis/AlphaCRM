@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { CreateNewFolderRounded, DeleteOutlineRounded, DownloadRounded, EditRounded, FolderRounded, HistoryRounded, InsertDriveFileRounded, LinkRounded, RestoreRounded, ShareRounded, CloudUploadRounded } from '@mui/icons-material'
-import { Alert, Box, Breadcrumbs, Button, Chip, IconButton, LinearProgress, Link, Stack, TextField, Tooltip, Typography } from '@mui/material'
-import { createFolder, downloadByLink, downloadFile, loadFolder, loadLink, loadQuota, loadShared, loadTrash, renameNode, restoreNode, setQuota, trashNode, uploadFile, uploadVersion } from '../../api/drive'
+import { Alert, Box, Breadcrumbs, Button, Chip, IconButton, Link, Stack, TextField, Tooltip, Typography } from '@mui/material'
+import { createFolder, downloadByLink, downloadFile, loadFolder, loadLink, loadQuota, loadShared, loadTrash, renameNode, restoreNode, trashNode, uploadFile, uploadVersion } from '../../api/drive'
 import type { DriveListing, DriveNode, DriveQuota, StaffItem } from '../../api/types'
 import { formatClinicMoment } from '../../shared/clinicTime'
-import { can } from '../../shared/permissions'
-import type { Role } from '../../shared/roles'
 import { formatBytes } from '../today/dashboard'
 import { allows, permissionLabels, tokenFrom } from './drive'
 import { NameDialog } from './NameDialog'
@@ -15,7 +13,6 @@ import { VersionsDialog } from './VersionsDialog'
 export type DriveSection = 'mine' | 'shared' | 'trash'
 
 type DrivePageProps = {
-  role: Role
   apiOnline: boolean
   self: StaffItem
   notify: (message: string) => void
@@ -32,7 +29,7 @@ type View = DriveSection | 'link'
  * содержимому; ссылка открывается только сотрудником клиники после входа. Медицинские документы
  * пациента сюда не загружаются — они в карточке пациента.
  */
-export function DrivePage({ role, apiOnline, self, notify, section, onSection }: DrivePageProps) {
+export function DrivePage({ apiOnline, self, notify, section, onSection }: DrivePageProps) {
   // Ссылка из адреса открывается поверх раздела; выбор раздела в меню её закрывает.
   const [linkMode, setLinkMode] = useState(() => Boolean(linkFromAddress()))
   const [shownSection, setShownSection] = useState(section)
@@ -53,11 +50,9 @@ export function DrivePage({ role, apiOnline, self, notify, section, onSection }:
   const [naming, setNaming] = useState<{ mode: 'folder' } | { mode: 'rename'; node: DriveNode } | null>(null)
   const [sharing, setSharing] = useState<DriveNode | null>(null)
   const [versions, setVersions] = useState<DriveNode | null>(null)
-  const [quotaInput, setQuotaInput] = useState('')
   const upload = useRef<HTMLInputElement | null>(null)
   const versionUpload = useRef<HTMLInputElement | null>(null)
   const [versionTarget, setVersionTarget] = useState<DriveNode | null>(null)
-  const admin = can(role, 'drive.clinic.admin')
 
   useEffect(() => {
     if (!apiOnline) return
@@ -129,10 +124,6 @@ export function DrivePage({ role, apiOnline, self, notify, section, onSection }:
     <>
       <Box className="section-intro">
         <Box><Typography variant="h4" sx={{ fontWeight: 750 }}>Диск</Typography><Typography sx={{ color: 'text.secondary' }}>Регламенты, договоры, шаблоны и отчёты клиники. Права на папку действуют и на её содержимое.</Typography></Box>
-        {quota && <Box sx={{ minWidth: 220 }}>
-          <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>Занято {formatBytes(quota.bytesUsed)} из {formatBytes(quota.bytesLimit)}</Typography>
-          <LinearProgress variant="determinate" value={Math.min(100, (quota.bytesUsed / Math.max(1, quota.bytesLimit)) * 100)} aria-label="Квота диска" />
-        </Box>}
       </Box>
       <Alert severity="warning" sx={{ mb: 2 }}>Медицинские документы пациента загружайте в карточку пациента, а не на диск: там они шифруются и открываются только врачу по связи с лечением.</Alert>
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
@@ -198,22 +189,6 @@ export function DrivePage({ role, apiOnline, self, notify, section, onSection }:
             </tbody>
           </table>}
       </Box>
-      {admin && quota && <Box className="panel" sx={{ mt: 2 }}>
-        <Typography className="panel-label">КВОТА КЛИНИКИ</Typography>
-        <Stack direction="row" spacing={1.5} sx={{ mt: 1, alignItems: 'center' }}>
-          <TextField size="small" label="Предел, ГБ" value={quotaInput} placeholder={String(Math.round(quota.bytesLimit / 1024 ** 3))} onChange={(event) => setQuotaInput(event.target.value)} />
-          <Button variant="outlined" onClick={() => {
-            const gigabytes = Number(quotaInput.replace(',', '.'))
-            if (!Number.isFinite(gigabytes) || gigabytes <= 0) {
-              setError('Квота — положительное число гигабайт')
-              return
-            }
-            void run(() => setQuota(Math.round(gigabytes * 1024 ** 3)), 'Квота изменена')
-            setQuotaInput('')
-          }}>Сохранить</Button>
-          <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>Файл — не больше {formatBytes(quota.maxFileBytes)}</Typography>
-        </Stack>
-      </Box>}
       {naming && <NameDialog title={naming.mode === 'folder' ? 'Новая папка' : 'Переименовать'} initial={naming.mode === 'rename' ? naming.node.name : ''} onClose={() => setNaming(null)} onSave={async (name) => {
         try {
           if (naming.mode === 'folder') await createFolder(folder, name)

@@ -69,8 +69,7 @@ class ContractService {
 
   @Transactional(readOnly = true)
   List<TemplateView> templates() {
-    requirePermission(Permission.PATIENT_READ);
-    requirePermission(Permission.PATIENT_CONTACTS_READ);
+    requirePermission(Permission.CONTRACT_USE);
     return jdbc.query(
         "select id, name, original_name, version, placeholders, created_at from contract_template"
             + " where clinic_id = ? order by name, version desc",
@@ -82,6 +81,17 @@ class ContractService {
                 rs.getInt("version"),
                 List.of(rs.getString("placeholders").split(",")),
                 rs.getTimestamp("created_at").toInstant()),
+        clinicId());
+  }
+
+  @Transactional(readOnly = true)
+  List<ContractController.ContractPatientView> patients() {
+    requirePermission(Permission.CONTRACT_USE);
+    return jdbc.query(
+        "select id, full_name from patient where clinic_id = ? order by full_name",
+        (rs, row) ->
+            new ContractController.ContractPatientView(
+                rs.getObject("id", UUID.class), rs.getString("full_name")),
         clinicId());
   }
 
@@ -127,8 +137,7 @@ class ContractService {
 
   @Transactional(readOnly = true)
   List<ContractView> list(UUID patientId) {
-    requirePermission(Permission.PATIENT_READ);
-    requirePermission(Permission.PATIENT_CONTACTS_READ);
+    requirePermission(Permission.CONTRACT_USE);
     requirePatient(patientId);
     return jdbc.query(
         "select c.id, c.patient_id, c.contract_number, t.name as template_name, c.service_name,"
@@ -143,7 +152,7 @@ class ContractService {
 
   @Transactional
   ContractView create(UUID patientId, CreateContractRequest request) {
-    requirePermission(Permission.PATIENT_WRITE);
+    requirePermission(Permission.CONTRACT_USE);
     var automatic = patientValues.forPatient(patientId, clinicId());
     if (automatic == null) throw notFound("PATIENT_NOT_FOUND", "Patient not found");
     var template = template(request.templateId());
@@ -213,8 +222,7 @@ class ContractService {
 
   @Transactional(readOnly = true)
   ContractFile download(UUID id, boolean pdfRequested) {
-    requirePermission(Permission.PATIENT_READ);
-    requirePermission(Permission.PATIENT_CONTACTS_READ);
+    requirePermission(Permission.CONTRACT_USE);
     var rows =
         jdbc.query(
             "select contract_number, docx_ciphertext, pdf_ciphertext from patient_contract"

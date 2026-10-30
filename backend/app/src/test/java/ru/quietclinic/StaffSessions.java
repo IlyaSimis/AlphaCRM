@@ -44,6 +44,7 @@ public final class StaffSessions {
           "t.senior", List.of("Test Senior Administrator", "SENIOR_ADMINISTRATOR", ""),
           "t.admin", List.of("Test Administrator", "ADMINISTRATOR", ""),
           "t.nurse", List.of("Test Nurse", "NURSE", ""),
+          "t.senior-nurse", List.of("Test Senior Nurse", "SENIOR_NURSE", ""),
           "t.support", List.of("Test Support", "SUPPORT", ""));
 
   /**
@@ -59,6 +60,7 @@ public final class StaffSessions {
           "CASHIER", "t.cashier",
           "DOCTOR", "t.petrov",
           "NURSE", "t.nurse",
+          "SENIOR_NURSE", "t.senior-nurse",
           "SUPPORT", "t.support");
 
   /** Сотрудник ровно этой роли — для матрицы RBAC (ADMINISTRATOR — t.admin, а не владелец). */
@@ -71,6 +73,7 @@ public final class StaffSessions {
           "CASHIER", "t.cashier",
           "DOCTOR", "t.petrov",
           "NURSE", "t.nurse",
+          "SENIOR_NURSE", "t.senior-nurse",
           "SUPPORT", "t.support");
 
   private final MockMvc mvc;

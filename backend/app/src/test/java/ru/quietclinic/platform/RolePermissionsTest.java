@@ -72,6 +72,21 @@ class RolePermissionsTest {
   }
 
   @Test
+  void contractsAreAvailableToEveryoneAndInventoryOnlyToItsOperators() {
+    var inventoryRoles =
+        Set.of(
+            "OWNER", "SENIOR_ADMINISTRATOR", "ADMINISTRATOR", "MANAGER", "NURSE", "SENIOR_NURSE");
+    for (var role : RolePermissions.STAFF_ROLES) {
+      assertThat(RolePermissions.of(role)).as(role).contains(Permission.CONTRACT_USE);
+      assertThat(RolePermissions.of(role).contains(Permission.INVENTORY_CATALOG_READ))
+          .as(role)
+          .isEqualTo(inventoryRoles.contains(role));
+    }
+    assertThat(RolePermissions.of(RolePermissions.SENIOR_NURSE))
+        .isEqualTo(RolePermissions.of(RolePermissions.NURSE));
+  }
+
+  @Test
   void permissionCodesAreUniqueAndDotted() {
     var codes = new java.util.HashSet<String>();
     for (var permission : Permission.values()) {

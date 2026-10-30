@@ -128,7 +128,7 @@ describe('working hours and prices', () => {
     expect(await menuHas(user, 'Сотрудники')).toBe(true)
   })
 
-  it('the administrator adds a service, it is bookable at once; a switched-off one is not offered', async () => {
+  it('the administrator adds a service and it is bookable at once; services have no activation buttons', async () => {
     goOffline()
     const user = userEvent.setup()
     renderApp()
@@ -141,28 +141,21 @@ describe('working hours and prices', () => {
     await user.type(screen.getByLabelText('Цена новой услуги, ₽'), '7000')
     await user.click(screen.getByRole('button', { name: 'Добавить услугу' }))
     expect(await screen.findByLabelText('Цена Семейная консультация, рублей')).toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: 'Выключить услугу Повторный приём' }))
-    expect(await screen.findByText('Выключена: не предлагается в новой записи')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Выключить услугу/ })).not.toBeInTheDocument()
 
     await openPage(user, 'Расписание')
     await user.click(screen.getByRole('button', { name: 'Новая запись' }))
     await user.click(screen.getByRole('combobox', { name: 'Услуга' }))
     const options = screen.getAllByRole('option').map((option) => option.textContent ?? '')
     expect(options.some((text) => text.startsWith('Семейная консультация · 80 мин'))).toBe(true)
-    expect(options.some((text) => text.startsWith('Повторный приём'))).toBe(false)
-    await user.keyboard('{Escape}')
-    await user.click(screen.getByRole('button', { name: 'Отмена' }))
-    // Старые записи на выключенную услугу остаются в расписании со своим названием.
-    expect(screen.getAllByText(/Повторный приём/).length).toBeGreaterThan(0)
+    expect(options.some((text) => text.startsWith('Повторный приём'))).toBe(true)
   })
 
-  it('on the server creates and switches off services; booking takes the list from the server', async () => {
+  it('on the server creates services without sending activation requests', async () => {
     const family = { id: '00000000-0000-0000-0000-000000000699', name: 'Семейная консультация', durationMinutes: 80, priceMinor: 700000, currency: 'RUB', active: true }
     const fetchMock = withAuth((address, init) => {
       const method = init?.method ?? 'GET'
       if (address.endsWith('/services') && method === 'POST') return jsonResponse({ ...family, ...JSON.parse(String(init?.body)) }, 201)
-      if (address.endsWith('/deactivate') && method === 'POST') return jsonResponse({ id: '00000000-0000-0000-0000-000000000602', name: 'Повторный приём', durationMinutes: 30, priceMinor: 300000, currency: 'RUB', active: false })
       if (address.includes('/patients')) return jsonResponse([anna])
       if (address.includes('/appointments')) return jsonResponse([])
       return jsonResponse({}, 404)
@@ -181,10 +174,8 @@ describe('working hours and prices', () => {
     await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => String(url).endsWith('/services') && init?.method === 'POST')).toBe(true))
     const created = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith('/services') && init?.method === 'POST')
     expect(JSON.parse(String(created?.[1]?.body))).toEqual({ name: 'Семейная консультация', durationMinutes: 80, priceMinor: 700000, currency: 'RUB' })
-
-    await user.click(screen.getByRole('button', { name: 'Выключить услугу Повторный приём' }))
-    expect(await screen.findByRole('button', { name: 'Включить услугу Повторный приём' })).toBeInTheDocument()
-    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/services/00000000-0000-0000-0000-000000000602/deactivate'))).toBe(true)
+    expect(screen.queryByRole('button', { name: /Выключить услугу/ })).not.toBeInTheDocument()
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/deactivate'))).toBe(false)
   })
 
   it('shows the on-screen phrase for a known error code', async () => {

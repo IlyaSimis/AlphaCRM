@@ -1,5 +1,5 @@
 import { apiFetch, failure } from './client'
-import type { ContractTemplateItem, PatientContractItem } from './types'
+import type { ContractPatientItem, ContractTemplateItem, PatientContractItem } from './types'
 
 export const MAX_CONTRACT_TEMPLATE_BYTES = 5 * 1024 * 1024
 
@@ -17,6 +17,13 @@ export async function uploadContractTemplate(name: string, file: File): Promise<
   const response = await apiFetch('/contract-templates', { method: 'POST', body })
   if (!response.ok) throw await failure(response, 'Не удалось загрузить шаблон', { 413: 'Шаблон больше 5 МБ' })
   return response.json()
+}
+
+export async function loadContractPatients(): Promise<ContractPatientItem[]> {
+  const response = await apiFetch('/contract-patients')
+  if (!response.ok) throw await failure(response, 'Пациенты для договора недоступны')
+  const rows: unknown = await response.json()
+  return Array.isArray(rows) ? rows.filter((row): row is ContractPatientItem => typeof row?.id === 'string' && typeof row?.name === 'string') : []
 }
 
 export async function loadPatientContracts(patientId: string): Promise<PatientContractItem[]> {
@@ -44,6 +51,22 @@ export async function downloadPatientContract(contract: Pick<PatientContractItem
   link.click()
   link.remove()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+/** Открывает PDF в отдельной вкладке: оттуда доступна штатная печать браузера. */
+export async function printPatientContract(contract: Pick<PatientContractItem, 'id'>) {
+  const tab = window.open('', '_blank')
+  if (!tab) throw new Error('Разрешите всплывающие окна, чтобы открыть PDF для печати')
+  try {
+    const response = await apiFetch(`/patient-contracts/${contract.id}/pdf`)
+    if (!response.ok) throw await failure(response, 'Не удалось открыть PDF для печати')
+    const url = URL.createObjectURL(await response.blob())
+    tab.location.href = url
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  } catch (reason) {
+    tab.close()
+    throw reason
+  }
 }
 
 export function contractTemplateProblem(file: File): string | null {

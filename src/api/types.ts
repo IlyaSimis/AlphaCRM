@@ -118,6 +118,8 @@ export type ContractTemplateItem = {
   createdAt: string
 }
 
+export type ContractPatientItem = { id: string; name: string }
+
 export type PatientContractItem = {
   id: string
   patientId: string
@@ -135,7 +137,7 @@ export type RegistryInput = { referralSource: string | null; registryNote: strin
 /** Состояние согласия пациента; надпись на экране — consentLabels. */
 export type ConsentState = 'ACTIVE' | 'NEEDS_UPDATE'
 
-export type StaffRole = 'OWNER' | 'SENIOR_ADMINISTRATOR' | 'ADMINISTRATOR' | 'MANAGER' | 'DOCTOR' | 'NURSE' | 'CASHIER' | 'SUPPORT'
+export type StaffRole = 'OWNER' | 'SENIOR_ADMINISTRATOR' | 'ADMINISTRATOR' | 'MANAGER' | 'DOCTOR' | 'NURSE' | 'SENIOR_NURSE' | 'CASHIER' | 'SUPPORT'
 
 /** Сотрудник без хеша пароля. mustChangePassword — вошёл с временным паролем. */
 export type StaffItem = {

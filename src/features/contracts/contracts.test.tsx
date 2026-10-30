@@ -81,4 +81,50 @@ describe('Договоры пациента', () => {
     expect(await within(block).findByRole('button', { name: 'Скачать DOCX Д-2026-00001' })).toBeInTheDocument()
     expect(within(block).queryByRole('button', { name: 'Скачать PDF Д-2026-00001' })).not.toBeInTheDocument()
   })
+
+  it('lets a cashier choose a patient in Documents, create a contract and print its PDF', async () => {
+    let created: { templateId: string; serviceId?: string; values: Record<string, string> } | null = null
+    withAuth((address, init) => {
+      const method = init?.method ?? 'GET'
+      if (address.endsWith('/contract-templates')) return jsonResponse([template])
+      if (address.endsWith('/contract-patients')) return jsonResponse([{ id: anna.id, name: 'Анна Михайлова' }])
+      if (address.endsWith(`/patients/${anna.id}/contracts`) && method === 'POST') {
+        created = JSON.parse(String(init?.body))
+        return jsonResponse({
+          id: '00000000-0000-0000-0000-0000000c0003', patientId: anna.id, contractNumber: 'Д-2026-00002',
+          templateName: template.name, serviceName: 'Первичный приём', pdfAvailable: true,
+          createdAt: '2026-10-30T08:02:00Z', createdByName: 'Тестовый кассир',
+        } satisfies PatientContractItem, 201)
+      }
+      if (address.includes('/patients')) return jsonResponse([anna])
+      if (address.includes('/appointments')) return jsonResponse([])
+      return jsonResponse([], 200)
+    }, 't.cashier')
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByText('API подключён')).toBeInTheDocument()
+    await openPage(user, 'Шаблоны договоров')
+    const page = await screen.findByRole('region', { name: 'Шаблоны договоров' })
+    expect(within(page).queryByRole('button', { name: 'Загрузить шаблон' })).not.toBeInTheDocument()
+
+    await user.click(await within(page).findByRole('button', { name: 'Сформировать договор' }))
+    const patientDialog = screen.getByRole('dialog', { name: 'Пациент для договора' })
+    await user.click(within(patientDialog).getByRole('combobox', { name: 'Пациент' }))
+    await user.click(screen.getByRole('option', { name: 'Анна Михайлова' }))
+    await user.click(within(patientDialog).getByRole('button', { name: 'Далее' }))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Сформировать договор' })
+    await user.click(within(dialog).getByRole('combobox', { name: 'Услуга' }))
+    await user.click(screen.getByRole('option', { name: 'Первичный приём' }))
+    await user.type(within(dialog).getByLabelText(/custom.note/), 'Условия для кассира')
+    await user.click(within(dialog).getByRole('button', { name: 'Сформировать' }))
+    await waitFor(() => expect(created).not.toBeNull())
+    expect(created).toEqual({
+      templateId: template.id,
+      serviceId: '00000000-0000-0000-0000-000000000601',
+      values: { 'custom.note': 'Условия для кассира' },
+    })
+    expect(await within(page).findByText('Договор Д-2026-00002 сформирован.')).toBeInTheDocument()
+    expect(within(page).getByRole('button', { name: 'Печать PDF' })).toBeInTheDocument()
+  })
 })

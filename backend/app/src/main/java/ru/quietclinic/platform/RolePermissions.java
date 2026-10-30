@@ -23,15 +23,25 @@ public final class RolePermissions {
   public static final String MANAGER = "MANAGER";
   public static final String DOCTOR = "DOCTOR";
   public static final String NURSE = "NURSE";
+  public static final String SENIOR_NURSE = "SENIOR_NURSE";
   public static final String CASHIER = "CASHIER";
   public static final String SUPPORT = "SUPPORT";
 
   /** Версия набора разрешений: отдаётся в /auth/me как permissionsVersion. */
-  public static final String VERSION = "2026-10-29.2";
+  public static final String VERSION = "2026-10-30.2";
 
   /** Роли сотрудников в порядке экрана «Сотрудники». */
   public static final List<String> STAFF_ROLES =
-      List.of(OWNER, SENIOR_ADMINISTRATOR, ADMINISTRATOR, MANAGER, DOCTOR, NURSE, CASHIER, SUPPORT);
+      List.of(
+          OWNER,
+          SENIOR_ADMINISTRATOR,
+          ADMINISTRATOR,
+          MANAGER,
+          DOCTOR,
+          NURSE,
+          SENIOR_NURSE,
+          CASHIER,
+          SUPPORT);
 
   /** Роли, которые назначает только владелец. */
   public static final Set<String> PRIVILEGED = Set.of(OWNER, SENIOR_ADMINISTRATOR);
@@ -66,6 +76,7 @@ public final class RolePermissions {
             PATIENT_WRITE,
             PATIENT_FILE_WRITE,
             PATIENT_FILE_READ,
+            CONTRACT_USE,
             INVOICE_READ,
             INVOICE_WRITE,
             INVOICE_SET_AMOUNT,
@@ -116,6 +127,7 @@ public final class RolePermissions {
             PATIENT_WRITE,
             SIGNED_DOCUMENT_READ,
             PATIENT_FILE_READ_SIGNED,
+            CONTRACT_USE,
             INVOICE_READ,
             REVENUE_READ,
             INVENTORY_CATALOG_READ,
@@ -143,8 +155,7 @@ public final class RolePermissions {
             CLINICAL_RECORD,
             SIGNED_DOCUMENT_READ_OWN,
             PATIENT_FILE_WRITE_CARE,
-            INVENTORY_CATALOG_READ,
-            INVENTORY_STOCK_READ,
+            CONTRACT_USE,
             DRIVE_USE,
             WORKSPACE_USE,
             ASSISTANT_USE,
@@ -160,6 +171,7 @@ public final class RolePermissions {
             SERVICE_READ,
             PATIENT_READ,
             PATIENT_CONTACTS_READ,
+            CONTRACT_USE,
             INVENTORY_CATALOG_READ,
             INVENTORY_CATALOG_WRITE,
             INVENTORY_DOCUMENT_WRITE,
@@ -178,6 +190,7 @@ public final class RolePermissions {
             SERVICE_READ,
             PATIENT_READ,
             REGISTRY_TASK_READ,
+            CONTRACT_USE,
             INVOICE_READ,
             INVOICE_WRITE,
             INVOICE_SET_AMOUNT,
@@ -194,10 +207,7 @@ public final class RolePermissions {
             SCHEDULE_READ,
             PRACTITIONER_READ,
             SERVICE_READ,
-            INVENTORY_CATALOG_READ,
-            INVENTORY_STOCK_READ,
-            MARKING_STATUS_READ,
-            MARKING_MANAGE,
+            CONTRACT_USE,
             DRIVE_USE,
             WORKSPACE_USE,
             ASSISTANT_USE,
@@ -215,6 +225,7 @@ public final class RolePermissions {
     map.put(MANAGER, Set.copyOf(manager));
     map.put(DOCTOR, Set.copyOf(doctor));
     map.put(NURSE, Set.copyOf(nurse));
+    map.put(SENIOR_NURSE, Set.copyOf(nurse));
     map.put(CASHIER, Set.copyOf(cashier));
     map.put(SUPPORT, Set.copyOf(support));
     return Map.copyOf(map);

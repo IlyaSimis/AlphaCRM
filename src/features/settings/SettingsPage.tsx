@@ -13,7 +13,6 @@ type SettingsPageProps = {
   onSaveCard: (practitioner: Practitioner, input: { specialty: string; room: string }) => Promise<string | null>
   onSavePrice: (service: ServiceItem, pricing: ServicePricing) => Promise<string | null>
   onCreateService: (input: NewService) => Promise<string | null>
-  onToggleService: (service: ServiceItem) => Promise<string | null>
   /** Цены и услуги меняют администраторы и владелец; менеджер видит их без правки. */
   canEditPrices?: boolean
   /** «График врачей» — в управлении, «Услуги и цены» — в финансах. */
@@ -21,7 +20,7 @@ type SettingsPageProps = {
 }
 
 /** Недельные смены врачей или справочник услуг. Цены — только администраторам и владельцу. */
-export function SettingsPage({ practitioners, services, onSaveHours, onSaveCard, onSavePrice, onCreateService, onToggleService, canEditPrices = true, section }: SettingsPageProps) {
+export function SettingsPage({ practitioners, services, onSaveHours, onSaveCard, onSavePrice, onCreateService, canEditPrices = true, section }: SettingsPageProps) {
   if (section === 'hours') return (
     <>
       <Box className="section-intro">
@@ -39,9 +38,9 @@ export function SettingsPage({ practitioners, services, onSaveHours, onSaveCard,
       </Box>
       <Box className="panel" sx={{ mb: 2 }}>
         <Typography className="panel-label">УСЛУГИ И ЦЕНЫ</Typography>
-        <Alert severity="info" sx={{ my: 1 }}>Новая цена и выключение услуги действуют для новых записей. В уже созданных записях остаются название и цена на момент записи. Свободная цена: при записи суммы нет, её вводят в кассе в пределах «от – до».</Alert>
+        <Alert severity="info" sx={{ my: 1 }}>Новая цена действует для новых записей. В уже созданных записях остаются название и цена на момент записи. Свободная цена: при записи суммы нет, её вводят в кассе в пределах «от – до».</Alert>
         {services.length === 0 && <Typography sx={{ color: 'text.secondary', my: 1 }}>Услуг пока нет. Добавьте первую — она сразу появится в записи на приём.</Typography>}
-        {services.map((service) => <PriceForm key={`${service.id}-${service.priceMode}-${service.priceMinor}-${service.minMinor}-${service.maxMinor}`} service={service} editable={canEditPrices} onSave={(pricing) => onSavePrice(service, pricing)} onToggle={() => onToggleService(service)} />)}
+        {services.map((service) => <PriceForm key={`${service.id}-${service.priceMode}-${service.priceMinor}-${service.minMinor}-${service.maxMinor}`} service={service} editable={canEditPrices} onSave={(pricing) => onSavePrice(service, pricing)} />)}
         {canEditPrices && <ServiceForm services={services} onCreate={onCreateService} />}
       </Box>
     </>

@@ -45,11 +45,16 @@ describe('interface roles', () => {
     expect(canSeeSignedDocuments('CASHIER')).toBe(false)
   })
 
-  it('inventory for nurse, manager and administrators; drive for everyone', () => {
-    expect(canSeeInventory('NURSE')).toBe(true)
-    expect(canSeeInventory('CASHIER')).toBe(false)
-    expect(can('NURSE', 'inventory.document.write')).toBe(true)
-    expect(can('DOCTOR', 'inventory.document.write')).toBe(false)
+  it('inventory is limited to medical staff, manager and administrators; contracts are for everyone', () => {
+    for (const role of ['OWNER', 'SENIOR_ADMINISTRATOR', 'ADMINISTRATOR', 'MANAGER', 'NURSE', 'SENIOR_NURSE'] as const) {
+      expect(canSeeInventory(role)).toBe(true)
+    }
+    for (const role of ['DOCTOR', 'CASHIER', 'SUPPORT'] as const) {
+      expect(canSeeInventory(role)).toBe(false)
+    }
+    for (const role of Object.keys(rolePermissions) as Array<keyof typeof rolePermissions>) {
+      expect(can(role, 'clinical.contract.use')).toBe(true)
+    }
     expect(canSeeDrive('CASHIER')).toBe(true)
     expect(can('SUPPORT', 'drive.clinic.admin')).toBe(true)
   })
@@ -58,7 +63,7 @@ describe('interface roles', () => {
     expect(assignableRoles('OWNER')).toContain('SENIOR_ADMINISTRATOR')
     expect(assignableRoles('ADMINISTRATOR')).not.toContain('OWNER')
     expect(assignableRoles('ADMINISTRATOR')).toContain('SUPPORT')
-    expect(assignableRoles('MANAGER')).toEqual(['MANAGER', 'DOCTOR', 'NURSE', 'CASHIER'])
+    expect(assignableRoles('MANAGER')).toEqual(['MANAGER', 'DOCTOR', 'NURSE', 'SENIOR_NURSE', 'CASHIER'])
     expect(assignableRoles('CASHIER')).toEqual([])
   })
 

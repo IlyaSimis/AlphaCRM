@@ -5,7 +5,7 @@ import { loadSales } from '../../api/finance'
 import type { SalesGroup, SalesReport } from '../../api/types'
 import { Metric } from '../../shared/ui'
 import { formatMoney } from '../schedule/booking'
-import { barWidth, groupLabels, lineLabel, periodOf, presetLabels, type PeriodPreset } from './finance'
+import { groupLabels, lineLabel, periodOf, presetLabels, type PeriodPreset } from './finance'
 
 /**
  * Продажи и выручка (раздел F, finance/sales): оплаты по дате оплаты, возвраты по дате возврата,
@@ -68,7 +68,7 @@ export function SalesPage({ apiOnline }: { apiOnline: boolean }) {
         {!report && !error ? <Box className="empty" sx={{ minHeight: 160 }}><CircularProgress aria-label="Загрузка отчёта" /></Box>
           : report && report.lines.length === 0 ? <Box className="empty" sx={{ minHeight: 160 }}><InsightsRounded /><Typography sx={{ fontWeight: 700 }}>За период оплат нет</Typography></Box>
           : report && <table className="audit-table sales-table">
-            <thead><tr><th>{group === 'day' ? 'День' : group === 'service' ? 'Услуга' : 'Врач'}</th><th>Оплат</th><th>Оплачено</th><th>Возвраты</th><th>Выручка</th><th aria-label="Доля" /></tr></thead>
+            <thead><tr><th>{group === 'day' ? 'День' : group === 'service' ? 'Услуга' : 'Врач'}</th><th>Оплат</th><th>Оплачено</th><th>Возвраты</th><th>Выручка</th></tr></thead>
             <tbody>
               {report.lines.map((line) => (
                 <tr key={line.key}>
@@ -77,7 +77,6 @@ export function SalesPage({ apiOnline }: { apiOnline: boolean }) {
                   <td className="nowrap">{formatMoney(line.amountMinor, currency)}</td>
                   <td className="nowrap">{line.refundedMinor > 0 ? `−${formatMoney(line.refundedMinor, currency)}` : '—'}</td>
                   <td className="nowrap" style={{ fontWeight: 700 }}>{formatMoney(line.netMinor, currency)}</td>
-                  <td className="sales-bar-cell"><Box className="sales-bar" sx={{ width: `${barWidth(line, report.lines)}%` }} /></td>
                 </tr>
               ))}
             </tbody>

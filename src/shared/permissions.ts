@@ -16,6 +16,7 @@ export type Permission =
   | 'clinical.note.write' | 'clinical.signed-document.read' | 'clinical.signed-document.read-own'
   | 'clinical.record.break-glass' | 'clinical.break-glass.review'
   | 'clinical.patient-file.write' | 'clinical.patient-file.write-care' | 'clinical.patient-file.read' | 'clinical.patient-file.read-signed'
+  | 'clinical.contract.use'
   | 'finance.invoice.read' | 'finance.invoice.write' | 'finance.invoice.set-amount' | 'finance.invoice.void' | 'finance.payment.refund' | 'finance.revenue.read'
   | 'inventory.item.read' | 'inventory.item.write' | 'inventory.document.write' | 'inventory.document.allow-negative'
   | 'inventory.stock.read' | 'inventory.marking.read' | 'inventory.marking.manage'
@@ -30,7 +31,7 @@ const OPERATIONS: Permission[] = [
   'schedule.appointment.read', 'schedule.appointment.write', 'schedule.practitioner.read', 'schedule.practitioner.manage',
   'schedule.service.read', 'schedule.service.manage', 'schedule.registry-task.read', 'schedule.registry-task.manage',
   'schedule.waitlist.read', 'schedule.waitlist.manage',
-  'clinical.patient.read', 'clinical.patient.contacts-read', 'clinical.patient.write', 'clinical.patient-file.write', 'clinical.patient-file.read',
+  'clinical.patient.read', 'clinical.patient.contacts-read', 'clinical.patient.write', 'clinical.patient-file.write', 'clinical.patient-file.read', 'clinical.contract.use',
   'finance.invoice.read', 'finance.invoice.write', 'finance.invoice.set-amount', 'finance.invoice.void', 'finance.payment.refund', 'finance.revenue.read',
   'inventory.item.read', 'inventory.item.write', 'inventory.document.write', 'inventory.document.allow-negative',
   'inventory.stock.read', 'inventory.marking.read', 'inventory.marking.manage',
@@ -46,7 +47,7 @@ export const rolePermissions: Record<StaffRole, Permission[]> = {
     'identity.staff.read', 'identity.staff.manage', 'identity.staff.reset-password',
     'schedule.appointment.read', 'schedule.appointment.write', 'schedule.practitioner.read', 'schedule.practitioner.manage',
     'schedule.service.read', 'schedule.registry-task.read', 'schedule.waitlist.read',
-    'clinical.patient.read', 'clinical.patient.contacts-read', 'clinical.patient.write',
+    'clinical.patient.read', 'clinical.patient.contacts-read', 'clinical.patient.write', 'clinical.contract.use',
     'clinical.signed-document.read', 'clinical.patient-file.read-signed',
     'finance.invoice.read', 'finance.revenue.read',
     'inventory.item.read', 'inventory.item.write', 'inventory.document.write', 'inventory.stock.read', 'inventory.marking.read', 'inventory.marking.manage',
@@ -55,23 +56,29 @@ export const rolePermissions: Record<StaffRole, Permission[]> = {
   DOCTOR: [
     'schedule.appointment.read', 'schedule.appointment.write-own', 'schedule.practitioner.read', 'schedule.service.read',
     'clinical.patient.read-care', 'clinical.patient.contacts-read', 'clinical.note.write', 'clinical.signed-document.read-own',
-    'clinical.patient-file.write-care', 'inventory.item.read', 'inventory.stock.read',
+    'clinical.patient-file.write-care', 'clinical.contract.use',
     'drive.file.use', 'workspace.item.use', 'assistant.navigation.use', 'insights.dashboard.read', 'insights.analytics.read-own', 'identity.hr.read-own',
   ],
   NURSE: [
     'schedule.appointment.read', 'schedule.appointment.write', 'schedule.practitioner.read', 'schedule.service.read',
-    'clinical.patient.read', 'clinical.patient.contacts-read',
+    'clinical.patient.read', 'clinical.patient.contacts-read', 'clinical.contract.use',
+    'inventory.item.read', 'inventory.item.write', 'inventory.document.write', 'inventory.stock.read', 'inventory.marking.read',
+    'drive.file.use', 'workspace.item.use', 'assistant.navigation.use', 'insights.dashboard.read', 'identity.hr.read-own',
+  ],
+  SENIOR_NURSE: [
+    'schedule.appointment.read', 'schedule.appointment.write', 'schedule.practitioner.read', 'schedule.service.read',
+    'clinical.patient.read', 'clinical.patient.contacts-read', 'clinical.contract.use',
     'inventory.item.read', 'inventory.item.write', 'inventory.document.write', 'inventory.stock.read', 'inventory.marking.read',
     'drive.file.use', 'workspace.item.use', 'assistant.navigation.use', 'insights.dashboard.read', 'identity.hr.read-own',
   ],
   CASHIER: [
-    'schedule.appointment.read', 'schedule.practitioner.read', 'schedule.service.read', 'clinical.patient.read',
+    'schedule.appointment.read', 'schedule.practitioner.read', 'schedule.service.read', 'clinical.patient.read', 'clinical.contract.use',
     'schedule.registry-task.read', 'finance.invoice.read', 'finance.invoice.write', 'finance.invoice.set-amount',
     'drive.file.use', 'workspace.item.use', 'assistant.navigation.use', 'insights.dashboard.read', 'identity.hr.read-own',
   ],
   SUPPORT: [
     'identity.staff.read', 'identity.staff.reset-password-platform', 'schedule.appointment.read', 'schedule.practitioner.read',
-    'schedule.service.read', 'inventory.item.read', 'inventory.stock.read', 'inventory.marking.read', 'inventory.marking.manage',
+    'schedule.service.read', 'clinical.contract.use',
     'drive.file.use', 'workspace.item.use', 'assistant.navigation.use', 'drive.clinic.admin', 'insights.dashboard.read', 'insights.analytics.read', 'audit.event.read-platform',
     'communications.delivery.read', 'communications.delivery.retry', 'identity.hr.read-own',
   ],
@@ -106,7 +113,7 @@ export const hasRole = (role: RoleSet, target: StaffRole) => asList(role).includ
 
 /** Роли, которые сотрудник может назначить (и обслуживать): не выше своих прав. */
 export function assignableRoles(role: RoleSet): StaffRole[] {
-  const all: StaffRole[] = ['OWNER', 'SENIOR_ADMINISTRATOR', 'ADMINISTRATOR', 'MANAGER', 'DOCTOR', 'NURSE', 'CASHIER', 'SUPPORT']
+  const all: StaffRole[] = ['OWNER', 'SENIOR_ADMINISTRATOR', 'ADMINISTRATOR', 'MANAGER', 'DOCTOR', 'NURSE', 'SENIOR_NURSE', 'CASHIER', 'SUPPORT']
   return all.filter((target) => {
     if (target === 'OWNER' || target === 'SENIOR_ADMINISTRATOR') return can(role, 'identity.role.assign-privileged')
     if (target === 'ADMINISTRATOR' || target === 'SUPPORT') return can(role, 'identity.role.assign-admin')

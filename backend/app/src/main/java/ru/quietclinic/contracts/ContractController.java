@@ -38,6 +38,11 @@ public class ContractController {
     return contracts.templates();
   }
 
+  @GetMapping("/contract-patients")
+  List<ContractPatientView> patients() {
+    return contracts.patients();
+  }
+
   @PostMapping(path = "/contract-templates", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @ResponseStatus(HttpStatus.CREATED)
   TemplateView upload(@RequestParam String name, @RequestParam("file") MultipartFile file)
@@ -87,6 +92,8 @@ public class ContractController {
       int version,
       List<String> placeholders,
       Instant createdAt) {}
+
+  record ContractPatientView(UUID id, String name) {}
 
   record CreateContractRequest(
       @NotNull UUID templateId, UUID serviceId, Map<String, String> values) {}

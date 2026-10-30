@@ -68,7 +68,7 @@ export function WorkspaceContent(props: WorkspaceContentProps) {
 
   return (
     <Suspense fallback={<Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress aria-label="Загрузка раздела" /></Box>}>
-      {page === 'today' && <TodayPage role={role} selfId={staff.id} selfName={staff.fullName} onNewAppointment={() => onOpenBooking(localToday())} onNewPatient={onNewPatient} apiOnline={clinic.apiOnline} patients={patientItems} dueTasks={registry.todayTasks} tasksError={registry.error} staffName={registry.staffName} onOpen={onNavigate} />}
+      {page === 'today' && <TodayPage role={role} selfId={staff.id} selfName={staff.fullName} onNewAppointment={() => onOpenBooking(localToday())} onNewPatient={onNewPatient} apiOnline={clinic.apiOnline} patients={patientItems} appointments={scheduleItems} practitioners={practitioners} dueTasks={registry.todayTasks} tasksError={registry.error} staffName={registry.staffName} onOpen={onNavigate} />}
       {page === 'workspace' && <WorkspacePage key={staff.id} apiOnline={clinic.apiOnline} selfId={staff.id} patients={canSeePatients(role) ? patientItems : []} appointments={scheduleItems} notify={clinic.notify} navigationIntent={workspaceIntent} />}
       {/* Врача встречают на расписании; остальных — на «Сегодня». */}
       {page === 'schedule' && canWriteClinical(role) && <Typography className="greeting" sx={{ mb: 1.5 }}>{greeting(staff.fullName)}</Typography>}
@@ -83,19 +83,19 @@ export function WorkspaceContent(props: WorkspaceContentProps) {
         registry={canSeeRegistry(role) ? <RegistryPanel patient={selectedPatient} sharedWith={sharedPhone(selectedPatient)} admin={canManageRegistry(role)} selfId={staff.id} registry={registry} onOpenPatient={onOpenPatientById} onSave={(input) => clinic.updateRegistry(selectedPatient, input)} /> : undefined}
         onEdit={() => onEditPatient(selectedPatient)} onBack={() => onNavigate('patients')} onCancel={(item) => clinic.cancelBooking(item, role)} onReschedule={onReschedule} onOpenEncounter={(encounter) => onOpenEncounter(selectedPatient, encounter)} onGrantConsent={(input) => clinic.grantConsent(selectedPatient, input)} onRevokeConsent={(consentId) => clinic.revokeConsent(selectedPatient, consentId)} />}
       {page === 'documents' && <SignedDocuments role={role} apiOnline={clinic.apiOnline} practitioners={practitioners} />}
-      {page === 'contract-templates' && <ContractTemplatesPage role={role} apiOnline={clinic.apiOnline} notify={clinic.notify} />}
+      {page === 'contract-templates' && <ContractTemplatesPage role={role} apiOnline={clinic.apiOnline} services={clinic.services} notify={clinic.notify} />}
       {page === 'registry' && <RegistryPage staff={staff} registry={registry} patients={patientItems} practitioners={practitioners} services={clinic.services} />}
       {page === 'analytics' && <Analytics apiOnline={clinic.apiOnline} anchor={scheduleDate} practitioners={practitioners} scheduleItems={scheduleItems} />}
       {page === 'audit' && <AuditLog apiOnline={clinic.apiOnline} />}
       {page === 'cashier' && <Cashier role={role} apiOnline={clinic.apiOnline} practitioners={practitioners} localAppointments={scheduleItems} localCharges={clinic.localCharges} onLocalCharge={clinic.addLocalCharge} onLocalPay={clinic.payLocalCharge} onLocalAmount={clinic.setLocalChargeAmount} notify={clinic.notify} />}
-      {(page === 'hours' || page === 'prices') && <SettingsPage key={page} section={page} practitioners={practitioners} services={clinic.services} onSaveHours={clinic.saveHours} onSaveCard={clinic.saveCard} onSavePrice={clinic.savePrice} onCreateService={clinic.addService} onToggleService={clinic.toggleService} canEditPrices={canManagePrices(role)} />}
+      {(page === 'hours' || page === 'prices') && <SettingsPage key={page} section={page} practitioners={practitioners} services={clinic.services} onSaveHours={clinic.saveHours} onSaveCard={clinic.saveCard} onSavePrice={clinic.savePrice} onCreateService={clinic.addService} canEditPrices={canManagePrices(role)} />}
       {page === 'outbox' && <OutboxPage apiOnline={clinic.apiOnline} />}
       {page === 'sales' && <SalesPage apiOnline={clinic.apiOnline} />}
       {page === 'break-glass' && <BreakGlassLog apiOnline={clinic.apiOnline} />}
       {page === 'hr' && <ContractsPage apiOnline={clinic.apiOnline} notify={clinic.notify} />}
       {page === 'hr-me' && <MyContractPage apiOnline={clinic.apiOnline} />}
       {stock && <InventoryPage role={role} apiOnline={clinic.apiOnline} services={clinic.services} notify={clinic.notify} section={stock} onSection={(next) => onNavigate(`stock-${next}`)} />}
-      {drive && <DrivePage role={role} apiOnline={clinic.apiOnline} self={staff} notify={clinic.notify} section={drive} onSection={(next) => onNavigate(next === 'mine' ? 'drive' : `drive-${next}`)} />}
+      {drive && <DrivePage apiOnline={clinic.apiOnline} self={staff} notify={clinic.notify} section={drive} onSection={(next) => onNavigate(next === 'mine' ? 'drive' : `drive-${next}`)} />}
       {page === 'staff' && <StaffPage self={staff} live={live} practitioners={practitioners} notify={clinic.notify} onPractitionerAdded={clinic.practitionerAdded} />}
       {page === 'visit' && visit && <Visit key={visitKey} target={visit} doctorName={doctorName} apiOnline={clinic.apiOnline} notify={clinic.notify} appointmentStatus={visitAppointment?.statusCode} onStarted={() => { if (visitAppointment) void clinic.visitStarted(visitAppointment) }} onComplete={() => { if (visitAppointment) void clinic.changeStatus(visitAppointment, 'COMPLETED', role) }} onBack={() => onNavigate('schedule')} />}
     </Suspense>

@@ -114,7 +114,12 @@ class ContractControllerTest {
     mvc.perform(get(endpoint).with(staff.role("MANAGER")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[*].id", hasItem(id)));
-    mvc.perform(get(endpoint).with(staff.role("CASHIER"))).andExpect(status().isForbidden());
+    mvc.perform(get(endpoint).with(staff.role("CASHIER")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[*].id", hasItem(id)));
+    mvc.perform(get("/api/v1/contract-patients").with(staff.role("DOCTOR")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[*].name", hasItem("Анна Михайлова")));
     var downloaded =
         mvc.perform(get("/api/v1/patient-contracts/" + id + "/docx").with(staff.admin()))
             .andExpect(status().isOk())

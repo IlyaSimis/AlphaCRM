@@ -16,8 +16,9 @@ const dashboard = {
 const server = (tasks: unknown[] = [
   { id: 't-1', patientId: anna.id, title: 'Перезвонить в лабораторию', dueDate: '2026-10-19', assigneeId: '00000000-0000-0000-0000-0000000a0001', status: 'OPEN' },
   { id: 't-2', patientId: null, title: 'Задача на сегодня', dueDate: '2026-10-20', assigneeId: '00000000-0000-0000-0000-0000000a0001', status: 'OPEN' },
-]) => (address: string) => {
+], appointments: unknown[] = []) => (address: string) => {
   if (address.includes('/patients')) return jsonResponse([anna])
+  if (address.includes('/practitioners')) return jsonResponse([{ id: '00000000-0000-0000-0000-000000000201', fullName: 'Александр Петров', specialty: 'Психиатр', workingHours: [] }])
   if (address.includes('/registry/tasks')) return jsonResponse(tasks)
   if (address.includes('/registry/waitlist')) return jsonResponse([])
   if (address.includes('/workspace/items')) return jsonResponse([{
@@ -25,7 +26,7 @@ const server = (tasks: unknown[] = [
     dueAt: null, remindAt: null, patientId: null, appointmentId: null, tags: [], fields: [], checklist: [],
     createdAt: '2026-10-19T08:00:00Z', updatedAt: '2026-10-20T08:00:00Z', completedAt: null, archivedAt: null,
   }])
-  if (address.includes('/appointments')) return jsonResponse([])
+  if (address.includes('/appointments')) return jsonResponse(appointments)
   return jsonResponse({}, 404)
 }
 
@@ -57,6 +58,25 @@ describe('«Сегодня»', () => {
     await openPage(user, 'Сегодня')
     await user.click(await screen.findByRole('button', { name: 'Открыть заметку: Идеи для клиники' }))
     expect(await screen.findByRole('heading', { name: 'Моё пространство', level: 4 })).toBeInTheDocument()
+  })
+
+  it('shows all of today’s appointments in a table and excludes cancelled ones', async () => {
+    withAuth(server([], [
+      { id: 'a-1', startsAt: '2026-10-20T09:00:00Z', endsAt: '2026-10-20T09:50:00Z', status: 'CONFIRMED', patientId: anna.id, serviceName: 'Первичный приём', practitionerId: '00000000-0000-0000-0000-000000000201' },
+      { id: 'a-2', startsAt: '2026-10-20T10:00:00Z', endsAt: '2026-10-20T10:30:00Z', status: 'CANCELLED', patientId: anna.id, serviceName: 'Отменённый приём', practitionerId: '00000000-0000-0000-0000-000000000201' },
+    ]), 'admin', { dashboard })
+    renderApp()
+    expect(await screen.findByText('API подключён')).toBeInTheDocument()
+    const region = await screen.findByRole('region', { name: 'Приёмы сегодня' })
+    const table = await within(region).findByRole('table')
+    expect(within(table).getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual(['Время', 'Пациент', 'Услуга', 'Врач', 'Статус'])
+    expect(within(table).getAllByRole('row')).toHaveLength(2)
+    expect(within(table).getByText('09:00')).toBeInTheDocument()
+    expect(within(table).getByText('Анна Михайлова')).toBeInTheDocument()
+    expect(within(table).getByText('Первичный приём')).toBeInTheDocument()
+    expect(within(table).getByText('Александр Петров')).toBeInTheDocument()
+    expect(within(table).getByText('Подтверждён')).toBeInTheDocument()
+    expect(within(table).queryByText('Отменённый приём')).not.toBeInTheDocument()
   })
 
   it('a cashier sees notes and an empty overdue block without unrelated requests', async () => {

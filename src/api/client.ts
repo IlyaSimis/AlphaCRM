@@ -1,6 +1,6 @@
 import { errorPhrase } from './errorMessages'
 
-export type ApiRole = 'OWNER' | 'SENIOR_ADMINISTRATOR' | 'ADMINISTRATOR' | 'MANAGER' | 'DOCTOR' | 'NURSE' | 'CASHIER' | 'SUPPORT'
+export type ApiRole = 'OWNER' | 'SENIOR_ADMINISTRATOR' | 'ADMINISTRATOR' | 'MANAGER' | 'DOCTOR' | 'NURSE' | 'SENIOR_NURSE' | 'CASHIER' | 'SUPPORT'
 
 /** Тот же origin, что и интерфейс: nginx в Docker, прокси Vite при разработке. */
 export const API = import.meta.env.VITE_API_URL ?? '/api/v1'

@@ -175,16 +175,18 @@ OWNER;GET;/api/v1/inventory/items;ok;
 SENIOR_ADMINISTRATOR;GET;/api/v1/inventory/items;ok;
 ADMINISTRATOR;GET;/api/v1/inventory/items;ok;
 MANAGER;GET;/api/v1/inventory/items;ok;
-DOCTOR;GET;/api/v1/inventory/items;ok;
+DOCTOR;GET;/api/v1/inventory/items;403;
 NURSE;GET;/api/v1/inventory/items;ok;
+SENIOR_NURSE;GET;/api/v1/inventory/items;ok;
 CASHIER;GET;/api/v1/inventory/items;403;
-SUPPORT;GET;/api/v1/inventory/items;ok;
+SUPPORT;GET;/api/v1/inventory/items;403;
 OWNER;POST;/api/v1/inventory/categories;ok;{"name":"RBAC {unique}","kind":"GOODS"}
 SENIOR_ADMINISTRATOR;POST;/api/v1/inventory/categories;ok;{"name":"RBAC {unique}","kind":"GOODS"}
 ADMINISTRATOR;POST;/api/v1/inventory/categories;ok;{"name":"RBAC {unique}","kind":"GOODS"}
 MANAGER;POST;/api/v1/inventory/categories;ok;{"name":"RBAC {unique}","kind":"GOODS"}
 DOCTOR;POST;/api/v1/inventory/categories;403;{"name":"RBAC {unique}","kind":"GOODS"}
 NURSE;POST;/api/v1/inventory/categories;ok;{"name":"RBAC {unique}","kind":"GOODS"}
+SENIOR_NURSE;POST;/api/v1/inventory/categories;ok;{"name":"RBAC {unique}","kind":"GOODS"}
 CASHIER;POST;/api/v1/inventory/categories;403;{"name":"RBAC {unique}","kind":"GOODS"}
 SUPPORT;POST;/api/v1/inventory/categories;403;{"name":"RBAC {unique}","kind":"GOODS"}
 OWNER;GET;/api/v1/inventory/documents;ok;
@@ -193,32 +195,36 @@ ADMINISTRATOR;GET;/api/v1/inventory/documents;ok;
 MANAGER;GET;/api/v1/inventory/documents;ok;
 DOCTOR;GET;/api/v1/inventory/documents;403;
 NURSE;GET;/api/v1/inventory/documents;ok;
+SENIOR_NURSE;GET;/api/v1/inventory/documents;ok;
 CASHIER;GET;/api/v1/inventory/documents;403;
 SUPPORT;GET;/api/v1/inventory/documents;403;
 OWNER;GET;/api/v1/inventory/balances;ok;
 SENIOR_ADMINISTRATOR;GET;/api/v1/inventory/balances;ok;
 ADMINISTRATOR;GET;/api/v1/inventory/balances;ok;
 MANAGER;GET;/api/v1/inventory/balances;ok;
-DOCTOR;GET;/api/v1/inventory/balances;ok;
+DOCTOR;GET;/api/v1/inventory/balances;403;
 NURSE;GET;/api/v1/inventory/balances;ok;
+SENIOR_NURSE;GET;/api/v1/inventory/balances;ok;
 CASHIER;GET;/api/v1/inventory/balances;403;
-SUPPORT;GET;/api/v1/inventory/balances;ok;
+SUPPORT;GET;/api/v1/inventory/balances;403;
 OWNER;GET;/api/v1/inventory/marking/operations;ok;
 SENIOR_ADMINISTRATOR;GET;/api/v1/inventory/marking/operations;ok;
 ADMINISTRATOR;GET;/api/v1/inventory/marking/operations;ok;
 MANAGER;GET;/api/v1/inventory/marking/operations;ok;
 DOCTOR;GET;/api/v1/inventory/marking/operations;403;
 NURSE;GET;/api/v1/inventory/marking/operations;ok;
+SENIOR_NURSE;GET;/api/v1/inventory/marking/operations;ok;
 CASHIER;GET;/api/v1/inventory/marking/operations;403;
-SUPPORT;GET;/api/v1/inventory/marking/operations;ok;
+SUPPORT;GET;/api/v1/inventory/marking/operations;403;
 OWNER;POST;/api/v1/inventory/marking/operations/{random}/retry;ok;
 SENIOR_ADMINISTRATOR;POST;/api/v1/inventory/marking/operations/{random}/retry;ok;
 ADMINISTRATOR;POST;/api/v1/inventory/marking/operations/{random}/retry;ok;
 MANAGER;POST;/api/v1/inventory/marking/operations/{random}/retry;ok;
 DOCTOR;POST;/api/v1/inventory/marking/operations/{random}/retry;403;
 NURSE;POST;/api/v1/inventory/marking/operations/{random}/retry;403;
+SENIOR_NURSE;POST;/api/v1/inventory/marking/operations/{random}/retry;403;
 CASHIER;POST;/api/v1/inventory/marking/operations/{random}/retry;403;
-SUPPORT;POST;/api/v1/inventory/marking/operations/{random}/retry;ok;
+SUPPORT;POST;/api/v1/inventory/marking/operations/{random}/retry;403;
 OWNER;GET;/api/v1/drive/nodes;ok;
 SENIOR_ADMINISTRATOR;GET;/api/v1/drive/nodes;ok;
 ADMINISTRATOR;GET;/api/v1/drive/nodes;ok;

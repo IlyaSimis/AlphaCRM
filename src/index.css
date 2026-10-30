@@ -342,10 +342,6 @@ button, input, textarea { font: inherit; }
   .clinical-form { padding: 2px 16px; }
 }
 
-/* Продажи: полоса доли выручки строки. */
-.sales-bar-cell { width: 28%; min-width: 80px; }
-.sales-bar { height: 10px; border-radius: 5px; background: var(--active-text); opacity: .55; min-width: 2px; }
-
 /* Личное рабочее пространство: карточки и доска произвольных статусов. */
 .workspace-card { position: relative; overflow: hidden; }
 .workspace-card::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--workspace-accent, var(--active-text)); }

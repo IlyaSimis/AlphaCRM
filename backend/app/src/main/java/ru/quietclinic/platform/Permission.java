@@ -62,6 +62,8 @@ public enum Permission {
   /** Черновики и подписанные PDF всех пациентов клиники. */
   PATIENT_FILE_READ("clinical.patient-file.read"),
   PATIENT_FILE_READ_SIGNED("clinical.patient-file.read-signed"),
+  /** Формирование, чтение и печать административных договоров любым сотрудником. */
+  CONTRACT_USE("clinical.contract.use"),
 
   // finance
   INVOICE_READ("finance.invoice.read"),

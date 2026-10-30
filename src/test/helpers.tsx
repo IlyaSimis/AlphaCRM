@@ -82,6 +82,7 @@ export function testAccounts(): Record<string, StaffItem> {
     't.petrov': account('00000000-0000-0000-0000-0000000a0004', 'Александр Петров', 't.petrov', 'DOCTOR', PETROV_ID),
     't.lebedeva': account('00000000-0000-0000-0000-0000000a0005', 'Ольга Лебедева', 't.lebedeva', 'DOCTOR', LEBEDEVA_ID),
     't.nurse': account('00000000-0000-0000-0000-0000000a0006', 'Тестовая медсестра', 't.nurse', 'NURSE'),
+    't.senior-nurse': account('00000000-0000-0000-0000-0000000a0008', 'Тестовый старший медперсонал', 't.senior-nurse', 'SENIOR_NURSE'),
     't.support': account('00000000-0000-0000-0000-0000000a0007', 'Тестовая техподдержка', 't.support', 'SUPPORT'),
   }
 }
@@ -169,7 +170,7 @@ export async function signIn(user: User, username: string, password = username =
   await user.click(screen.getByRole('button', { name: 'Войти' }))
 }
 
-const loginsByRole: Record<StaffRole, string> = { OWNER: 'admin', SENIOR_ADMINISTRATOR: 'admin', ADMINISTRATOR: 'admin', DOCTOR: 't.petrov', MANAGER: 't.manager', CASHIER: 't.cashier', NURSE: 't.nurse', SUPPORT: 't.support' }
+const loginsByRole: Record<StaffRole, string> = { OWNER: 'admin', SENIOR_ADMINISTRATOR: 'admin', ADMINISTRATOR: 'admin', DOCTOR: 't.petrov', MANAGER: 't.manager', CASHIER: 't.cashier', NURSE: 't.nurse', SENIOR_NURSE: 't.senior-nurse', SUPPORT: 't.support' }
 
 /** Сменить сотрудника: выйти и войти другим — в песочнице кнопкой роли, на сервере через форму. */
 export async function chooseRole(user: User, role: StaffRole, username = loginsByRole[role]) {

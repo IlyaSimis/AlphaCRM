@@ -104,7 +104,7 @@ function allowed(page: Page, role: Role): boolean {
     case 'visit': return canWriteClinical(role)
     case 'registry': return canSeeRegistry(role)
     case 'documents': return canSeeSignedDocuments(role)
-    case 'contract-templates': return canSeeStaff(role) && can(role, 'clinical.patient.read', 'clinical.patient.contacts-read')
+    case 'contract-templates': return can(role, 'clinical.contract.use')
     case 'hours': return can(role, 'schedule.practitioner.manage')
     case 'stock-balances': return can(role, 'inventory.stock.read')
     case 'stock-items': return can(role, 'inventory.item.read')

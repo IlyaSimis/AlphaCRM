@@ -45,3 +45,5 @@ databaseChangeLog:
       file: db/changelog/022-patient-privacy.sql
   - include:
       file: db/changelog/023-patient-contracts.sql
+  - include:
+      file: db/changelog/024-senior-nurse.sql

@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AddRounded, ArchiveRounded, CheckCircleOutlineRounded, DeleteOutlineRounded, NotificationsActiveRounded, NoteAddRounded, RadioButtonUncheckedRounded, RestoreRounded, SaveRounded, ViewKanbanRounded, ViewListRounded } from '@mui/icons-material'
+import { AddRounded, ArchiveRounded, CheckCircleOutlineRounded, NotificationsActiveRounded, NoteAddRounded, RadioButtonUncheckedRounded, RestoreRounded, ViewKanbanRounded, ViewListRounded } from '@mui/icons-material'
 import { Alert, Box, Button, Chip, IconButton, MenuItem, Stack, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material'
-import { archiveWorkspaceItem, createWorkspaceItem, createWorkspaceView, deleteWorkspaceView, loadWorkspaceItems, loadWorkspaceViews, updateWorkspaceItem } from '../../api/workspace'
-import type { PatientItem, ScheduleItem, WorkspaceFilter, WorkspaceItem, WorkspaceItemInput, WorkspaceView } from '../../api/types'
+import { archiveWorkspaceItem, createWorkspaceItem, loadWorkspaceItems, updateWorkspaceItem } from '../../api/workspace'
+import type { PatientItem, ScheduleItem, WorkspaceFilter, WorkspaceItem, WorkspaceItemInput } from '../../api/types'
 import { formatClinicMoment } from '../../shared/clinicTime'
-import { NameDialog } from '../drive/NameDialog'
 import type { WorkspaceNavigationIntent } from '../assistant/navigationCatalog'
 import { WorkspaceItemDialog } from './WorkspaceItemDialog'
 import { blankWorkspaceItem, emptyWorkspaceFilter, filterWorkspace, inputOf, isWorkspaceOverdue, isWorkspaceReminderDue, newWorkspaceId, offlineStore } from './workspace'
@@ -18,16 +17,26 @@ type WorkspacePageProps = {
   navigationIntent?: ({ key: number } & WorkspaceNavigationIntent) | null
 }
 
+function normalizeItem(item: WorkspaceItem): WorkspaceItem {
+  const tags = Array.isArray(item.tags)
+    ? [...new Set(item.tags.filter((tag): tag is string => typeof tag === 'string').map((tag) => tag.trim()).filter(Boolean))]
+    : []
+  return {
+    ...item,
+    tags,
+    fields: Array.isArray(item.fields) ? item.fields : [],
+    checklist: Array.isArray(item.checklist) ? item.checklist.filter((entry) => entry && typeof entry.text === 'string') : [],
+  }
+}
+
 /** Личное пространство: серверная версия для работы и локально сохраняемая демо-песочница. */
 export function WorkspacePage({ apiOnline, selfId, patients, appointments, notify, navigationIntent }: WorkspacePageProps) {
-  const initial = useMemo(() => apiOnline ? { items: [], views: [] } : offlineStore(selfId), [apiOnline, selfId])
-  const [items, setItems] = useState<WorkspaceItem[]>(initial.items)
-  const [views, setViews] = useState<WorkspaceView[]>(initial.views)
+  const initial = useMemo(() => apiOnline ? [] : offlineStore(selfId).items.map(normalizeItem), [apiOnline, selfId])
+  const [items, setItems] = useState<WorkspaceItem[]>(initial)
   const [filter, setFilter] = useState<WorkspaceFilter>(emptyWorkspaceFilter)
   const [archived, setArchived] = useState(false)
   const [editor, setEditor] = useState<{ item: WorkspaceItem | null; preset?: string } | null>(null)
   const [quickTitle, setQuickTitle] = useState('')
-  const [savingView, setSavingView] = useState(false)
   const [loading, setLoading] = useState(apiOnline)
   const [error, setError] = useState('')
   const [revision, setRevision] = useState(0)
@@ -36,8 +45,8 @@ export function WorkspacePage({ apiOnline, selfId, patients, appointments, notif
     if (!apiOnline) return
     let cancelled = false
     setLoading(true)
-    Promise.all([loadWorkspaceItems(archived), loadWorkspaceViews()])
-      .then(([nextItems, nextViews]) => { if (!cancelled) { setItems(nextItems); setViews(nextViews); setError('') } })
+    loadWorkspaceItems(archived)
+      .then((nextItems) => { if (!cancelled) { setItems(nextItems.map(normalizeItem)); setError('') } })
       .catch((reason: Error) => { if (!cancelled) setError(reason.message) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
@@ -45,8 +54,8 @@ export function WorkspacePage({ apiOnline, selfId, patients, appointments, notif
 
   useEffect(() => {
     if (apiOnline) return
-    try { globalThis.localStorage?.setItem(`alphacrm.workspace.${selfId}`, JSON.stringify({ items, views })) } catch { /* Нет места — остаётся текущая сессия. */ }
-  }, [apiOnline, selfId, items, views])
+    try { globalThis.localStorage?.setItem(`alphacrm.workspace.${selfId}`, JSON.stringify({ items, views: [] })) } catch { /* Нет места — остаётся текущая сессия. */ }
+  }, [apiOnline, selfId, items])
 
   useEffect(() => {
     if (!navigationIntent) return
@@ -68,16 +77,21 @@ export function WorkspacePage({ apiOnline, selfId, patients, appointments, notif
   const refresh = () => setRevision((value) => value + 1)
   const save = async (input: WorkspaceItemInput) => {
     if (apiOnline) {
-      if (editor?.item) await updateWorkspaceItem(editor.item.id, input)
-      else await createWorkspaceItem(input)
+      const saved = normalizeItem(editor?.item
+        ? await updateWorkspaceItem(editor.item.id, input)
+        : await createWorkspaceItem(input))
+      // Ответ сервера показываем сразу: новые теги доступны ещё до завершения фонового обновления.
+      setItems((current) => editor?.item
+        ? current.map((item) => item.id === saved.id ? saved : item)
+        : [saved, ...current])
       refresh()
     } else {
       const now = new Date().toISOString()
       if (editor?.item) {
         const completedAt = input.completed ? editor.item.completedAt ?? now : null
-        setItems((current) => current.map((item) => item.id === editor.item?.id ? { ...item, ...input, completedAt, updatedAt: now } : item))
+        setItems((current) => current.map((item) => item.id === editor.item?.id ? normalizeItem({ ...item, ...input, completedAt, updatedAt: now }) : item))
       } else {
-        setItems((current) => [{ ...input, id: newWorkspaceId(), createdAt: now, updatedAt: now, completedAt: input.completed ? now : null, archivedAt: null }, ...current])
+        setItems((current) => [normalizeItem({ ...input, id: newWorkspaceId(), createdAt: now, updatedAt: now, completedAt: input.completed ? now : null, archivedAt: null }), ...current])
       }
     }
     notify(editor?.item ? 'Запись сохранена' : 'Запись создана')
@@ -87,12 +101,13 @@ export function WorkspacePage({ apiOnline, selfId, patients, appointments, notif
   const toggle = async (item: WorkspaceItem) => {
     try {
       const input = { ...inputOf(item), completed: !item.completed }
-      if (apiOnline) await updateWorkspaceItem(item.id, input)
-      else {
+      if (apiOnline) {
+        const saved = normalizeItem(await updateWorkspaceItem(item.id, input))
+        setItems((current) => current.map((entry) => entry.id === saved.id ? saved : entry))
+      } else {
         const now = new Date().toISOString()
         setItems((current) => current.map((entry) => entry.id === item.id ? { ...entry, completed: input.completed, completedAt: input.completed ? now : null, updatedAt: now } : entry))
       }
-      if (apiOnline) refresh()
     } catch (reason) { setError((reason as Error).message) }
   }
 
@@ -110,8 +125,11 @@ export function WorkspacePage({ apiOnline, selfId, patients, appointments, notif
     if (!title) return
     try {
       const input = { ...blankWorkspaceItem(), title }
-      if (apiOnline) { await createWorkspaceItem(input); refresh() }
-      else {
+      if (apiOnline) {
+        const saved = normalizeItem(await createWorkspaceItem(input))
+        setItems((current) => [saved, ...current])
+        refresh()
+      } else {
         const now = new Date().toISOString()
         setItems((current) => [{ ...input, id: newWorkspaceId(), createdAt: now, updatedAt: now, completedAt: null, archivedAt: null }, ...current])
       }
@@ -143,33 +161,18 @@ export function WorkspacePage({ apiOnline, selfId, patients, appointments, notif
         </Box>
         <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 2, alignItems: 'center', flexWrap: 'wrap' }}>
           <ToggleButtonGroup size="small" exclusive value={filter.display} onChange={(_, value) => { if (value) patchFilter('display', value) }} aria-label="Вид списка"><ToggleButton value="list" aria-label="Список"><ViewListRounded /></ToggleButton><ToggleButton value="board" aria-label="Доска"><ViewKanbanRounded /></ToggleButton></ToggleButtonGroup>
-          <Button size="small" startIcon={<SaveRounded />} onClick={() => setSavingView(true)}>Сохранить вид</Button>
-          <Button size="small" onClick={() => setFilter(emptyWorkspaceFilter)}>Сбросить</Button>
           <Box sx={{ flex: 1 }} />
           <Button size="small" startIcon={archived ? <RestoreRounded /> : <ArchiveRounded />} onClick={() => { setArchived((value) => !value); setFilter(emptyWorkspaceFilter) }}>{archived ? 'К активным' : 'Архив'}</Button>
         </Stack>
-        {views.length > 0 && <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 2, flexWrap: 'wrap' }}>{views.map((view) => <Chip key={view.id} label={view.name} onClick={() => { setFilter({ ...emptyWorkspaceFilter, ...view.filter }); setArchived(false) }} onDelete={() => {
-          if (apiOnline) void deleteWorkspaceView(view.id).then(refresh).catch((reason: Error) => setError(reason.message))
-          else setViews((current) => current.filter((entry) => entry.id !== view.id))
-        }} deleteIcon={<Tooltip title="Удалить сохранённый вид"><DeleteOutlineRounded /></Tooltip>} />)}</Stack>}
       </Box>
 
       {loading ? <Typography sx={{ color: 'text.secondary' }}>Загрузка…</Typography> : visible.length === 0 ? <Box className="panel" sx={{ p: 4, textAlign: 'center' }}><Typography variant="h6">{archived ? 'Архив пуст' : 'Здесь пока ничего нет'}</Typography><Typography sx={{ color: 'text.secondary', mt: 1 }}>{archived ? 'Архивированные записи можно восстановить.' : 'Создайте запись или измените фильтры — структура полностью ваша.'}</Typography></Box> : filter.display === 'list' ? (
-        <Stack spacing={1.2}>{visible.map((item) => <WorkspaceCard key={item.id} item={item} patientName={patientName(item.patientId)} archived={archived} onOpen={() => setEditor({ item })} onToggle={() => void toggle(item)} onArchive={() => void setArchive(item, !archived)} />)}</Stack>
+        <Stack component="section" aria-label="Список задач" spacing={1.2}>{visible.map((item) => <WorkspaceCard key={item.id} item={item} patientName={patientName(item.patientId)} archived={archived} onOpen={() => setEditor({ item })} onToggle={() => void toggle(item)} onArchive={() => void setArchive(item, !archived)} />)}</Stack>
       ) : (
-        <Box className="workspace-board">{statuses.map((status) => <Box component="section" className="workspace-board-column" key={status}><Typography className="panel-label" sx={{ p: 1.5 }}>{status} · {visible.filter((item) => item.status === status).length}</Typography><Stack spacing={1}>{visible.filter((item) => item.status === status).map((item) => <WorkspaceCard key={item.id} item={item} patientName={patientName(item.patientId)} archived={archived} compact onOpen={() => setEditor({ item })} onToggle={() => void toggle(item)} onArchive={() => void setArchive(item, !archived)} />)}</Stack></Box>)}</Box>
+        <Box component="section" aria-label="Доска задач" className="workspace-board">{statuses.map((status) => <Box component="section" className="workspace-board-column" key={status}><Typography className="panel-label" sx={{ p: 1.5 }}>{status} · {visible.filter((item) => item.status === status).length}</Typography><Stack spacing={1}>{visible.filter((item) => item.status === status).map((item) => <WorkspaceCard key={item.id} item={item} patientName={patientName(item.patientId)} archived={archived} compact onOpen={() => setEditor({ item })} onToggle={() => void toggle(item)} onArchive={() => void setArchive(item, !archived)} />)}</Stack></Box>)}</Box>
       )}
 
       {editor && <WorkspaceItemDialog item={editor.item} preset={editor.preset} patients={patients} appointments={appointments} onClose={() => setEditor(null)} onSave={save} />}
-      {savingView && <NameDialog title="Сохранить текущий вид" initial="" onClose={() => setSavingView(false)} onSave={async (name) => {
-        try {
-          if (apiOnline) { await createWorkspaceView(name, filter); refresh() }
-          else setViews((current) => [...current, { id: newWorkspaceId(), name, filter, createdAt: new Date().toISOString() }])
-          setSavingView(false)
-          notify('Представление сохранено')
-          return null
-        } catch (reason) { return (reason as Error).message }
-      }} />}
     </>
   )
 }
@@ -184,6 +187,12 @@ function WorkspaceCard({ item, patientName, archived, compact, onOpen, onToggle,
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Button variant="text" onClick={onOpen} sx={{ p: 0, minWidth: 0, textAlign: 'left', textTransform: 'none', color: 'text.primary', fontWeight: 700, textDecoration: item.completed ? 'line-through' : 'none' }}>{item.title}</Button>
           {item.body && !compact && <Typography sx={{ color: 'text.secondary', fontSize: 14, mt: 0.5, whiteSpace: 'pre-wrap', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{item.body}</Typography>}
+          {item.checklist.length > 0 && <Stack component="ul" aria-label={`Пункты: ${item.title}`} spacing={0.35} sx={{ mt: 1, mb: 0, pl: 0, listStyle: 'none' }}>
+            {item.checklist.map((entry, index) => <Stack component="li" direction="row" spacing={0.6} key={`${entry.text}-${index}`} sx={{ alignItems: 'center' }}>
+              {entry.done ? <CheckCircleOutlineRounded color="primary" sx={{ fontSize: 17 }} /> : <RadioButtonUncheckedRounded color="action" sx={{ fontSize: 17 }} />}
+              <Typography sx={{ fontSize: 13, color: entry.done ? 'text.secondary' : 'text.primary', textDecoration: entry.done ? 'line-through' : 'none' }}>{entry.text || `Пункт ${index + 1}`}</Typography>
+            </Stack>)}
+          </Stack>}
           <Stack direction="row" spacing={0.7} useFlexGap sx={{ mt: 1, flexWrap: 'wrap', alignItems: 'center' }}><Chip size="small" variant="outlined" label={item.type} /><Chip size="small" label={item.status} />{item.dueAt && <Chip size="small" color={isWorkspaceOverdue(item) ? 'error' : 'default'} label={`Срок: ${formatClinicMoment(item.dueAt)}`} />}{isWorkspaceReminderDue(item) && <Tooltip title="Время напоминания наступило"><NotificationsActiveRounded color="warning" fontSize="small" /></Tooltip>}{item.checklist.length > 0 && <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>☑ {checklistDone}/{item.checklist.length}</Typography>}{patientName && <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>Пациент: {patientName}</Typography>}{item.tags.map((tag) => <Chip key={tag} size="small" variant="outlined" label={`#${tag}`} />)}</Stack>
         </Box>
         <Tooltip title={archived ? 'Восстановить' : 'В архив'}><IconButton size="small" aria-label={`${archived ? 'Восстановить' : 'Архивировать'}: ${item.title}`} onClick={onArchive}>{archived ? <RestoreRounded /> : <ArchiveRounded />}</IconButton></Tooltip>

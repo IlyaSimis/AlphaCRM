@@ -126,7 +126,9 @@ class InventoryControllerTest {
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("DOCUMENT_POSTED"));
 
-    assertThat(stock(staff.role("DOCTOR"), gloves)).isEqualByComparingTo("10");
+    assertThat(stock(staff.role("NURSE"), gloves)).isEqualByComparingTo("10");
+    mvc.perform(get("/api/v1/inventory/balances").with(staff.role("DOCTOR")))
+        .andExpect(status().isForbidden());
 
     var tooMuch =
         send(
@@ -202,9 +204,11 @@ class InventoryControllerTest {
     List<String> statuses = JsonPath.read(codes, "$[*].status");
     assertThat(statuses).containsOnly("IN_STOCK").hasSize(2);
     List<String> sgtins = JsonPath.read(codes, "$[*].sgtin");
-    mvc.perform(get("/api/v1/inventory/marking/operations").with(staff.role("SUPPORT")))
+    mvc.perform(get("/api/v1/inventory/marking/operations").with(staff.role("NURSE")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[?(@.documentId == '" + receipt + "')].status").value("DONE"));
+    mvc.perform(get("/api/v1/inventory/marking/operations").with(staff.role("SUPPORT")))
+        .andExpect(status().isForbidden());
 
     var consumption =
         send(
