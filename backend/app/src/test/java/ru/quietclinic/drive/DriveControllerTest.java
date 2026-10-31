@@ -3,6 +3,9 @@ package ru.quietclinic.drive;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -14,6 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.jayway.jsonpath.JsonPath;
 import java.nio.charset.StandardCharsets;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,9 +28,11 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import ru.quietclinic.SecondClinic;
 import ru.quietclinic.StaffSessions;
+import ru.quietclinic.contracts.LibreOfficePdfConverter;
 
 /** Корпоративный диск (раздел H): права с наследованием, версии, ссылки, корзина, квота. */
 @SpringBootTest
@@ -35,6 +41,7 @@ import ru.quietclinic.StaffSessions;
 class DriveControllerTest {
   @Autowired MockMvc mvc;
   @Autowired JdbcTemplate jdbc;
+  @MockitoBean LibreOfficePdfConverter pdf;
   StaffSessions staff;
 
   @BeforeEach
@@ -189,6 +196,101 @@ class DriveControllerTest {
         .andExpect(status().isOk());
     mvc.perform(get("/api/v1/drive/nodes").with(staff.admin()))
         .andExpect(jsonPath("$.children[*].id").value(hasItem(folder)));
+  }
+
+  @Test
+  void previewUsesTheSameRightsAndConvertsOfficeDocumentsOnlyForViewing() throws Exception {
+    var suffix = UUID.randomUUID();
+    var pdfBytes = "%PDF-1.4\npreview\n%%EOF".getBytes(StandardCharsets.UTF_8);
+    var pdfId =
+        read(
+            mvc.perform(
+                    multipart("/api/v1/drive/files")
+                        .file(
+                            new MockMultipartFile(
+                                "file", "preview-" + suffix + ".pdf", "application/pdf", pdfBytes))
+                        .with(staff.admin()))
+                .andExpect(status().isCreated()),
+            "$.id");
+
+    mvc.perform(get("/api/v1/drive/files/" + pdfId + "/preview").with(staff.admin()))
+        .andExpect(status().isOk())
+        .andExpect(content().contentType(MediaType.APPLICATION_PDF))
+        .andExpect(content().bytes(pdfBytes));
+    mvc.perform(get("/api/v1/drive/files/" + pdfId + "/preview").with(staff.role("NURSE")))
+        .andExpect(status().isNotFound());
+    mvc.perform(get("/api/v1/drive/files/" + pdfId + "/preview").with(staff.anonymous()))
+        .andExpect(status().isUnauthorized());
+
+    var imageBytes = new byte[] {(byte) 0x89, 0x50, 0x4e, 0x47};
+    var imageId =
+        read(
+            mvc.perform(
+                    multipart("/api/v1/drive/files")
+                        .file(
+                            new MockMultipartFile(
+                                "file", "image-" + suffix + ".png", "image/png", imageBytes))
+                        .with(staff.admin()))
+                .andExpect(status().isCreated()),
+            "$.id");
+    mvc.perform(get("/api/v1/drive/files/" + imageId + "/preview").with(staff.admin()))
+        .andExpect(status().isOk())
+        .andExpect(content().contentType(MediaType.IMAGE_PNG))
+        .andExpect(content().bytes(imageBytes));
+
+    when(pdf.convert(any(byte[].class), anyString()))
+        .thenAnswer(
+            invocation ->
+                Optional.of(
+                    ("%PDF-" + invocation.getArgument(1)).getBytes(StandardCharsets.UTF_8)));
+    for (var extension : new String[] {"docx", "xlsx"}) {
+      var officeId =
+          read(
+              mvc.perform(
+                      multipart("/api/v1/drive/files")
+                          .file(
+                              new MockMultipartFile(
+                                  "file",
+                                  "office-" + suffix + "." + extension,
+                                  "application/octet-stream",
+                                  new byte[] {1, 2, 3}))
+                          .with(staff.admin()))
+                  .andExpect(status().isCreated()),
+              "$.id");
+      mvc.perform(get("/api/v1/drive/files/" + officeId + "/preview").with(staff.admin()))
+          .andExpect(status().isOk())
+          .andExpect(content().contentType(MediaType.APPLICATION_PDF))
+          .andExpect(
+              content().bytes(("%PDF-" + extension).getBytes(StandardCharsets.UTF_8)));
+    }
+
+    var textId =
+        read(
+            mvc.perform(
+                    multipart("/api/v1/drive/files")
+                        .file(file("text-" + suffix + ".txt", "not previewable"))
+                        .with(staff.admin()))
+                .andExpect(status().isCreated()),
+            "$.id");
+    mvc.perform(get("/api/v1/drive/files/" + textId + "/preview").with(staff.admin()))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("PREVIEW_UNSUPPORTED"));
+
+    var token =
+        read(
+            mvc.perform(
+                    post("/api/v1/drive/nodes/" + pdfId + "/shares")
+                        .with(staff.admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"principalType\":\"LINK\",\"permission\":\"VIEW\"}"))
+                .andExpect(status().isCreated()),
+            "$.token");
+    mvc.perform(
+            get("/api/v1/drive/links/" + token + "/preview")
+                .param("node", pdfId)
+                .with(staff.role("CASHIER")))
+        .andExpect(status().isOk())
+        .andExpect(content().bytes(pdfBytes));
   }
 
   @Test

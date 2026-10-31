@@ -290,7 +290,10 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
             workspaceIntent={workspaceIntent} visit={visit} visitKey={visitKey} visitAppointment={visitAppointment} doctorName={doctorName}
             sharedPhone={sharedPhone} onQuery={setQuery} onDoctorFilter={setDoctorFilter} onNavigate={navigate} onOpenBooking={openBooking}
             onNewPatient={() => { setCreateError(''); setPatientDialog(true) }} onCreatePatient={() => setPatientDialog(true)}
-            onImportPatients={() => setPatientImport(true)} onEditPatient={(patient) => { setEditError(''); setEditPatient(patient) }}
+            onImportPatients={() => setPatientImport(true)} onEditPatient={(patient, addRepresentative = false) => {
+              setEditError('')
+              setEditPatient(addRepresentative ? { ...patient, profile: { ...patient.profile, representatives: [...(patient.profile?.representatives ?? []), { fullName: '', relationship: '', primary: false }] } } : patient)
+            }}
             onOpenPatient={openPatient} onOpenPatientById={openPatientById} onOpenPatientOf={openPatientOf} onOpenEncounter={openEncounter}
             onStartVisit={startVisit} onReschedule={(item) => { setMoveError(''); setMoving(item) }} onWaitlist={(item) => { setWaitError(''); setWaitSlot(item) }}
           />

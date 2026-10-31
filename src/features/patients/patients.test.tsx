@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { anna, enterDemo, goOffline, jsonResponse, renderApp, withAuth, openPage } from '../../test/helpers'
 
 describe('patients', () => {
@@ -142,6 +142,7 @@ describe('patients', () => {
 
   it('shows all patient appointments in the card without paging by day', async () => {
     goOffline()
+    vi.setSystemTime(new Date('2026-10-21T06:00:00Z'))
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user)
@@ -150,9 +151,13 @@ describe('patients', () => {
     expect(screen.getByText('Ближайшие записи')).toBeInTheDocument()
     expect(screen.getByText('Прошедшие записи')).toBeInTheDocument()
     expect(screen.getByText('20.10.2026 10:10 · Подтверждён')).toBeInTheDocument()
-    expect(screen.getByText('06.10.2026 10:10 · Завершён')).toBeInTheDocument()
     expect(screen.getByText('08.10.2026 09:00 · Отменена')).toBeInTheDocument()
     expect(screen.getByText('13.10.2026 11:00 · Завершён')).toBeInTheDocument()
+    expect(screen.queryByText('06.10.2026 10:10 · Завершён')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Показать ещё (1)' }))
+    expect(screen.getByText('06.10.2026 10:10 · Завершён')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Скрыть старые записи' }))
+    expect(screen.queryByText('06.10.2026 10:10 · Завершён')).not.toBeInTheDocument()
   })
 
   it('the administrator renews and revokes consent', async () => {

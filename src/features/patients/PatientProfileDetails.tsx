@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
-import { Box, Divider, Typography } from '@mui/material'
+import { AddRounded } from '@mui/icons-material'
+import { Box, Button, Divider, Typography } from '@mui/material'
 import { normalizePatientProfile } from '../../api/patients'
 import type { PatientItem } from '../../api/types'
 import { Info } from '../../shared/ui'
@@ -17,7 +18,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 /** Все административные реквизиты карточки; пустые поля видны как незаполненные. */
-export function PatientProfileDetails({ patient }: { patient: PatientItem }) {
+export function PatientProfileDetails({ patient, onAddRepresentative }: { patient: PatientItem; onAddRepresentative?: () => void }) {
   const profile = normalizePatientProfile(patient.profile)
   const channels = [
     ['Эл. почта (email)', profile.emailNotifications],
@@ -77,7 +78,10 @@ export function PatientProfileDetails({ patient }: { patient: PatientItem }) {
       </Section>
     </Box>
     <Divider sx={{ my: 3 }} />
-    <Typography variant="h6" sx={{ fontSize: 17, fontWeight: 750 }}>Представители</Typography>
+    <Box className="panel-title-row">
+      <Typography variant="h6" sx={{ fontSize: 17, fontWeight: 750 }}>Представители</Typography>
+      {onAddRepresentative && <Button size="small" startIcon={<AddRounded />} aria-label="Добавить представителя из карточки" onClick={onAddRepresentative}>Добавить представителя</Button>}
+    </Box>
     {profile.representatives?.length ? profile.representatives.map((representative, index) => <Box className="history-item" key={`${index}-${representative.fullName ?? ''}`}>
       <Box><Typography sx={{ fontWeight: 650 }}>{index + 1}. {representative.fullName || 'Без имени'}</Typography><Typography sx={{ fontSize: 13, color: 'text.secondary' }}>{representative.relationship || 'Родство не указано'}</Typography></Box>
       {representative.primary && <Typography sx={{ color: 'primary.main', fontWeight: 650 }}>Основной</Typography>}

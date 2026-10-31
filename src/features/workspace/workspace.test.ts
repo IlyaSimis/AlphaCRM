@@ -25,6 +25,16 @@ describe('personal workspace', () => {
     expect(isWorkspaceOverdue({ ...overdue, completed: true }, '2026-10-20')).toBe(false)
   })
 
+  it('filters only tasks assigned to the current user and combines with tags', () => {
+    const assigned = item({ title: 'Общая задача', type: 'Задача', assigneeId: 'staff-test', tags: ['отчёт'] })
+    const otherAssignee = item({ title: 'Чужая задача', type: 'Задача', assigneeId: 'staff-doctor', tags: ['отчёт'] })
+    const ownNote = item({ title: 'Личная заметка', type: 'Заметка', assigneeId: 'staff-test', tags: ['отчёт'] })
+    const records = [assigned, otherAssignee, ownNote]
+    expect(filterWorkspace(records, { ...emptyWorkspaceFilter, assigneeId: 'staff-test' }, '2026-10-20')).toEqual([assigned])
+    expect(filterWorkspace(records, { ...emptyWorkspaceFilter, assigneeId: 'staff-test', tag: 'отчёт' }, '2026-10-20')).toEqual([assigned])
+    expect(filterWorkspace(records, { ...emptyWorkspaceFilter, assigneeId: 'staff-test', tag: 'другое' }, '2026-10-20')).toEqual([])
+  })
+
   it('sorts unfinished by date and keeps completed at the end', () => {
     const later = item({ title: 'Позже', dueAt: '2026-10-22T09:00:00Z' })
     const earlier = item({ title: 'Раньше', dueAt: '2026-10-21T09:00:00Z' })

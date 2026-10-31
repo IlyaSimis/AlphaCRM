@@ -1,5 +1,11 @@
 import { apiFetch, failure } from './client'
-import type { WorkspaceItem, WorkspaceItemInput, WorkspaceView } from './types'
+import type { WorkspaceAssignee, WorkspaceItem, WorkspaceItemInput, WorkspaceView } from './types'
+
+export async function loadWorkspaceAssignees(): Promise<WorkspaceAssignee[]> {
+  const response = await apiFetch('/workspace/assignees')
+  if (!response.ok) throw await failure(response, 'Список сотрудников недоступен')
+  return response.json()
+}
 
 export async function loadWorkspaceItems(archived = false): Promise<WorkspaceItem[]> {
   const response = await apiFetch(`/workspace/items?archived=${archived}`)

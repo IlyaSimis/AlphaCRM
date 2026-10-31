@@ -101,6 +101,12 @@ public class DriveController {
     return attachment(drive.content(id, version));
   }
 
+  @GetMapping("/files/{id}/preview")
+  ResponseEntity<byte[]> preview(
+      @PathVariable UUID id, @RequestParam(required = false) Integer version) {
+    return inline(drive.preview(id, version));
+  }
+
   @GetMapping("/nodes/{id}/shares")
   List<ShareView> shares(@PathVariable UUID id) {
     return drive.shares(id);
@@ -130,6 +136,12 @@ public class DriveController {
     return attachment(drive.linkContent(token, node));
   }
 
+  @GetMapping("/links/{token}/preview")
+  ResponseEntity<byte[]> linkPreview(
+      @PathVariable String token, @RequestParam(required = false) UUID node) {
+    return inline(drive.linkPreview(token, node));
+  }
+
   @GetMapping("/principals")
   List<PrincipalView> principals() {
     return drive.principals();
@@ -152,6 +164,20 @@ public class DriveController {
         .header(
             HttpHeaders.CONTENT_DISPOSITION,
             ContentDisposition.attachment()
+                .filename(file.name(), StandardCharsets.UTF_8)
+                .build()
+                .toString())
+        .header(HttpHeaders.CACHE_CONTROL, "no-store")
+        .body(file.bytes());
+  }
+
+  /** Только PDF и изображения из DriveService; HTML и SVG сюда не попадают. */
+  private static ResponseEntity<byte[]> inline(FileContent file) {
+    return ResponseEntity.ok()
+        .contentType(MediaType.parseMediaType(file.contentType()))
+        .header(
+            HttpHeaders.CONTENT_DISPOSITION,
+            ContentDisposition.inline()
                 .filename(file.name(), StandardCharsets.UTF_8)
                 .build()
                 .toString())

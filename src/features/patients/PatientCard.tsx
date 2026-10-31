@@ -34,6 +34,7 @@ type PatientCardProps = {
   /** Блок «Документы PDF»; кассиру не передаётся. */
   files?: ReactNode
   onEdit: () => void
+  onAddRepresentative: () => void
   onBack: () => void
   onCancel: (item: ScheduleItem) => void
   onReschedule: (item: ScheduleItem) => void
@@ -57,8 +58,10 @@ export function PatientCard(props: PatientCardProps) {
   const { patient, role, apiOnline, practitioners, revision, onEdit, onBack } = props
   const [consentDialog, setConsentDialog] = useState(false)
   const [consentError, setConsentError] = useState('')
+  const [showAllPast, setShowAllPast] = useState(false)
   const history = usePatientHistory(patient, apiOnline, props.appointments, revision)
   const { upcoming, past } = splitHistory(history.items, localToday())
+  const visiblePast = showAllPast ? past : past.slice(0, 3)
   const doctorName = (id: string) => practitioners.find((doctor) => doctor.id === id)?.fullName ?? 'Врач'
   const basisLabel = (value: string) => consentBases.find((item) => item.value === value)?.label ?? value
 
@@ -96,7 +99,8 @@ export function PatientCard(props: PatientCardProps) {
           {history.error && <Alert severity="warning" sx={{ mt: 1 }}>{history.error}</Alert>}
           {!history.loading && (upcoming.length ? upcoming.map(row) : <Typography sx={{ color: 'text.secondary', mt: 1 }}>Ближайших записей нет</Typography>)}
           <Typography sx={{ fontWeight: 700, mt: 2.5 }}>Прошедшие записи</Typography>
-          {!history.loading && (past.length ? past.map(row) : <Typography sx={{ color: 'text.secondary', mt: 1 }}>Прошедших записей нет</Typography>)}
+          {!history.loading && (past.length ? visiblePast.map(row) : <Typography sx={{ color: 'text.secondary', mt: 1 }}>Прошедших записей нет</Typography>)}
+          {!history.loading && past.length > 3 && <Button size="small" sx={{ mt: 1 }} onClick={() => setShowAllPast((value) => !value)}>{showAllPast ? 'Скрыть старые записи' : `Показать ещё (${past.length - 3})`}</Button>}
           {canEditPatients(role) && <>
             <Divider sx={{ my: 2 }} />
             <Box className="panel-title-row"><Typography sx={{ fontWeight: 700 }}>Согласие на обработку данных</Typography><Button size="small" onClick={() => { setConsentError(''); setConsentDialog(true) }}>Обновить согласие</Button></Box>
@@ -111,7 +115,7 @@ export function PatientCard(props: PatientCardProps) {
         </Box>
         <ClinicalPanel {...props} />
       </Box>
-      <PatientProfileDetails patient={patient} />
+      <PatientProfileDetails patient={patient} onAddRepresentative={canEditPatients(role) ? props.onAddRepresentative : undefined} />
       {props.files}
       {consentDialog && <ConsentDialog error={consentError} onClose={() => setConsentDialog(false)} onSave={async (input) => {
         const error = await props.onGrantConsent(input)

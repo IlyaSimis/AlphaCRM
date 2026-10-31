@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { DescriptionOutlined, PictureAsPdfRounded } from '@mui/icons-material'
 import { Alert, Box, Button, Chip, CircularProgress, Typography } from '@mui/material'
-import { downloadPatientContract, loadContractTemplates, loadPatientContracts, printPatientContract } from '../../api/contracts'
+import { downloadPatientContract, loadContractTemplates, loadPatientContracts, previewPatientContract, printPatientContract } from '../../api/contracts'
 import type { ContractTemplateItem, PatientContractItem, ServiceItem } from '../../api/types'
 import { formatClinicMoment } from '../../shared/clinicTime'
 import { can } from '../../shared/permissions'
 import type { Role } from '../../shared/roles'
 import { isUuid } from '../../shared/text'
+import { FilePreviewDialog, type FilePreviewSource } from '../files/FilePreviewDialog'
 import { ContractCreateDialog } from './ContractCreateDialog'
 
 type PatientContractsProps = {
@@ -25,6 +26,7 @@ export function PatientContracts({ patientId, role, apiOnline, services, notify 
   const [items, setItems] = useState<PatientContractItem[] | null>(null)
   const [error, setError] = useState('')
   const [actionError, setActionError] = useState('')
+  const [preview, setPreview] = useState<FilePreviewSource | null>(null)
   const [revision, setRevision] = useState(0)
   const [creating, setCreating] = useState(false)
 
@@ -89,12 +91,14 @@ export function PatientContracts({ patientId, role, apiOnline, services, notify 
           </Box>
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
             {contract.pdfAvailable && <Chip size="small" variant="outlined" icon={<PictureAsPdfRounded />} label="PDF" />}
+            {contract.pdfAvailable && <Button size="small" aria-label={`Просмотр PDF ${contract.contractNumber}`} onClick={() => setPreview({ title: `${contract.contractNumber} · ${contract.templateName}`, kind: 'pdf', load: () => previewPatientContract(contract) })}>Просмотр</Button>}
             <Button size="small" aria-label={`Скачать DOCX ${contract.contractNumber}`} onClick={() => void download(contract, 'docx')}>DOCX</Button>
             {contract.pdfAvailable && <Button size="small" aria-label={`Скачать PDF ${contract.contractNumber}`} onClick={() => void download(contract, 'pdf')}>PDF</Button>}
             {contract.pdfAvailable && <Button size="small" aria-label={`Печать PDF ${contract.contractNumber}`} onClick={() => void print(contract)}>Печать</Button>}
           </Box>
         </Box>
       ))}
+      <FilePreviewDialog source={preview} onClose={() => setPreview(null)} />
       <ContractCreateDialog
         key={`${patientId}-${creating}`}
         open={creating}

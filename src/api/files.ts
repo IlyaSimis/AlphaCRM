@@ -37,6 +37,12 @@ export async function loadSignedFiles(): Promise<PatientFileItem[]> {
  * Скачивает расшифрованный файл с сессией сотрудника и сохраняет его через временную ссылку
  * браузера. Публичной ссылки на файл нет.
  */
+export async function previewPatientFile(file: Pick<PatientFileItem, 'id'>): Promise<Blob> {
+  const response = await apiFetch(`/patient-files/${file.id}/inline`)
+  if (!response.ok) throw await failure(response, 'Не удалось открыть файл')
+  return response.blob()
+}
+
 export async function downloadPatientFile(file: Pick<PatientFileItem, 'id' | 'originalName'>) {
   const response = await apiFetch(`/patient-files/${file.id}/content`)
   if (!response.ok) throw await failure(response, 'Не удалось скачать файл')

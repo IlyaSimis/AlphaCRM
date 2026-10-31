@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { CreateNewFolderRounded, DeleteOutlineRounded, DownloadRounded, EditRounded, FolderRounded, HistoryRounded, InsertDriveFileRounded, LinkRounded, RestoreRounded, ShareRounded, CloudUploadRounded } from '@mui/icons-material'
+import { CreateNewFolderRounded, DeleteOutlineRounded, DownloadRounded, EditRounded, FolderRounded, HistoryRounded, InsertDriveFileRounded, LinkRounded, RestoreRounded, ShareRounded, CloudUploadRounded, VisibilityRounded } from '@mui/icons-material'
 import { Alert, Box, Breadcrumbs, Button, Chip, IconButton, Link, Stack, TextField, Tooltip, Typography } from '@mui/material'
-import { createFolder, downloadByLink, downloadFile, loadFolder, loadLink, loadQuota, loadShared, loadTrash, renameNode, restoreNode, trashNode, uploadFile, uploadVersion } from '../../api/drive'
+import { createFolder, downloadByLink, downloadFile, loadFolder, loadLink, loadQuota, loadShared, loadTrash, previewDriveFile, previewDriveLink, renameNode, restoreNode, trashNode, uploadFile, uploadVersion } from '../../api/drive'
 import type { DriveListing, DriveNode, DriveQuota, StaffItem } from '../../api/types'
 import { formatClinicMoment } from '../../shared/clinicTime'
+import { FilePreviewDialog, type FilePreviewSource } from '../files/FilePreviewDialog'
+import { supportedFilePreview } from '../files/filePreview'
 import { formatBytes } from '../today/dashboard'
 import { allows, permissionLabels, tokenFrom } from './drive'
 import { NameDialog } from './NameDialog'
@@ -50,6 +52,7 @@ export function DrivePage({ apiOnline, self, notify, section, onSection }: Drive
   const [naming, setNaming] = useState<{ mode: 'folder' } | { mode: 'rename'; node: DriveNode } | null>(null)
   const [sharing, setSharing] = useState<DriveNode | null>(null)
   const [versions, setVersions] = useState<DriveNode | null>(null)
+  const [preview, setPreview] = useState<FilePreviewSource | null>(null)
   const upload = useRef<HTMLInputElement | null>(null)
   const versionUpload = useRef<HTMLInputElement | null>(null)
   const [versionTarget, setVersionTarget] = useState<DriveNode | null>(null)
@@ -176,6 +179,7 @@ export function DrivePage({ apiOnline, self, notify, section, onSection }: Drive
                     {view === 'trash'
                       ? <Tooltip title="Восстановить"><IconButton aria-label={`Восстановить ${node.name}`} onClick={() => void run(() => restoreNode(node.id), 'Восстановлено')}><RestoreRounded /></IconButton></Tooltip>
                       : <>
+                        {node.kind === 'FILE' && supportedFilePreview(node.name) && <Tooltip title="Просмотр"><IconButton aria-label={`Просмотр ${node.name}`} onClick={() => setPreview(filePreviewSource(node, view, link))}><VisibilityRounded /></IconButton></Tooltip>}
                         {node.kind === 'FILE' && <Tooltip title="Скачать"><IconButton aria-label={`Скачать ${node.name}`} onClick={() => download(node)}><DownloadRounded /></IconButton></Tooltip>}
                         {view !== 'link' && node.kind === 'FILE' && <Tooltip title="Версии"><IconButton aria-label={`Версии ${node.name}`} onClick={() => setVersions(node)}><HistoryRounded /></IconButton></Tooltip>}
                         {view !== 'link' && node.kind === 'FILE' && allows(node, 'EDIT') && <Tooltip title="Загрузить новую версию"><IconButton aria-label={`Новая версия ${node.name}`} onClick={() => { setVersionTarget(node); versionUpload.current?.click() }}><CloudUploadRounded /></IconButton></Tooltip>}
@@ -203,8 +207,19 @@ export function DrivePage({ apiOnline, self, notify, section, onSection }: Drive
       }} />}
       {sharing && <ShareDialog node={sharing} onClose={() => { setSharing(null); refresh() }} notify={notify} />}
       {versions && <VersionsDialog node={versions} onClose={() => setVersions(null)} />}
+      <FilePreviewDialog source={preview} onClose={() => setPreview(null)} />
     </>
   )
+}
+
+function filePreviewSource(node: DriveNode, view: View, link: string): FilePreviewSource | null {
+  const kind = supportedFilePreview(node.name)
+  if (!kind) return null
+  return {
+    title: node.name,
+    kind: kind === 'image' ? 'image' : 'pdf',
+    load: () => view === 'link' ? previewDriveLink(link, node) : previewDriveFile(node),
+  }
 }
 
 /** Ссылка из адреса страницы (…?drive-link=…), если её открыли из письма или чата. */

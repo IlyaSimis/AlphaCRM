@@ -44,7 +44,7 @@ type WorkspaceContentProps = {
   onNewPatient: () => void
   onCreatePatient: () => void
   onImportPatients: () => void
-  onEditPatient: (patient: PatientItem) => void
+  onEditPatient: (patient: PatientItem, addRepresentative?: boolean) => void
   onOpenPatient: (patient: PatientItem) => void
   onOpenPatientById: (id: string) => void
   onOpenPatientOf: (item: ScheduleItem) => void
@@ -70,7 +70,7 @@ export function WorkspaceContent(props: WorkspaceContentProps) {
   return (
     <Suspense fallback={<Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress aria-label="Загрузка раздела" /></Box>}>
       {page === 'today' && <TodayPage role={role} selfId={staff.id} selfName={staff.fullName} onNewAppointment={() => onOpenBooking(localToday())} onNewPatient={onNewPatient} apiOnline={clinic.apiOnline} patients={patientItems} appointments={scheduleItems} practitioners={practitioners} dueTasks={registry.todayTasks} tasksError={registry.error} staffName={registry.staffName} onOpen={onNavigate} />}
-      {page === 'workspace' && <WorkspacePage key={staff.id} apiOnline={clinic.apiOnline} selfId={staff.id} patients={canSeePatients(role) ? patientItems : []} appointments={scheduleItems} notify={clinic.notify} navigationIntent={workspaceIntent} />}
+      {page === 'workspace' && <WorkspacePage key={staff.id} apiOnline={clinic.apiOnline} selfId={staff.id} staff={registry.staffList} patients={canSeePatients(role) ? patientItems : []} appointments={scheduleItems} notify={clinic.notify} navigationIntent={workspaceIntent} />}
       {/* Врача встречают на расписании; остальных — на «Сегодня». */}
       {page === 'schedule' && canWriteClinical(role) && <Typography className="greeting" sx={{ mb: 1.5 }}>{greeting(staff.fullName)}</Typography>}
       {page === 'schedule' && canWriteClinical(role) && <DashboardWidgets apiOnline={clinic.apiOnline} role={role} codes={dashboardCodes(role)} onOpen={onNavigate} />}
@@ -82,7 +82,7 @@ export function WorkspaceContent(props: WorkspaceContentProps) {
           <PatientFiles patientId={selectedPatient.id} role={role} apiOnline={clinic.apiOnline} notify={clinic.notify} />
         </Box>}
         registry={canSeeRegistry(role) ? <RegistryPanel patient={selectedPatient} sharedWith={sharedPhone(selectedPatient)} admin={canManageRegistry(role)} selfId={staff.id} registry={registry} onOpenPatient={onOpenPatientById} onSave={(input) => clinic.updateRegistry(selectedPatient, input)} /> : undefined}
-        onEdit={() => onEditPatient(selectedPatient)} onBack={() => onNavigate('patients')} onCancel={(item) => clinic.cancelBooking(item, role)} onReschedule={onReschedule} onOpenEncounter={(encounter) => onOpenEncounter(selectedPatient, encounter)} onGrantConsent={(input) => clinic.grantConsent(selectedPatient, input)} onRevokeConsent={(consentId) => clinic.revokeConsent(selectedPatient, consentId)} />}
+        onEdit={() => onEditPatient(selectedPatient)} onAddRepresentative={() => onEditPatient(selectedPatient, true)} onBack={() => onNavigate('patients')} onCancel={(item) => clinic.cancelBooking(item, role)} onReschedule={onReschedule} onOpenEncounter={(encounter) => onOpenEncounter(selectedPatient, encounter)} onGrantConsent={(input) => clinic.grantConsent(selectedPatient, input)} onRevokeConsent={(consentId) => clinic.revokeConsent(selectedPatient, consentId)} />}
       {page === 'documents' && <SignedDocuments role={role} apiOnline={clinic.apiOnline} practitioners={practitioners} />}
       {page === 'contract-templates' && <ContractTemplatesPage role={role} apiOnline={clinic.apiOnline} services={clinic.services} notify={clinic.notify} />}
       {page === 'registry' && <RegistryPage staff={staff} registry={registry} patients={patientItems} practitioners={practitioners} services={clinic.services} />}

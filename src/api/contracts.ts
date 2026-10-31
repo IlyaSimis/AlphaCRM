@@ -53,6 +53,12 @@ export async function downloadPatientContract(contract: Pick<PatientContractItem
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
+export async function previewPatientContract(contract: Pick<PatientContractItem, 'id'>): Promise<Blob> {
+  const response = await apiFetch(`/patient-contracts/${contract.id}/pdf`)
+  if (!response.ok) throw await failure(response, 'Не удалось открыть договор')
+  return response.blob()
+}
+
 /** Открывает PDF в отдельной вкладке: оттуда доступна штатная печать браузера. */
 export async function printPatientContract(contract: Pick<PatientContractItem, 'id'>) {
   const tab = window.open('', '_blank')

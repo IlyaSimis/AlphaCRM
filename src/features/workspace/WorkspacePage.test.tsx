@@ -58,4 +58,40 @@ describe('workspace page', () => {
     await user.click(screen.getByRole('option', { name: 'новый' }))
     expect(screen.getByRole('button', { name: 'Составная задача' })).toBeInTheDocument()
   })
+
+  it('assigns a task to another employee and shows it in both workspaces', async () => {
+    const staff = [
+      { id: 'staff-test', fullName: 'Илья Менеджер', role: 'MANAGER' as const },
+      { id: 'staff-doctor', fullName: 'Мария Врач', role: 'DOCTOR' as const },
+    ]
+    const user = userEvent.setup()
+    const view = render(<WorkspacePage apiOnline={false} selfId="staff-test" staff={staff} patients={[]} appointments={[]} notify={vi.fn()} />)
+
+    await user.click(screen.getByRole('button', { name: 'Создать' }))
+    await user.type(screen.getByRole('textbox', { name: /^Название/ }), 'Подготовить общий отчёт')
+    await user.click(screen.getByRole('combobox', { name: 'Исполнитель' }))
+    await user.click(screen.getByRole('option', { name: 'Мария Врач · врач' }))
+    await user.click(screen.getByRole('button', { name: 'Сохранить' }))
+
+    expect(await screen.findByRole('button', { name: 'Подготовить общий отчёт' })).toBeInTheDocument()
+    expect(screen.getByText('Исполнитель: Мария Врач')).toBeInTheDocument()
+    const assignedStore = JSON.parse(localStorage.getItem('alphacrm.workspace.staff-doctor')!)
+    expect(assignedStore.items[0]).toMatchObject({ title: 'Подготовить общий отчёт', creatorId: 'staff-test', assigneeId: 'staff-doctor' })
+
+    view.unmount()
+    const assigneeView = render(<WorkspacePage apiOnline={false} selfId="staff-doctor" staff={staff} patients={[]} appointments={[]} notify={vi.fn()} />)
+    expect(await screen.findByRole('button', { name: 'Подготовить общий отчёт' })).toBeInTheDocument()
+    expect(screen.getByText('Автор: Илья Менеджер')).toBeInTheDocument()
+    await user.click(screen.getByRole('combobox', { name: 'Исполнитель' }))
+    await user.click(screen.getByRole('option', { name: 'Назначенные мне' }))
+    expect(screen.getByRole('button', { name: 'Подготовить общий отчёт' })).toBeInTheDocument()
+
+    assigneeView.unmount()
+    render(<WorkspacePage apiOnline={false} selfId="staff-test" staff={staff} patients={[]} appointments={[]} notify={vi.fn()} />)
+    await user.click(screen.getByRole('combobox', { name: 'Исполнитель' }))
+    await user.click(screen.getByRole('option', { name: 'Назначенные мне' }))
+    expect(screen.getByRole('button', { name: 'Собрать план на неделю' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Подготовить общий отчёт' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Идеи для клиники' })).not.toBeInTheDocument()
+  })
 })

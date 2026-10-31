@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Запись личного пространства; ownerId не возвращается: API всегда работает только с владельцем.
+ * Запись рабочего пространства. Автор и исполнитель видят одну задачу; у личной записи они совпадают.
  */
 public record WorkspaceItemView(
     UUID id,
@@ -25,4 +25,6 @@ public record WorkspaceItemView(
     Instant createdAt,
     Instant updatedAt,
     Instant completedAt,
-    Instant archivedAt) {}
+    Instant archivedAt,
+    UUID creatorId,
+    UUID assigneeId) {}

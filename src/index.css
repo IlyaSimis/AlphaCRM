@@ -162,9 +162,10 @@ button, input, textarea { font: inherit; }
 .mobile-menu { display: none !important; }
 .content { max-width: 1240px; margin: 0 auto; padding: 30px 36px 60px; }
 .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-.metric { background: var(--paper); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; display: flex; align-items: center; gap: 16px; }
+.metric { background: var(--paper); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; display: flex; align-items: center; gap: 16px; min-width: 0; }
 .metric.accent { background: var(--accent-bg); border-color: var(--accent-border); }
-.metric-value { font-size: 30px !important; line-height: 1 !important; font-weight: 800 !important; color: var(--active-text); }
+.metric-value { font-size: 30px !important; line-height: 1 !important; font-weight: 800 !important; color: var(--active-text); flex-shrink: 0; white-space: nowrap; }
+.metric > :last-child { min-width: 0; }
 .toolbar { display: flex; justify-content: space-between; align-items: center; margin: 28px 0 14px; }
 .date-nav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .date-nav .MuiTextField-root { width: 168px; }
@@ -211,8 +212,13 @@ button, input, textarea { font: inherit; }
 .schedule-appointment-actions { display: flex; margin-left: auto; }
 .schedule-appointment-actions .MuiIconButton-root { width: 23px; height: 23px; padding: 2px; color: inherit; }
 .schedule-appointment-actions svg { font-size: 17px; }
-.schedule-appointment.compact .schedule-service-name, .schedule-appointment.compact .schedule-appointment-bottom .status-chip { display: none; }
-.schedule-appointment.compact .schedule-appointment-bottom { position: absolute; top: 3px; right: 26px; }
+.schedule-appointment.short .schedule-service-name, .schedule-appointment.compact .schedule-service-name, .schedule-appointment.compact .schedule-appointment-bottom .status-chip { display: none; }
+.schedule-appointment.compact { padding: 2px 6px; }
+.schedule-appointment.compact .schedule-appointment-head { min-height: 20px; }
+.schedule-appointment.compact .schedule-appointment-head .MuiIconButton-root { width: 20px; height: 20px; }
+.schedule-appointment.compact .schedule-patient-name { min-height: 18px !important; line-height: 18px !important; }
+.schedule-appointment.compact .schedule-appointment-bottom { position: absolute; top: 2px; right: 24px; }
+.schedule-appointment.compact .schedule-appointment-actions .MuiIconButton-root { width: 20px; height: 20px; }
 :root[data-theme="dark"] .schedule-appointment { color: #f2ead0; background: #574d20; border-color: #76682e; }
 :root[data-theme="dark"] .schedule-appointment.green, :root[data-theme="dark"] .schedule-appointment.done { background: #21473b; border-color: #376858; }
 :root[data-theme="dark"] .schedule-appointment.red { background: #512d27; border-color: #774238; }
@@ -305,7 +311,7 @@ button, input, textarea { font: inherit; }
 .patient-header { display: flex; gap: 17px; align-items: center; background: var(--paper); border: 1px solid var(--border); border-radius: 15px; padding: 22px; margin-bottom: 16px; }
 .patient-header .MuiChip-root { margin-left: auto; }
 .patient-columns { display: grid; grid-template-columns: 1fr 1.35fr; gap: 16px; }
-.patient-profile-details { margin-top: 16px; }
+.patient-profile-details { margin: 16px 0; }
 .patient-profile-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px 32px; }
 .patient-profile-section { min-width: 0; }
 .patient-profile-section .info-row { margin: 12px 0; overflow-wrap: anywhere; }

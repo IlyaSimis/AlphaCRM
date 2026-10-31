@@ -465,6 +465,8 @@ export type DrivePrincipal = { id: string; fullName: string; role: StaffRole }
 /** Личная запись рабочего пространства. Тип и статус — свободные строки, а не закрытый справочник. */
 export type WorkspaceField = { name: string; value: string }
 export type ChecklistItem = { text: string; done: boolean }
+export type WorkspaceAssignee = { id: string; fullName: string; role: StaffRole; active?: boolean }
+
 export type WorkspaceItemInput = {
   title: string
   type: string
@@ -479,9 +481,12 @@ export type WorkspaceItemInput = {
   tags: string[]
   fields: WorkspaceField[]
   checklist: ChecklistItem[]
+  /** null у старых записей означает текущего пользователя. */
+  assigneeId: string | null
 }
 export type WorkspaceItem = WorkspaceItemInput & {
   id: string
+  creatorId?: string
   createdAt: string
   updatedAt: string
   completedAt: string | null
@@ -493,6 +498,8 @@ export type WorkspaceFilter = {
   type: string
   status: string
   tag: string
+  /** null или отсутствие — все записи; id пользователя — только его задачи. */
+  assigneeId?: string | null
   due: WorkspaceDueFilter
   sort: 'due' | 'updated' | 'created' | 'title'
   display: 'list' | 'board'

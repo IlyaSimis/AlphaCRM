@@ -73,7 +73,7 @@ export function DayScheduleGrid({ date, doctors, appointments, role, doctorId, w
               const top = (minutesOf(item.time) - start) / SLOT_MINUTES * ROW_HEIGHT
               const height = Math.max(38, item.minutes / SLOT_MINUTES * ROW_HEIGHT - 4)
               const freed = item.statusCode === 'CANCELLED' || item.statusCode === 'NO_SHOW'
-              return <Box className={`schedule-appointment ${item.tone} ${item.minutes <= 30 ? 'compact' : ''}`} key={item.id ?? `${item.time}-${item.name}`} sx={{ top: Math.max(2, top + 2), height }}>
+              return <Box className={`schedule-appointment ${item.tone} ${item.minutes <= 30 ? 'compact' : item.minutes < 60 ? 'short' : ''}`} key={item.id ?? `${item.time}-${item.name}`} sx={{ top: Math.max(2, top + 2), height }}>
                 <Box className="schedule-appointment-head">
                   <Box component="span" sx={{ display: 'flex', gap: 0.5, alignItems: 'baseline', fontWeight: 800, fontSize: 12 }}><Typography component="span" sx={{ font: 'inherit' }}>{item.time}</Typography><Typography component="span" sx={{ fontSize: 11 }}>· {item.duration}</Typography></Box>
                   {availableActions(item, role, doctorId).length > 0 && <IconButton size="small" aria-label={`Изменить статус ${item.time} ${item.name}`} onClick={(event) => onStatusMenu(event.currentTarget, item)}><MoreHorizRounded /></IconButton>}

@@ -21,4 +21,5 @@ public record WorkspaceItemRequest(
     UUID appointmentId,
     @Size(max = 30) List<@Size(max = 50) String> tags,
     @Size(max = 40) List<@Valid WorkspaceField> fields,
-    @Size(max = 150) List<@Valid ChecklistItem> checklist) {}
+    @Size(max = 150) List<@Valid ChecklistItem> checklist,
+    UUID assigneeId) {}

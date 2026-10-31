@@ -74,6 +74,54 @@ class WorkspaceControllerTest {
   }
 
   @Test
+  void assignedTaskIsSharedByCreatorAndAssigneeOnly() throws Exception {
+    var title = "Общая задача " + UUID.randomUUID();
+    var assigneeId = staff.userId("t.petrov");
+    var creatorId = staff.userId("t.manager");
+    var created =
+        mvc.perform(
+                post("/api/v1/workspace/items")
+                    .with(staff.role("MANAGER"))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        "{\"title\":\"" + title + "\",\"type\":\"Задача\",\"assigneeId\":\""
+                            + assigneeId + "\"}"))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.creatorId").value(creatorId))
+            .andExpect(jsonPath("$.assigneeId").value(assigneeId))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    var id = JsonPath.<String>read(created, "$.id");
+
+    mvc.perform(get("/api/v1/workspace/items").with(staff.role("MANAGER")))
+        .andExpect(jsonPath("$[*].title").value(hasItem(title)));
+    mvc.perform(get("/api/v1/workspace/items").with(staff.role("DOCTOR")))
+        .andExpect(jsonPath("$[*].title").value(hasItem(title)));
+    mvc.perform(get("/api/v1/workspace/items").with(staff.role("SUPPORT")))
+        .andExpect(jsonPath("$[*].title").value(not(hasItem(title))));
+    mvc.perform(get("/api/v1/workspace/assignees").with(staff.role("DOCTOR")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[*].id").value(hasItem(assigneeId)));
+
+    mvc.perform(
+            put("/api/v1/workspace/items/{id}", id)
+                .with(staff.role("DOCTOR"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"title\":\"" + title + "\",\"type\":\"Задача\",\"completed\":true,"
+                        + "\"assigneeId\":\"" + assigneeId + "\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.completed").value(true));
+    mvc.perform(
+            put("/api/v1/workspace/items/{id}", id)
+                .with(staff.role("SUPPORT"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"title\":\"Чужая задача\"}"))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
   void savedViewsAndArchiveBelongToOwner() throws Exception {
     var name = "Мой фильтр " + UUID.randomUUID();
     var created =

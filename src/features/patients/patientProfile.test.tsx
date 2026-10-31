@@ -50,4 +50,23 @@ describe('расширенная карточка пациента', () => {
     expect(screen.getByText('Основной')).toBeInTheDocument()
     expect(screen.getByText('SMS · Push')).toBeInTheDocument()
   })
+
+  it('opens a new representative field directly from the patient card', async () => {
+    goOffline()
+    const user = userEvent.setup()
+    renderApp()
+    await enterDemo(user, 'ADMINISTRATOR')
+    await openPage(user, 'Пациенты')
+    await user.click(screen.getByText('Дмитрий Волков'))
+    await user.click(await screen.findByRole('button', { name: 'Добавить представителя из карточки' }))
+
+    const fullName = screen.getByLabelText('Представитель 1: ФИО')
+    expect(fullName).toHaveFocus()
+    await user.type(fullName, 'Борис Волков')
+    await user.type(screen.getByLabelText('Кем приходится'), 'Отец')
+    await user.click(screen.getByRole('button', { name: 'Сохранить изменения' }))
+
+    expect(await screen.findByText('1. Борис Волков')).toBeInTheDocument()
+    expect(screen.getByText('Отец')).toBeInTheDocument()
+  })
 })

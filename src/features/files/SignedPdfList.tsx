@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { LockOutlined } from '@mui/icons-material'
 import { Alert, Box, Button, Typography } from '@mui/material'
-import { downloadPatientFile, fileSize, loadSignedFiles, printPatientFile } from '../../api/files'
+import { downloadPatientFile, fileSize, loadSignedFiles, previewPatientFile, printPatientFile } from '../../api/files'
 import type { PatientFileItem } from '../../api/types'
 import { formatClinicMoment } from '../../shared/clinicTime'
 import { can } from '../../shared/permissions'
 import type { Role } from '../../shared/roles'
+import { FilePreviewDialog, type FilePreviewSource } from './FilePreviewDialog'
 
 type SignedPdfListProps = { role: Role; apiOnline: boolean }
 
@@ -13,6 +14,7 @@ type SignedPdfListProps = { role: Role; apiOnline: boolean }
 export function SignedPdfList({ role, apiOnline }: SignedPdfListProps) {
   const [items, setItems] = useState<PatientFileItem[]>([])
   const [error, setError] = useState('')
+  const [preview, setPreview] = useState<FilePreviewSource | null>(null)
   // Все файлы клиники — менеджеру (read-signed); врачу — подписанные им самим.
   const manager = can(role, 'clinical.patient-file.read-signed', 'clinical.patient-file.read')
 
@@ -48,10 +50,12 @@ export function SignedPdfList({ role, apiOnline }: SignedPdfListProps) {
             <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}><LockOutlined sx={{ fontSize: 15, verticalAlign: 'middle', mr: 0.5 }} />{file.patientName ?? 'Пациент'} · {file.originalName}</Typography>
             <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>Подписал {file.signedByName ?? 'сотрудник'} · {formatClinicMoment(file.signedAt)} · {fileSize(file.sizeBytes)}</Typography>
           </Box>
+          <Button size="small" aria-label={`Просмотр ${file.originalName}`} onClick={() => setPreview({ title: file.originalName, kind: 'pdf', load: () => previewPatientFile(file) })}>Просмотр</Button>
           <Button size="small" aria-label={`Печать ${file.originalName}`} onClick={() => { if (!printPatientFile(file)) setError('Браузер не открыл новую вкладку: разрешите всплывающие окна для этого сайта') }}>Печать</Button>
           <Button size="small" aria-label={`Скачать ${file.originalName}`} onClick={() => void download(file)}>Скачать</Button>
         </Box>
       ))}
+      <FilePreviewDialog source={preview} onClose={() => setPreview(null)} />
     </Box>
   )
 }

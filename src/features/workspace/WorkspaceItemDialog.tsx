@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { AddRounded, DeleteOutlineRounded, EditRounded } from '@mui/icons-material'
 import { Alert, Autocomplete, Box, Button, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack, TextField, Typography } from '@mui/material'
-import type { PatientItem, ScheduleItem, WorkspaceItem, WorkspaceItemInput } from '../../api/types'
+import type { PatientItem, ScheduleItem, WorkspaceAssignee, WorkspaceItem, WorkspaceItemInput } from '../../api/types'
 import { formatClinicMoment } from '../../shared/clinicTime'
+import { roleLabels } from '../../shared/roles'
 import { blankWorkspaceItem, inputOf, workspaceDateInput, workspaceInstant } from './workspace'
 
 const typeOptions = ['Задача', 'Заметка', 'Идея', 'Встреча', 'Чек-лист', 'Проект']
@@ -12,6 +13,9 @@ const colorOptions = [{ value: 'green', label: 'Зелёный' }, { value: 'blu
 type WorkspaceItemDialogProps = {
   item: WorkspaceItem | null
   preset?: string
+  selfId: string
+  selfName: string
+  staff: WorkspaceAssignee[]
   patients: PatientItem[]
   appointments: ScheduleItem[]
   onClose: () => void
@@ -19,8 +23,8 @@ type WorkspaceItemDialogProps = {
 }
 
 /** Существующая запись открывается для чтения; форма появляется только по явной команде. */
-export function WorkspaceItemDialog({ item, preset, patients, appointments, onClose, onSave }: WorkspaceItemDialogProps) {
-  const [draft, setDraft] = useState<WorkspaceItemInput>(() => item ? inputOf(item) : blankWorkspaceItem(preset))
+export function WorkspaceItemDialog({ item, preset, selfId, selfName, staff, patients, appointments, onClose, onSave }: WorkspaceItemDialogProps) {
+  const [draft, setDraft] = useState<WorkspaceItemInput>(() => item ? { ...inputOf(item), assigneeId: item.assigneeId ?? selfId } : blankWorkspaceItem(preset, selfId))
   const [editing, setEditing] = useState(!item)
   const [tagInput, setTagInput] = useState('')
   const [error, setError] = useState('')
@@ -29,6 +33,8 @@ export function WorkspaceItemDialog({ item, preset, patients, appointments, onCl
   const patient = patients.find((entry) => entry.id === draft.patientId) ?? null
   const appointment = appointments.find((entry) => entry.id === draft.appointmentId) ?? null
   const viewing = Boolean(item && !editing)
+  const isTask = draft.type.trim().toLocaleLowerCase('ru-RU') === 'задача'
+  const staffName = (id: string | null | undefined) => id === selfId ? selfName : staff.find((entry) => entry.id === id)?.fullName ?? 'Сотрудник'
 
   const save = async () => {
     if (!draft.title.trim()) {
@@ -39,7 +45,7 @@ export function WorkspaceItemDialog({ item, preset, patients, appointments, onCl
     setSaving(true)
     setError('')
     try {
-      await onSave({ ...draft, title: draft.title.trim(), type: draft.type.trim() || 'Запись', status: draft.status.trim() || 'Без статуса', tags })
+      await onSave({ ...draft, title: draft.title.trim(), type: draft.type.trim() || 'Запись', status: draft.status.trim() || 'Без статуса', tags, assigneeId: isTask ? draft.assigneeId ?? selfId : selfId })
     } catch (reason) {
       setError((reason as Error).message)
       setSaving(false)
@@ -53,6 +59,7 @@ export function WorkspaceItemDialog({ item, preset, patients, appointments, onCl
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
         {viewing ? <Stack spacing={2.2} sx={{ pt: 0.5 }}>
           <Box><Typography variant="h5" sx={{ fontWeight: 750, overflowWrap: 'anywhere' }}>{draft.title}</Typography><Stack direction="row" spacing={0.8} useFlexGap sx={{ mt: 1.2, flexWrap: 'wrap' }}><Chip size="small" label={draft.status} />{draft.completed && <Chip size="small" color="success" label="Выполнено" />}{draft.tags.map((tag) => <Chip key={tag} size="small" variant="outlined" label={`#${tag}`} />)}</Stack></Box>
+          {isTask && <Box><Typography className="panel-label" sx={{ mb: 0.5 }}>ИСПОЛНИТЕЛЬ</Typography><Typography>{staffName(draft.assigneeId)}</Typography>{item?.creatorId && item.creatorId !== selfId && <Typography sx={{ color: 'text.secondary' }}>Автор: {staffName(item.creatorId)}</Typography>}</Box>}
           {(draft.dueAt || draft.remindAt) && <Box><Typography className="panel-label" sx={{ mb: 0.5 }}>СРОКИ</Typography>{draft.dueAt && <Typography>Срок: {formatClinicMoment(draft.dueAt)}</Typography>}{draft.remindAt && <Typography>Напоминание: {formatClinicMoment(draft.remindAt)}</Typography>}</Box>}
           {draft.body && <Box><Typography className="panel-label" sx={{ mb: 0.5 }}>ТЕКСТ</Typography><Typography sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{draft.body}</Typography></Box>}
           {(patient || appointment) && <Box><Typography className="panel-label" sx={{ mb: 0.5 }}>СВЯЗИ</Typography>{patient && <Typography>Пациент: {patient.name}</Typography>}{appointment && <Typography>Запись: {appointment.date} {appointment.time} · {appointment.name}</Typography>}</Box>}
@@ -64,6 +71,9 @@ export function WorkspaceItemDialog({ item, preset, patients, appointments, onCl
             <Autocomplete freeSolo options={typeOptions} value={draft.type} onChange={(_, value) => patch('type', value ?? '')} onInputChange={(_, value) => patch('type', value)} renderInput={(params) => <TextField {...params} label="Тип — можно свой" />} />
             <Autocomplete freeSolo options={statusOptions} value={draft.status} onChange={(_, value) => patch('status', value ?? '')} onInputChange={(_, value) => patch('status', value)} renderInput={(params) => <TextField {...params} label="Статус — можно свой" />} />
             <TextField select label="Цвет" value={draft.color} onChange={(event) => patch('color', event.target.value as WorkspaceItemInput['color'])}>{colorOptions.map((color) => <MenuItem key={color.value} value={color.value}>{color.label}</MenuItem>)}</TextField>
+            {isTask && <TextField select required label="Исполнитель" value={draft.assigneeId ?? selfId} onChange={(event) => patch('assigneeId', event.target.value)} helperText="Задача будет видна вам и выбранному сотруднику">
+              {staff.map((person) => <MenuItem key={person.id} value={person.id}>{person.fullName}{person.id === selfId ? ' (вы)' : ` · ${roleLabels[person.role].toLowerCase()}`}</MenuItem>)}
+            </TextField>}
             <FormControlLabel control={<Checkbox checked={draft.completed} onChange={(event) => patch('completed', event.target.checked)} />} label="Выполнено" sx={{ mx: 0 }} />
             <TextField type="datetime-local" label="Срок" value={workspaceDateInput(draft.dueAt)} onChange={(event) => patch('dueAt', workspaceInstant(event.target.value))} slotProps={{ inputLabel: { shrink: true } }} />
             <TextField type="datetime-local" label="Время напоминания" value={workspaceDateInput(draft.remindAt)} onChange={(event) => patch('remindAt', workspaceInstant(event.target.value))} slotProps={{ inputLabel: { shrink: true } }} helperText="Напоминание появится в личном списке" />

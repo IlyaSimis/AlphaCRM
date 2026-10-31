@@ -129,6 +129,20 @@ describe('schedule', () => {
     if (today !== '2026-10-22') expect(screen.queryByText('15:00', { selector: '.schedule-appointment *' })).not.toBeInTheDocument()
   })
 
+  it('uses compact layouts for 30-minute and other sub-hour appointments', async () => {
+    goOffline()
+    const user = userEvent.setup()
+    renderApp()
+    await enterDemo(user)
+
+    const compact = screen.getByText('10:10', { selector: '.schedule-appointment *' }).closest('.schedule-appointment')
+    const short = screen.getByText('09:00', { selector: '.schedule-appointment *' }).closest('.schedule-appointment')
+    expect(compact).toHaveClass('compact')
+    expect(compact).toHaveStyle({ height: '44px' })
+    expect(short).toHaveClass('short')
+    expect(short).toHaveStyle({ height: '76px' })
+  })
+
   it('only the administrator cancels an appointment', async () => {
     goOffline()
     const user = userEvent.setup()

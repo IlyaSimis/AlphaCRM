@@ -32,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import ru.quietclinic.audit.AuditService;
+import ru.quietclinic.contracts.LibreOfficePdfConverter;
 import ru.quietclinic.platform.EncryptionService;
 import ru.quietclinic.platform.Permission;
 import ru.quietclinic.platform.RolePermissions;
@@ -57,6 +58,7 @@ class DriveService {
   private final EncryptionService encryption;
   private final JdbcTemplate jdbc;
   private final AuditService audit;
+  private final LibreOfficePdfConverter pdf;
   private final long maxFileBytes;
   private final long defaultQuota;
   private final int keepVersions;
@@ -71,6 +73,7 @@ class DriveService {
       EncryptionService encryption,
       JdbcTemplate jdbc,
       AuditService audit,
+      LibreOfficePdfConverter pdf,
       @Value("${clinic.drive.max-file-bytes:104857600}") long maxFileBytes,
       @Value("${clinic.drive.default-quota-bytes:10737418240}") long defaultQuota,
       @Value("${clinic.drive.keep-versions:20}") int keepVersions,
@@ -83,6 +86,7 @@ class DriveService {
     this.encryption = encryption;
     this.jdbc = jdbc;
     this.audit = audit;
+    this.pdf = pdf;
     this.maxFileBytes = maxFileBytes;
     this.defaultQuota = defaultQuota;
     this.keepVersions = keepVersions;
@@ -186,6 +190,12 @@ class DriveService {
     var node = live(id);
     require(node, "VIEW");
     return read(node, version, "direct");
+  }
+
+  /** Предпросмотр использует те же права и аудит чтения, что скачивание. */
+  @Transactional(readOnly = true)
+  FileContent preview(UUID id, Integer version) {
+    return preview(content(id, version));
   }
 
   // ---------- изменения ----------
@@ -407,6 +417,11 @@ class DriveService {
     return read(target, null, "link");
   }
 
+  @Transactional(readOnly = true)
+  FileContent linkPreview(String token, UUID nodeId) {
+    return preview(linkContent(token, nodeId));
+  }
+
   /** Сотрудники клиники для выбора в «Поделиться». */
   @Transactional(readOnly = true)
   List<PrincipalView> principals() {
@@ -528,6 +543,36 @@ class DriveService {
         node.name,
         version.contentType == null ? "application/octet-stream" : version.contentType,
         bytes);
+  }
+
+  private FileContent preview(FileContent source) {
+    var lowerName = source.name().toLowerCase(Locale.ROOT);
+    var dot = lowerName.lastIndexOf('.');
+    var extension = dot < 0 ? "" : lowerName.substring(dot + 1);
+    if ("pdf".equals(extension)) {
+      return new FileContent(source.name(), "application/pdf", source.bytes());
+    }
+    var imageType =
+        switch (extension) {
+          case "png" -> "image/png";
+          case "jpg", "jpeg" -> "image/jpeg";
+          case "gif" -> "image/gif";
+          case "webp" -> "image/webp";
+          default -> null;
+        };
+    if (imageType != null) return new FileContent(source.name(), imageType, source.bytes());
+    if ("docx".equals(extension) || "xlsx".equals(extension)) {
+      var converted =
+          pdf.convert(source.bytes(), extension)
+              .orElseThrow(
+                  () ->
+                      conflict(
+                          "PREVIEW_CONVERSION_UNAVAILABLE",
+                          "LibreOffice is not configured for document preview"));
+      var baseName = source.name().substring(0, source.name().lastIndexOf('.'));
+      return new FileContent(baseName + ".pdf", "application/pdf", converted);
+    }
+    throw conflict("PREVIEW_UNSUPPORTED", "This file format cannot be previewed");
   }
 
   private DriveNode linked(String token, UUID nodeId) {

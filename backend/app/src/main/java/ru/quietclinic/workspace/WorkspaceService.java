@@ -47,12 +47,26 @@ class WorkspaceService {
   List<WorkspaceItemView> items(boolean archived) {
     requirePermission(Permission.WORKSPACE_USE);
     return jdbc.query(
-        "select * from workspace.item where clinic_id = ? and owner_id = ? and archived_at is "
+        "select * from workspace.item where clinic_id = ? and (owner_id = ? or assignee_id = ?)"
+            + " and archived_at is "
             + (archived ? "not null" : "null")
             + " order by completed, coalesce(due_at, '9999-12-31 00:00:00+00'), updated_at desc limit 1000",
         (rs, rowNum) -> item(rs),
         clinicId(),
+        staffId(),
         staffId());
+  }
+
+  @Transactional(readOnly = true)
+  List<WorkspaceAssigneeView> assignees() {
+    requirePermission(Permission.WORKSPACE_USE);
+    return jdbc.query(
+        "select id, full_name, role from staff_user where clinic_id = ? and active = true"
+            + " order by full_name",
+        (rs, rowNum) ->
+            new WorkspaceAssigneeView(
+                rs.getObject("id", UUID.class), rs.getString("full_name"), rs.getString("role")),
+        clinicId());
   }
 
   @Transactional
@@ -65,8 +79,8 @@ class WorkspaceService {
     jdbc.update(
         "insert into workspace.item(id, clinic_id, owner_id, type, title, body, status, color,"
             + " completed, due_at, remind_at, patient_id, appointment_id, tags, fields, checklist,"
-            + " created_at, updated_at, completed_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,"
-            + " ?, ?, ?, ?, ?, ?, ?)",
+            + " created_at, updated_at, completed_at, assignee_id) values (?, ?, ?, ?, ?, ?, ?, ?,"
+            + " ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         id,
         clinicId(),
         staffId(),
@@ -85,7 +99,8 @@ class WorkspaceService {
         json.writeValueAsString(request.checklist()),
         Timestamp.from(now),
         Timestamp.from(now),
-        request.completed() ? Timestamp.from(now) : null);
+        request.completed() ? Timestamp.from(now) : null,
+        request.assigneeId());
     audit.record(actorId(), "WORKSPACE_ITEM_CREATED", "WORKSPACE_ITEM", id, "ALLOWED", null);
     events.publish("WorkspaceItemCreated", java.util.Map.of("itemId", id));
     return get(id);
@@ -103,8 +118,8 @@ class WorkspaceService {
     jdbc.update(
         "update workspace.item set type = ?, title = ?, body = ?, status = ?, color = ?, completed ="
             + " ?, due_at = ?, remind_at = ?, patient_id = ?, appointment_id = ?, tags = ?, fields ="
-            + " ?, checklist = ?, updated_at = ?, completed_at = ? where id = ? and clinic_id = ?"
-            + " and owner_id = ?",
+            + " ?, checklist = ?, updated_at = ?, completed_at = ?, assignee_id = ? where id = ?"
+            + " and clinic_id = ? and (owner_id = ? or assignee_id = ?)",
         request.type(),
         request.title(),
         request.body(),
@@ -120,8 +135,10 @@ class WorkspaceService {
         json.writeValueAsString(request.checklist()),
         Timestamp.from(now),
         timestamp(completedAt),
+        request.assigneeId(),
         id,
         clinicId(),
+        staffId(),
         staffId());
     audit.record(actorId(), "WORKSPACE_ITEM_UPDATED", "WORKSPACE_ITEM", id, "ALLOWED", null);
     events.publish(
@@ -135,11 +152,12 @@ class WorkspaceService {
     get(id);
     jdbc.update(
         "update workspace.item set archived_at = ?, updated_at = ? where id = ? and clinic_id = ?"
-            + " and owner_id = ?",
+            + " and (owner_id = ? or assignee_id = ?)",
         archived ? Timestamp.from(Instant.now()) : null,
         Timestamp.from(Instant.now()),
         id,
         clinicId(),
+        staffId(),
         staffId());
     audit.record(
         actorId(),
@@ -201,10 +219,12 @@ class WorkspaceService {
   private WorkspaceItemView get(UUID id) {
     var rows =
         jdbc.query(
-            "select * from workspace.item where id = ? and clinic_id = ? and owner_id = ?",
+            "select * from workspace.item where id = ? and clinic_id = ?"
+                + " and (owner_id = ? or assignee_id = ?)",
             (rs, rowNum) -> item(rs),
             id,
             clinicId(),
+            staffId(),
             staffId());
     if (rows.isEmpty()) throw notFound("WORKSPACE_ITEM_NOT_FOUND", "Workspace item not found");
     return rows.get(0);
@@ -229,7 +249,9 @@ class WorkspaceService {
         rs.getTimestamp("created_at").toInstant(),
         rs.getTimestamp("updated_at").toInstant(),
         instant(rs.getTimestamp("completed_at")),
-        instant(rs.getTimestamp("archived_at")));
+        instant(rs.getTimestamp("archived_at")),
+        rs.getObject("owner_id", UUID.class),
+        rs.getObject("assignee_id", UUID.class));
   }
 
   private WorkspaceItemRequest normalize(WorkspaceItemRequest input) {
@@ -272,10 +294,16 @@ class WorkspaceService {
         input.appointmentId(),
         tags,
         fields,
-        checklist);
+        checklist,
+        input.assigneeId() == null ? staffId() : input.assigneeId());
   }
 
   private void validateReferences(WorkspaceItemRequest request) {
+    if (!exists(
+        "select count(*) from staff_user where id = ? and clinic_id = ? and active = true",
+        request.assigneeId())) {
+      throw conflict("INVALID_ASSIGNEE", "Assignee not found or inactive");
+    }
     if (request.patientId() != null) {
       requirePermission(Permission.PATIENT_READ, Permission.PATIENT_READ_CARE);
       if (!exists(

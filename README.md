@@ -134,7 +134,7 @@ docker compose exec postgres pg_restore -U quiet_clinic -d quiet_clinic --clean 
 | `CLINIC_ASSISTANT_API_KEY` | пусто | Ключ OpenAI-compatible API для неоднозначных запросов ИИ-навигатора. Хранится только на backend; пусто — работает локальный поиск |
 | `CLINIC_ASSISTANT_MODEL` | `gpt-5.4-nano` | Модель навигации |
 | `CLINIC_ASSISTANT_API_URL` | `https://api.openai.com/v1` | Базовый адрес OpenAI-compatible API; backend вызывает `/chat/completions` |
-| `CLINIC_CONTRACT_LIBREOFFICE_BINARY` | пусто | Необязательный PDF договоров: путь к LibreOffice внутри backend-контейнера. Пусто — формируется только DOCX |
+| `CLINIC_CONTRACT_LIBREOFFICE_BINARY` | пусто | Путь к LibreOffice внутри backend-контейнера: PDF договоров и временный предпросмотр DOCX/XLSX на диске. Пусто — договоры формируются только в DOCX, офисный предпросмотр недоступен |
 
 После изменения `.env` выполните `docker compose up -d`.
 

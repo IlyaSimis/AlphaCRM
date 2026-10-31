@@ -10,9 +10,9 @@ import java.util.concurrent.TimeUnit;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-/** Необязательный локальный конвертер. Без настроенного бинарника DOCX остаётся доступным. */
+/** Локальный конвертер договоров и временного предпросмотра офисных документов. */
 @Component
-class LibreOfficePdfConverter {
+public class LibreOfficePdfConverter {
   private final String binary;
 
   LibreOfficePdfConverter(@Value("${clinic.contracts.libreoffice-binary:}") String binary) {
@@ -24,12 +24,20 @@ class LibreOfficePdfConverter {
   }
 
   Optional<byte[]> convert(byte[] docx) {
+    return convert(docx, "docx");
+  }
+
+  /** Конвертация только в памяти запроса: временный каталог удаляется сразу после чтения PDF. */
+  public Optional<byte[]> convert(byte[] document, String extension) {
     if (!available()) return Optional.empty();
+    if (!extension.equals("docx") && !extension.equals("xlsx")) {
+      throw conflict("PREVIEW_UNSUPPORTED", "This file format cannot be previewed");
+    }
     Path directory = null;
     try {
-      directory = Files.createTempDirectory("alphacrm-contract-");
-      var input = directory.resolve("contract.docx");
-      Files.write(input, docx);
+      directory = Files.createTempDirectory("alphacrm-document-");
+      var input = directory.resolve("document." + extension);
+      Files.write(input, document);
       var profile = directory.resolve("lo-profile");
       var process =
           new ProcessBuilder(
@@ -51,11 +59,11 @@ class LibreOfficePdfConverter {
         throw conflict("PDF_CONVERSION_TIMEOUT", "PDF conversion timed out");
       }
       if (process.exitValue() != 0) {
-        throw conflict("PDF_CONVERSION_FAILED", "Cannot convert the contract to PDF");
+        throw conflict("PDF_CONVERSION_FAILED", "Cannot convert the document to PDF");
       }
-      var pdf = directory.resolve("contract.pdf");
+      var pdf = directory.resolve("document.pdf");
       if (!Files.isRegularFile(pdf)) {
-        throw conflict("PDF_CONVERSION_FAILED", "Cannot convert the contract to PDF");
+        throw conflict("PDF_CONVERSION_FAILED", "Cannot convert the document to PDF");
       }
       return Optional.of(Files.readAllBytes(pdf));
     } catch (java.io.IOException ex) {

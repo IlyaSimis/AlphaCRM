@@ -63,6 +63,18 @@ export function setQuota(bytesLimit: number) {
   return json<DriveQuota>('/drive/quota', 'Не удалось изменить квоту', { method: 'PUT', body: JSON.stringify({ bytesLimit }) })
 }
 
+export async function previewDriveFile(node: Pick<DriveNode, 'id'>): Promise<Blob> {
+  const response = await apiFetch(`/drive/files/${node.id}/preview`)
+  if (!response.ok) throw await failure(response, 'Не удалось открыть файл')
+  return response.blob()
+}
+
+export async function previewDriveLink(token: string, node: Pick<DriveNode, 'id'>): Promise<Blob> {
+  const response = await apiFetch(`/drive/links/${encodeURIComponent(token)}/preview?node=${node.id}`)
+  if (!response.ok) throw await failure(response, 'Не удалось открыть файл')
+  return response.blob()
+}
+
 /** Скачивание через сессию сотрудника: файл отдаётся вложением. */
 export async function downloadFile(node: DriveNode, version?: number) {
   const response = await apiFetch(`/drive/files/${node.id}/content${version ? `?version=${version}` : ''}`)

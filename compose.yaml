@@ -67,7 +67,7 @@ services:
       # Корпоративный диск: зашифрованные файлы в томе quiet-clinic-drive.
       CLINIC_DRIVE_STORAGE_DIR: /var/lib/alphacrm/drive
       CLINIC_DRIVE_QUOTA_BYTES: ${CLINIC_DRIVE_QUOTA_BYTES:-10737418240}
-      # PDF договоров: опциональный путь к LibreOffice внутри backend-контейнера.
+      # PDF договоров и предпросмотр DOCX/XLSX: путь к LibreOffice внутри backend-контейнера.
       CLINIC_CONTRACT_LIBREOFFICE_BINARY: ${CLINIC_CONTRACT_LIBREOFFICE_BINARY:-}
       # ИИ-навигатор. Пустой ключ — локальный поиск работает, обращения к модели выключены.
       CLINIC_ASSISTANT_API_KEY: ${CLINIC_ASSISTANT_API_KEY:-}

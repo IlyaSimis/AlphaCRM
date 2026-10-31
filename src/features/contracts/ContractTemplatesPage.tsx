@@ -6,12 +6,13 @@ import {
 } from '@mui/material'
 import {
   contractTemplateProblem, downloadPatientContract, loadContractPatients, loadContractTemplates,
-  printPatientContract, uploadContractTemplate,
+  previewPatientContract, printPatientContract, uploadContractTemplate,
 } from '../../api/contracts'
 import type { ContractPatientItem, ContractTemplateItem, PatientContractItem, ServiceItem } from '../../api/types'
 import { formatClinicMoment } from '../../shared/clinicTime'
 import { can } from '../../shared/permissions'
 import type { Role } from '../../shared/roles'
+import { FilePreviewDialog, type FilePreviewSource } from '../files/FilePreviewDialog'
 import { ContractCreateDialog } from './ContractCreateDialog'
 
 type ContractTemplatesPageProps = {
@@ -34,6 +35,7 @@ export function ContractTemplatesPage({ role, apiOnline, services, notify }: Con
   const [patientId, setPatientId] = useState('')
   const [creating, setCreating] = useState(false)
   const [created, setCreated] = useState<PatientContractItem | null>(null)
+  const [preview, setPreview] = useState<FilePreviewSource | null>(null)
   const [busy, setBusy] = useState(false)
   const [name, setName] = useState('')
   const [file, setFile] = useState<File | null>(null)
@@ -119,11 +121,13 @@ export function ContractTemplatesPage({ role, apiOnline, services, notify }: Con
       {actionError && !open && <Alert severity="error" sx={{ mb: 2 }}>{actionError}</Alert>}
       {created && (
         <Alert severity="success" sx={{ mb: 2 }} action={<Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+          {created.pdfAvailable && <Button color="inherit" size="small" onClick={() => setPreview({ title: `${created.contractNumber} · ${created.templateName}`, kind: 'pdf', load: () => previewPatientContract(created) })}>Просмотр</Button>}
           <Button color="inherit" size="small" onClick={() => void download('docx')}>DOCX</Button>
           {created.pdfAvailable && <Button color="inherit" size="small" startIcon={<PictureAsPdfRounded />} onClick={() => void download('pdf')}>PDF</Button>}
           {created.pdfAvailable && <Button color="inherit" size="small" startIcon={<PrintRounded />} onClick={() => void print()}>Печать PDF</Button>}
         </Box>}>Договор {created.contractNumber} сформирован.</Alert>
       )}
+      <FilePreviewDialog source={preview} onClose={() => setPreview(null)} />
       {apiOnline && !error && items === null && <Box className="empty" sx={{ minHeight: 160 }}><CircularProgress size={28} aria-label="Загрузка шаблонов" /></Box>}
       {apiOnline && !error && items !== null && (
         <Box className="panel">

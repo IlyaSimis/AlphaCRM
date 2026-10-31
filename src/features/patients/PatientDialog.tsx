@@ -116,7 +116,7 @@ export function PatientDialog({ open, mode = 'create', initial, error = '', pati
           <Typography variant="h6" sx={{ fontSize: 17, fontWeight: 750, mb: 2 }}>Представители</Typography>
           <Stack spacing={2}>
             {(profile.representatives ?? []).map((representative, index) => <Box key={index} className="patient-representative">
-              <TextField label={`Представитель ${index + 1}: ФИО`} value={representative.fullName ?? ''} onChange={(event) => updateRepresentative(index, { fullName: event.target.value })} />
+              <TextField autoFocus={edit && index === (profile.representatives?.length ?? 0) - 1 && !representative.fullName} label={`Представитель ${index + 1}: ФИО`} value={representative.fullName ?? ''} onChange={(event) => updateRepresentative(index, { fullName: event.target.value })} />
               <TextField label="Кем приходится" value={representative.relationship ?? ''} onChange={(event) => updateRepresentative(index, { relationship: event.target.value })} />
               <FormControlLabel control={<Checkbox checked={Boolean(representative.primary)} onChange={(event) => updateRepresentative(index, { primary: event.target.checked })} />} label="Основной" />
               <Button color="warning" onClick={() => setProfile((current) => ({ ...current, representatives: (current.representatives ?? []).filter((_, itemIndex) => itemIndex !== index) }))}>Удалить</Button>

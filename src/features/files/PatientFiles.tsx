@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { LockOutlined, PictureAsPdfRounded } from '@mui/icons-material'
 import { Alert, Box, Button, Chip, CircularProgress, Typography } from '@mui/material'
-import { downloadPatientFile, fileSize, loadPatientFiles, pdfProblem, printPatientFile, signPatientFile, uploadPatientFile } from '../../api/files'
+import { downloadPatientFile, fileSize, loadPatientFiles, pdfProblem, previewPatientFile, printPatientFile, signPatientFile, uploadPatientFile } from '../../api/files'
 import type { PatientFileItem } from '../../api/types'
 import { formatClinicMoment } from '../../shared/clinicTime'
 import type { Role } from '../../shared/roles'
 import { isUuid } from '../../shared/text'
+import { FilePreviewDialog, type FilePreviewSource } from './FilePreviewDialog'
 import { fileRights, fileStateLabels } from './fileRules'
 import { SignFileDialog } from './SignFileDialog'
 
@@ -33,6 +34,7 @@ export function PatientFiles({ patientId, appointmentId, role, apiOnline, notify
   const [busy, setBusy] = useState(false)
   const [signing, setSigning] = useState<PatientFileItem | null>(null)
   const [signError, setSignError] = useState('')
+  const [preview, setPreview] = useState<FilePreviewSource | null>(null)
   const [revision, setRevision] = useState(0)
   const input = useRef<HTMLInputElement | null>(null)
 
@@ -122,12 +124,14 @@ export function PatientFiles({ patientId, appointmentId, role, apiOnline, notify
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
             <Chip size="small" variant="outlined" color={file.state === 'SIGNED_LOCKED' ? 'success' : 'default'} label={fileStateLabels[file.state]} />
             {rights.sign(file) && <Button size="small" aria-label={`Подписать ${file.originalName}`} onClick={() => { setSignError(''); setSigning(file) }}>Подписать</Button>}
+            {rights.download && <Button size="small" aria-label={`Просмотр ${file.originalName}`} onClick={() => setPreview({ title: file.originalName, kind: 'pdf', load: () => previewPatientFile(file) })}>Просмотр</Button>}
             {rights.download && <Button size="small" aria-label={`Печать ${file.originalName}`} onClick={() => print(file)}>Печать</Button>}
             {rights.download && <Button size="small" aria-label={`Скачать ${file.originalName}`} onClick={() => void download(file)}>Скачать</Button>}
           </Box>
         </Box>
       ))}
       {signing && <SignFileDialog file={signing} error={signError} busy={busy} onClose={() => setSigning(null)} onSign={() => void sign()} />}
+      <FilePreviewDialog source={preview} onClose={() => setPreview(null)} />
     </Box>
   )
 }

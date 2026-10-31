@@ -151,6 +151,10 @@ export const errorMessages: Record<string, string> = {
   DRIVE_VERSION_NOT_FOUND: 'Версия не найдена',
   NOT_A_FILE: 'Это не файл',
   NOT_A_FOLDER: 'Это не папка',
+  PREVIEW_UNSUPPORTED: 'Встроенный просмотр для этого формата недоступен. Скачайте файл',
+  PREVIEW_CONVERSION_UNAVAILABLE: 'Для предпросмотра DOCX и XLSX нужно настроить LibreOffice на сервере',
+  PDF_CONVERSION_FAILED: 'Не удалось преобразовать документ в PDF. Скачайте оригинал',
+  PDF_CONVERSION_TIMEOUT: 'Преобразование документа заняло слишком много времени. Попробуйте ещё раз или скачайте оригинал',
 }
 
 /** Фраза для сотрудника по коду ответа или undefined, если экран этот код ещё не знает. */

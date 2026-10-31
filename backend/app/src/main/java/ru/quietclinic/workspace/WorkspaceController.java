@@ -29,6 +29,11 @@ public class WorkspaceController {
     return workspace.items(archived);
   }
 
+  @GetMapping("/assignees")
+  List<WorkspaceAssigneeView> assignees() {
+    return workspace.assignees();
+  }
+
   @PostMapping("/items")
   @ResponseStatus(HttpStatus.CREATED)
   WorkspaceItemView create(@Valid @RequestBody WorkspaceItemRequest request) {

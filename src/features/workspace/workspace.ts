@@ -4,13 +4,13 @@ import { localToday, shiftDate } from '../../shared/dates'
 
 export const emptyWorkspaceFilter: WorkspaceFilter = { query: '', type: '', status: '', tag: '', due: 'all', sort: 'due', display: 'board' }
 
-export function blankWorkspaceItem(type = 'Задача'): WorkspaceItemInput {
-  return { title: '', type, body: '', status: type === 'Заметка' ? 'Заметки' : 'К выполнению', color: type === 'Заметка' ? 'blue' : 'green', completed: false, dueAt: null, remindAt: null, patientId: null, appointmentId: null, tags: [], fields: [], checklist: [] }
+export function blankWorkspaceItem(type = 'Задача', assigneeId: string | null = null): WorkspaceItemInput {
+  return { title: '', type, body: '', status: type === 'Заметка' ? 'Заметки' : 'К выполнению', color: type === 'Заметка' ? 'blue' : 'green', completed: false, dueAt: null, remindAt: null, patientId: null, appointmentId: null, tags: [], fields: [], checklist: [], assigneeId }
 }
 
 export function inputOf(item: WorkspaceItem): WorkspaceItemInput {
-  const { title, type, body, status, color, completed, dueAt, remindAt, patientId, appointmentId, tags, fields, checklist } = item
-  return { title, type, body, status, color, completed, dueAt, remindAt, patientId, appointmentId, tags, fields, checklist }
+  const { title, type, body, status, color, completed, dueAt, remindAt, patientId, appointmentId, tags, fields, checklist, assigneeId } = item
+  return { title, type, body, status, color, completed, dueAt, remindAt, patientId, appointmentId, tags, fields, checklist, assigneeId }
 }
 
 export function filterWorkspace(items: WorkspaceItem[], filter: WorkspaceFilter, today = localToday()): WorkspaceItem[] {
@@ -24,6 +24,7 @@ export function filterWorkspace(items: WorkspaceItem[], filter: WorkspaceFilter,
     if (filter.type && item.type !== filter.type) return false
     if (filter.status && item.status !== filter.status) return false
     if (filter.tag && !item.tags.includes(filter.tag)) return false
+    if (filter.assigneeId && (item.type !== 'Задача' || item.assigneeId !== filter.assigneeId)) return false
     const day = item.dueAt ? clinicParts(item.dueAt).date : null
     if (filter.due === 'today' && day !== today) return false
     if (filter.due === 'overdue' && (!day || day >= today || item.completed)) return false
@@ -68,6 +69,21 @@ export function newWorkspaceId() {
 
 type OfflineStore = { items: WorkspaceItem[]; views: import('../../api/types').WorkspaceView[] }
 const storageKey = (selfId: string) => `alphacrm.workspace.${selfId}`
+
+/** Делит изменения задачи между автором и исполнителем в локальной песочнице. */
+export function syncOfflineItem(item: WorkspaceItem, previous?: WorkspaceItem) {
+  try {
+    const ids = new Set([item.creatorId, item.assigneeId, previous?.creatorId, previous?.assigneeId].filter((id): id is string => Boolean(id)))
+    for (const id of ids) {
+      const raw = globalThis.localStorage?.getItem(storageKey(id))
+      const store = raw ? JSON.parse(raw) as OfflineStore : { items: [], views: [] }
+      const participates = item.creatorId === id || item.assigneeId === id
+      const items = store.items.filter((entry) => entry.id !== item.id)
+      if (participates) items.unshift(item)
+      globalThis.localStorage?.setItem(storageKey(id), JSON.stringify({ ...store, items }))
+    }
+  } catch { /* Если хранилище недоступно, текущая вкладка продолжит работать в памяти. */ }
+}
 
 /** Локальное демо-пространство используется и полной страницей, и панелью заметок. */
 export function offlineStore(selfId: string): OfflineStore {
