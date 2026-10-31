@@ -125,6 +125,7 @@ describe('Договоры пациента', () => {
       values: { 'custom.note': 'Условия для кассира' },
     })
     expect(await within(page).findByText('Договор Д-2026-00002 сформирован.')).toBeInTheDocument()
+    expect(within(page).getByRole('button', { name: 'Просмотр' })).toBeInTheDocument()
     expect(within(page).getByRole('button', { name: 'Печать PDF' })).toBeInTheDocument()
   })
 })
