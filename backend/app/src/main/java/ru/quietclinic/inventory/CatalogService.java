@@ -181,6 +181,7 @@ class CatalogService {
     item.marked = marked;
     item.markingSystem = marked ? system : "NONE";
     item.rxOnly = Boolean.TRUE.equals(request.rxOnly());
+    if (request.minStock() != null) item.minStock = request.minStock();
   }
 
   @Transactional
@@ -314,7 +315,8 @@ class CatalogService {
         i.markingSystem,
         i.rxOnly,
         i.active,
-        stock.getOrDefault(i.id, BigDecimal.ZERO));
+        stock.getOrDefault(i.id, BigDecimal.ZERO),
+        i.minStock);
   }
 
   private static String kindOf(Item item, Map<UUID, ItemCategory> categories) {

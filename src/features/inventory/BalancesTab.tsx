@@ -5,6 +5,7 @@ import { loadBalances, loadCategories, loadWarehouses } from '../../api/inventor
 import type { InventoryCategory, StockBalance, Warehouse } from '../../api/types'
 import { localToday, shortDate } from '../../shared/dates'
 import { balanceAlert, formatQuantity, kindLabels } from './inventory'
+import { InventoryMetricsPanel } from './InventoryMetricsPanel'
 
 /** Остатки по складам и партиям; минус и истекающий срок — с пометкой. */
 export function BalancesTab({ onReceive }: { onReceive?: () => void }) {
@@ -71,6 +72,7 @@ export function BalancesTab({ onReceive }: { onReceive?: () => void }) {
               })}
             </tbody>
           </table>}
+      <InventoryMetricsPanel />
     </Box>
   )
 }

@@ -82,6 +82,9 @@ export type PatientItem = {
   phoneSharedWith?: Array<{ id: string; fullName: string }>
   /** Есть контакт Telegram (chat id). Сам chat id сервер на экран не отдаёт. */
   telegramConnected?: boolean
+  /** Подключён MAX и выбранный основной канал; внешние id сервер не отдаёт. */
+  maxConnected?: boolean
+  preferredMessenger?: 'TELEGRAM' | 'MAX' | null
   email?: string | null
   /** Второй телефон — отдельный контакт, основной телефон — phone. */
   secondPhone?: string | null
@@ -227,7 +230,7 @@ export type ChargeItem = {
 export type VoidReason = 'DUPLICATE' | 'ERROR' | 'PATIENT_DECLINED' | 'OTHER'
 export type RefundReason = 'PATIENT_REQUEST' | 'SERVICE_NOT_PROVIDED' | 'ERROR' | 'OTHER'
 
-export type SalesGroup = 'day' | 'service' | 'practitioner'
+export type SalesGroup = 'day' | 'weekday' | 'service' | 'practitioner'
 export type SalesLine = { key: string; label: string; payments: number; amountMinor: number; refunds: number; refundedMinor: number; netMinor: number; openPriceMinor: number }
 export type SalesReport = {
   from: string
@@ -287,6 +290,28 @@ export type Practitioner = {
 
 export type StatRow = { date: string; practitionerId: string; status: AppointmentStatus; count: number }
 
+export type AnalyticsLoad = { id: string; label: string; specialty: string | null; occupiedMinutes: number; availableMinutes: number }
+export type AnalyticsWeek = { weekStart: string; appointments: number; attended: number; noShow: number; cancelled: number; revenueMinor: number; occupiedMinutes: number; availableMinutes: number }
+export type AnalyticsOverview = {
+  from: string
+  to: string
+  currency: string
+  totals: {
+    appointments: number; attended: number; noShow: number; cancelled: number
+    revenueMinor: number; payments: number; averageCheckMinor: number | null
+    debtMinor: number; unpaidCharges: number; openPriceMinor: number; refundedMinor: number
+    newPatients: number; returningPatients: number; completedPatients: number; withoutNextVisit: number
+    occupiedMinutes: number; availableMinutes: number
+    waitlistActive: number; waitlistBooked: number; waitlistPeriodTotal: number
+  }
+  weeks: AnalyticsWeek[]
+  practitioners: AnalyticsLoad[]
+  rooms: AnalyticsLoad[]
+  nextSlots: Array<{ specialty: string; practitioners: number; averageHours: number; nextAvailableAt: string }>
+  funnel: { contacts: number; booked: number; visited: number; paid: number }
+  queues: { unclosedEncounters: number; unsignedDocuments: number; unpaidCharges: number }
+}
+
 export type AuditItem = {
   id: string
   occurredAt: string
@@ -323,7 +348,7 @@ export type OutboxItem = {
 }
 
 /** Виджет персонального дашборда: подпись выбирает интерфейс по code. */
-export type DashboardWidget = { code: string; scope: 'OWN' | 'CLINIC'; value: number; secondary: number | null; unit: 'count' | 'money' | 'bytes'; items: string[] }
+export type DashboardWidget = { code: string; scope: 'OWN' | 'CLINIC'; value: number; secondary: number | null; unit: 'count' | 'money' | 'bytes' | 'percent'; items: string[] }
 
 export type Dashboard = { role: string | null; monthStart: string; today: string; generatedAt: string; widgets: DashboardWidget[] }
 
@@ -345,6 +370,7 @@ export type InventoryItem = {
   rxOnly: boolean
   active: boolean
   stock: number
+  minStock: number
 }
 
 export type Warehouse = { id: string; name: string; isDefault: boolean }
@@ -384,6 +410,21 @@ export type StockBalance = {
   quantity: number
   codesInStock: number
 }
+
+export type StockMetricRow = {
+  itemId: string
+  itemName: string
+  unit: string
+  stock: number
+  minStock: number
+  received: number
+  consumption: number
+  writeOff: number
+  turnover: number | null
+  daysStock: number | null
+}
+
+export type StockMetrics = { from: string; to: string; rows: StockMetricRow[] }
 
 export type ScannedCode = { sgtin: string; gtin: string; serial: string; batch: string; expiresOn: string | null; itemId: string | null; itemName: string | null; codeStatus: string | null; warehouseId: string | null }
 

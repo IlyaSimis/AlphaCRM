@@ -3,6 +3,7 @@ import { Box, Drawer, Snackbar } from '@mui/material'
 import { changePassword } from '../api/auth'
 import type { AssignedStaff, EncounterView, PatientItem, ScheduleItem, StaffItem, WaitlistItem } from '../api/types'
 import type { NavigationDestination, WorkspaceNavigationIntent } from '../features/assistant/navigationCatalog'
+import type { BookingDraft } from '../features/schedule/booking'
 import { filterPatients } from '../features/patients/search'
 import { phoneSharedWith } from '../features/registry/registry'
 import { useRegistry } from '../features/registry/useRegistry'
@@ -10,7 +11,7 @@ import type { VisitTarget } from '../features/visit/visitRules'
 import { formatDay, localToday } from '../shared/dates'
 import { administratorRoles, staffRolesOf } from '../shared/roles'
 import { Landscape } from './Landscape'
-import { canOpen, firstPageOf, pageTitles, serviceOf, servicesFor, startPage, type Page, type Service } from './pages'
+import { canOpen, firstPageOf, pageTitles, sectionsFor, serviceOf, servicesFor, startPage, type Page, type Service } from './pages'
 import { Sidebar } from './Sidebar'
 import { Topbar } from './Topbar'
 import { useClinicData } from './useClinicData'
@@ -38,10 +39,12 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
   const [lastPages, setLastPages] = useState<Partial<Record<Service, Page>>>({})
   const [query, setQuery] = useState('')
   const [drawer, setDrawer] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [doctorFilter, setDoctorFilter] = useState('all')
-  const [booking, setBooking] = useState<{ date: string; practitionerId?: string } | null>(null)
+  const [booking, setBooking] = useState<{ date: string; practitionerId?: string; time?: string } | null>(null)
   const [bookingKey, setBookingKey] = useState(0)
   const [bookingError, setBookingError] = useState('')
+  const [pendingBookingPatient, setPendingBookingPatient] = useState<{ draft: BookingDraft; fullName: string; patient?: PatientItem } | null>(null)
   const [moving, setMoving] = useState<ScheduleItem | null>(null)
   const [moveError, setMoveError] = useState('')
   const [patientDialog, setPatientDialog] = useState(false)
@@ -86,10 +89,10 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
     if (target) navigate(target)
   }
 
-  const openBooking = (date = scheduleDate, practitionerId?: string) => {
+  const openBooking = (date = scheduleDate, practitionerId?: string, time?: string) => {
     setBookingError('')
     setBookingKey((value) => value + 1)
-    setBooking({ date, practitionerId })
+    setBooking({ date, practitionerId, time })
   }
 
   const openPatient = (patient: PatientItem) => {
@@ -185,6 +188,44 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
     }
   }
 
+  const prepareBookingPatient = (draft: BookingDraft, fullName: string) => {
+    setBooking(null)
+    setBookingError('')
+    setCreateError('')
+    setPendingBookingPatient({ draft, fullName })
+  }
+
+  /** Сначала полная карточка проходит серверные проверки, затем создаётся связанная запись. */
+  const saveBookingPatient = async (input: Parameters<typeof clinic.createPatient>[0]) => {
+    const pending = pendingBookingPatient
+    if (!pending) return
+    let patient = pending.patient
+    if (patient) {
+      const error = await clinic.updatePatient(patient, input, assignedOf(input.assignedStaffId, patient.assignedStaff))
+      if (error) {
+        setCreateError(error)
+        return
+      }
+      patient = { ...patient, name: input.fullName }
+    } else {
+      const error = await clinic.createPatient(input, assignedOf(input.assignedStaffId), (created) => { patient = created })
+      if (error || !patient) {
+        setCreateError(error ?? 'Не удалось сохранить пациента')
+        return
+      }
+    }
+    const result = await clinic.book({ ...pending.draft, patientId: patient.id }, patient)
+    if (result.status === 'error') {
+      setPendingBookingPatient({ ...pending, patient })
+      setCreateError(`Карточка пациента сохранена, но запись не создана: ${result.message}`)
+      return
+    }
+    if (result.status === 'done') {
+      setPendingBookingPatient(null)
+      setCreateError('')
+    }
+  }
+
   const saveMoving = async (draft: Parameters<typeof clinic.reschedule>[1]) => {
     if (!moving) return
     const result = await clinic.reschedule(moving, draft)
@@ -237,11 +278,11 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
 
   return (
     <Box className="app-shell">
-      <Box className="desktop-sidebar"><Sidebar className="sidebar" page={page} service={service} staff={staff} live={live} visits={visits} activeVisit={page === 'visit' ? visit : null} onNavigate={navigate} onVisit={openVisit} onSettings={() => setSettings(true)} /></Box>
-      <Drawer open={drawer} onClose={() => setDrawer(false)}><Sidebar className="sidebar sidebar-in-drawer" page={page} service={service} staff={staff} live={live} visits={visits} activeVisit={page === 'visit' ? visit : null} onNavigate={navigate} onVisit={(target) => { openVisit(target); setDrawer(false) }} onSettings={() => { setDrawer(false); setSettings(true) }} /></Drawer>
+      <Box className={`desktop-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}><Sidebar className="sidebar" page={page} service={service} services={servicesFor(role)} staff={staff} live={live} visits={visits} activeVisit={page === 'visit' ? visit : null} collapsed={sidebarCollapsed} onService={openService} onNavigate={navigate} onVisit={openVisit} onSettings={() => setSettings(true)} onToggleCollapse={() => setSidebarCollapsed((value) => !value)} /></Box>
+      <Drawer open={drawer} onClose={() => setDrawer(false)}><Sidebar className="sidebar sidebar-in-drawer" page={page} service={service} services={servicesFor(role)} staff={staff} live={live} visits={visits} activeVisit={page === 'visit' ? visit : null} onService={openService} onNavigate={navigate} onVisit={(target) => { openVisit(target); setDrawer(false) }} onSettings={() => { setDrawer(false); setSettings(true) }} /></Drawer>
       <Box component="main" className="main">
         <Landscape />
-        <Topbar eyebrow={eyebrow} title={page === 'today' ? '' : pageTitles[page]} services={servicesFor(role)} service={service} onService={openService} live={live} clinicName={staff.clinicName} onAssistant={() => setAssistant(true)} onSignOut={onSignOut} onMenu={() => setDrawer(true)} />
+        <Topbar eyebrow={eyebrow} title={page === 'today' ? '' : pageTitles[page]} pages={sectionsFor(service, role).flatMap((section) => section.pages)} page={page} onNavigate={navigate} live={live} clinicName={staff.clinicName} onAssistant={() => setAssistant(true)} onSignOut={onSignOut} onMenu={() => setDrawer(true)} />
         <Box className="content">
           <WorkspaceContent
             page={page} staff={staff} role={role} doctorId={doctorId} live={live} clinic={clinic} registry={registry}
@@ -258,11 +299,12 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
 
       <WorkspaceDialogs
         staff={staff} role={role} live={live} page={page} clinic={clinic} registry={registry} administrators={administrators}
-        doctorFilter={doctorFilter} booking={booking} bookingKey={bookingKey} bookingError={bookingError}
+        doctorFilter={doctorFilter} booking={booking} bookingKey={bookingKey} bookingError={bookingError} pendingBookingPatient={pendingBookingPatient}
         moving={moving} moveError={moveError} waitSlot={waitSlot} waitError={waitError}
         patientDialog={patientDialog} createError={createError} patientImport={patientImport}
         editPatient={editPatient} editError={editError} settings={settings} password={password} passwordError={passwordError} assistant={assistant}
-        onBookingClose={() => { setBooking(null); setBookingError('') }} onBookingSave={saveBooking}
+        onBookingClose={() => { setBooking(null); setBookingError('') }} onBookingSave={saveBooking} onBookingNewPatient={prepareBookingPatient}
+        onBookingPatientClose={() => { setPendingBookingPatient(null); setCreateError('') }} onBookingPatientSave={saveBookingPatient}
         onMovingClose={() => setMoving(null)} onMovingSave={saveMoving}
         onWaitlistClose={() => setWaitSlot(null)} onBookWaiting={(entry) => { if (waitSlot) void bookWaiting(waitSlot, entry) }}
         onPatientCreateClose={() => { setPatientDialog(false); setCreateError('') }} onPatientCreate={createPatient}

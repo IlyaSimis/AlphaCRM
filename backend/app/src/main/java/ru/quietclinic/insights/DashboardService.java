@@ -28,10 +28,12 @@ class DashboardService {
 
   private final JdbcTemplate jdbc;
   private final ClinicTime time;
+  private final AnalyticsOverviewService analytics;
 
-  DashboardService(JdbcTemplate jdbc, ClinicTime time) {
+  DashboardService(JdbcTemplate jdbc, ClinicTime time, AnalyticsOverviewService analytics) {
     this.jdbc = jdbc;
     this.time = time;
+    this.analytics = analytics;
   }
 
   @Transactional(readOnly = true)
@@ -48,7 +50,7 @@ class DashboardService {
     var scope = own ? "OWN" : "CLINIC";
     var widgets = new ArrayList<Widget>();
 
-    if (can(Permission.SCHEDULE_READ)) {
+    if (can(Permission.SCHEDULE_READ) && (can(Permission.ANALYTICS_READ) || can(Permission.ANALYTICS_READ_OWN))) {
       var filter = appointmentFilter(own);
       var month =
           jdbc.queryForMap(
@@ -94,6 +96,9 @@ class DashboardService {
               .map(t -> HH_MM.format(t.atZone(time.zone())))
               .toList();
       widgets.add(new Widget("appointments.today", scope, upcoming.size(), null, "count", next));
+      var load = analytics.occupancy(monthStart, monthStart.plusMonths(1).minusDays(1), own ? actorId() : null);
+      long loadPercent = load.availableMinutes() == 0 ? 0 : Math.round(load.occupiedMinutes() * 100.0 / load.availableMinutes());
+      widgets.add(new Widget("schedule.load", scope, loadPercent, load.occupiedMinutes(), "percent", List.of()));
     }
 
     if (can(Permission.CLINICAL_RECORD)) {
@@ -253,8 +258,10 @@ class DashboardService {
               "stock.shortage",
               "CLINIC",
               count(
-                  "select count(*) from inventory.stock_balance where clinic_id = ? and quantity <"
-                      + " 0",
+                  "select count(*) from inventory.item i left join (select item_id, sum(quantity) as quantity"
+                      + " from inventory.stock_balance where clinic_id = ? group by item_id) b on b.item_id = i.id"
+                      + " where i.clinic_id = ? and i.active = true and coalesce(b.quantity, 0) < i.min_stock",
+                  clinicId(),
                   clinicId()),
               null,
               "count",

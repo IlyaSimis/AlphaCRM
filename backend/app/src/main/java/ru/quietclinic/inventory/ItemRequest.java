@@ -1,8 +1,11 @@
 package ru.quietclinic.inventory;
 
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
 import java.util.UUID;
 
 /**
@@ -18,4 +21,5 @@ record ItemRequest(
     Boolean marked,
     @Pattern(regexp = "NONE|MDLP|GIS_MT") String markingSystem,
     Boolean rxOnly,
-    Boolean active) {}
+    Boolean active,
+    @DecimalMin("0.0") @Digits(integer = 11, fraction = 3) BigDecimal minStock) {}

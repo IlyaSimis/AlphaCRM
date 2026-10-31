@@ -46,6 +46,10 @@ describe('workspace page', () => {
     await user.click(screen.getByRole('button', { name: 'Доска' }))
 
     await user.click(screen.getByRole('button', { name: 'Составная задача' }))
+    expect(screen.getByRole('dialog')).toHaveTextContent('Составная задача')
+    expect(screen.queryByLabelText('Название')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Сохранить' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Редактировать' }))
     await user.type(screen.getByLabelText('Теги'), 'новый')
     await user.click(screen.getByRole('button', { name: 'Сохранить' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())

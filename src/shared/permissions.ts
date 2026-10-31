@@ -79,7 +79,7 @@ export const rolePermissions: Record<StaffRole, Permission[]> = {
   SUPPORT: [
     'identity.staff.read', 'identity.staff.reset-password-platform', 'schedule.appointment.read', 'schedule.practitioner.read',
     'schedule.service.read', 'clinical.contract.use',
-    'drive.file.use', 'workspace.item.use', 'assistant.navigation.use', 'drive.clinic.admin', 'insights.dashboard.read', 'insights.analytics.read', 'audit.event.read-platform',
+    'drive.file.use', 'workspace.item.use', 'assistant.navigation.use', 'drive.clinic.admin', 'insights.dashboard.read', 'audit.event.read-platform',
     'communications.delivery.read', 'communications.delivery.retry', 'identity.hr.read-own',
   ],
 }

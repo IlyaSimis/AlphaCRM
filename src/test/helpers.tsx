@@ -22,21 +22,20 @@ function pageByTitle(title: string): Page {
   return page
 }
 
-/** Открыть страницу как сотрудник: вкладка сервиса в верхней панели, затем раздел в боковом меню. */
+/** Открыть страницу: сервис в боковом меню, затем его раздел в верхней панели. */
 export async function openPage(user: User, title: string) {
-  const tab = screen.getByRole('tab', { name: serviceTitles[serviceOf(pageByTitle(title))] })
-  if (tab.getAttribute('aria-selected') !== 'true') await user.click(tab)
-  await user.click(menu().getByRole('button', { name: title }))
+  await user.click(menu().getByRole('button', { name: serviceTitles[serviceOf(pageByTitle(title))] }))
+  await user.click(screen.getByRole('tab', { name: title }))
   // Нестартовые разделы подгружаются через React.lazy.
   await waitFor(() => expect(screen.queryByLabelText('Загрузка раздела')).not.toBeInTheDocument())
 }
 
-/** Есть ли страница в меню сотрудника: вкладка её сервиса и раздел в нём. Переключает вкладку. */
+/** Есть ли страница у сотрудника: сервис слева и раздел сверху. Переключает сервис. */
 export async function menuHas(user: User, title: string) {
-  const tab = screen.queryByRole('tab', { name: serviceTitles[serviceOf(pageByTitle(title))] })
-  if (!tab) return false
-  if (tab.getAttribute('aria-selected') !== 'true') await user.click(tab)
-  return menu().queryByRole('button', { name: title }) !== null
+  const service = menu().queryByRole('button', { name: serviceTitles[serviceOf(pageByTitle(title))] })
+  if (!service) return false
+  await user.click(service)
+  return screen.queryByRole('tab', { name: title }) !== null
 }
 
 export const renderApp = () => render(<ClinicThemeProvider><App /></ClinicThemeProvider>)

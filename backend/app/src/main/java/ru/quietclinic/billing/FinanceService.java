@@ -157,8 +157,8 @@ class FinanceService {
       throw badRequest("PERIOD_TOO_LONG", "The report period is limited to about a year");
     }
     var group = groupBy == null ? "day" : groupBy;
-    if (!List.of("day", "service", "practitioner").contains(group)) {
-      throw badRequest("INVALID_GROUP", "Group by day, service or practitioner");
+    if (!List.of("day", "weekday", "service", "practitioner").contains(group)) {
+      throw badRequest("INVALID_GROUP", "Group by day, weekday, service or practitioner");
     }
     var start = Timestamp.from(time.startOf(from));
     var end = Timestamp.from(time.startOf(to.plusDays(1)));
@@ -193,7 +193,7 @@ class FinanceService {
     for (var refund : returned) add(rows, group, refund, zone, true);
     var list = new ArrayList<>(rows.values());
     list.sort(
-        "day".equals(group)
+        "day".equals(group) || "weekday".equals(group)
             ? Comparator.comparing(Row::key)
             : Comparator.comparingLong(Row::net).reversed().thenComparing(Row::label));
     long payments = 0, amount = 0, refundsCount = 0, refunded = 0, open = 0;
@@ -233,6 +233,10 @@ class FinanceService {
       case "practitioner" -> {
         key = String.valueOf(sale.get("practitioner_id"));
         label = (String) sale.get("practitioner");
+      }
+      case "weekday" -> {
+        key = String.valueOf(at.atZone(zone).getDayOfWeek().getValue());
+        label = key;
       }
       default -> {
         key = at.atZone(zone).toLocalDate().toString();

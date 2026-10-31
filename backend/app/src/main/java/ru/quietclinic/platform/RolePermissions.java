@@ -28,7 +28,7 @@ public final class RolePermissions {
   public static final String SUPPORT = "SUPPORT";
 
   /** Версия набора разрешений: отдаётся в /auth/me как permissionsVersion. */
-  public static final String VERSION = "2026-10-30.2";
+  public static final String VERSION = "2026-10-31.1";
 
   /** Роли сотрудников в порядке экрана «Сотрудники». */
   public static final List<String> STAFF_ROLES =
@@ -213,7 +213,6 @@ public final class RolePermissions {
             ASSISTANT_USE,
             DRIVE_ADMIN,
             DASHBOARD_READ,
-            ANALYTICS_READ,
             AUDIT_READ_PLATFORM,
             DELIVERY_READ,
             DELIVERY_RETRY);

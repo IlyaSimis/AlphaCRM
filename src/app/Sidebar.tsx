@@ -1,94 +1,68 @@
-import { ArticleRounded, AssignmentTurnedInRounded, BadgeRounded, CalendarMonthRounded, ContactPhoneRounded, DeleteOutlineRounded, DescriptionRounded, EventNoteRounded, FolderSharedRounded, FolderRounded, HealthAndSafetyRounded, HistoryRounded, InsightsRounded, Inventory2Rounded, ListAltRounded, MedicalServicesRounded, OutboxRounded, PaymentsRounded, PeopleAltRounded, QrCode2Rounded, QueryStatsRounded, SettingsRounded, WorkOutlineRounded, WorkRounded, ReceiptLongRounded, SellRounded, TodayRounded } from '@mui/icons-material'
-import { Avatar, Box, Stack, Typography } from '@mui/material'
+import { AdminPanelSettingsRounded, ChevronLeftRounded, ChevronRightRounded, DashboardRounded, DescriptionRounded, FolderSharedRounded, HealthAndSafetyRounded, Inventory2Rounded, MedicalServicesRounded, PaymentsRounded, PeopleAltRounded, SettingsRounded } from '@mui/icons-material'
+import { Avatar, Box, IconButton, Stack, Tooltip, Typography } from '@mui/material'
 import type { ReactNode } from 'react'
 import type { StaffItem } from '../api/types'
 import type { VisitTarget } from '../features/visit/visitRules'
 import { canWriteClinical, profileOf } from '../shared/roles'
-import { pageTitles, sectionsFor, serviceOf, serviceTitles, startPage, type Page, type Service } from './pages'
+import { serviceTitles, startPage, type Page, type Service } from './pages'
 import { rolesOf } from '../shared/permissions'
 
-const pageIcons: Partial<Record<Page, ReactNode>> = {
-  today: <TodayRounded />,
-  workspace: <AssignmentTurnedInRounded />,
-  analytics: <InsightsRounded />,
-  staff: <BadgeRounded />,
-  hr: <WorkRounded />,
-  'hr-me': <WorkOutlineRounded />,
-  audit: <HistoryRounded />,
-  'break-glass': <HealthAndSafetyRounded />,
-  outbox: <OutboxRounded />,
-  schedule: <CalendarMonthRounded />,
-  patients: <PeopleAltRounded />,
-  registry: <ContactPhoneRounded />,
-  documents: <ArticleRounded />,
-  'contract-templates': <DescriptionRounded />,
-  hours: <EventNoteRounded />,
-  'stock-balances': <Inventory2Rounded />,
-  'stock-items': <ListAltRounded />,
-  'stock-documents': <ReceiptLongRounded />,
-  'stock-marking': <QrCode2Rounded />,
-  'stock-norms': <AssignmentTurnedInRounded />,
-  cashier: <PaymentsRounded />,
-  sales: <QueryStatsRounded />,
-  prices: <SellRounded />,
-  drive: <FolderRounded />,
-  'drive-shared': <FolderSharedRounded />,
-  'drive-trash': <DeleteOutlineRounded />,
+const serviceIcons: Record<Service, ReactNode> = {
+  dashboards: <DashboardRounded />, management: <AdminPanelSettingsRounded />, patients: <PeopleAltRounded />,
+  documents: <DescriptionRounded />, inventory: <Inventory2Rounded />, finance: <PaymentsRounded />, drive: <FolderSharedRounded />,
 }
 
-function NavItem({ active, icon, label, onClick }: { active: boolean; icon: ReactNode; label: string; onClick: () => void }) {
-  return <button type="button" className={`nav-item ${active ? 'active' : ''}`} aria-current={active ? 'page' : undefined} onClick={onClick}>{icon}{label}</button>
+function NavItem({ active, icon, label, collapsed = false, onClick }: { active: boolean; icon: ReactNode; label: string; collapsed?: boolean; onClick: () => void }) {
+  return <button type="button" className={`nav-item ${active ? 'active' : ''}`} aria-label={label} title={collapsed ? label : undefined} aria-current={active ? 'page' : undefined} onClick={onClick}>{icon}<span className="nav-text">{label}</span></button>
 }
 
 type SidebarProps = {
   className: string
   page: Page
-  /** Сервис верхней панели: в меню — его разделы. */
   service: Service
+  services: Service[]
   staff: StaffItem
   live: boolean
-  /** Открытые приёмы врача: можно вернуться к любому, ни один не закрывается при переходе. */
   visits: VisitTarget[]
   activeVisit: VisitTarget | null
+  collapsed?: boolean
+  onService: (service: Service) => void
   onNavigate: (page: Page) => void
   onVisit: (visit: VisitTarget) => void
   onSettings: () => void
+  onToggleCollapse?: () => void
 }
 
-/** Боковое меню: разделы выбранного сервиса, открытые приёмы и личные настройки внизу. */
-export function Sidebar({ className, page, service, staff, live, visits, activeVisit, onNavigate, onVisit, onSettings }: SidebarProps) {
+/** Боковое меню: сервисы, открытые приёмы и личные настройки. На десктопе сворачивается до иконок. */
+export function Sidebar({ className, service, services, staff, live, visits, activeVisit, collapsed = false, onService, onNavigate, onVisit, onSettings, onToggleCollapse }: SidebarProps) {
   const profile = profileOf(staff)
   const role = rolesOf(staff)
-  const sections = sectionsFor(service, role)
-  const current = page === 'patient' ? 'patients' : page
   return (
-    <Box className={className}>
-      {/* Название — кнопка «домой»: тот же переход, что после входа. Открытые приёмы не закрывает. */}
-      <button type="button" className="brand brand-button" aria-label="На главную" onClick={() => onNavigate(startPage(role))}>
-        <Box component="span" className="brand-mark"><HealthAndSafetyRounded /></Box>
-        <Box component="span"><Typography component="span" className="brand-name">AlphaCRM</Typography><Typography component="span" className="brand-caption">{serviceTitles[service]}</Typography></Box>
-      </button>
-      {sections.map((section) => (
-        <Box key={section.label} component="nav" aria-label={section.label.charAt(0) + section.label.slice(1).toLocaleLowerCase('ru-RU')} className="nav-section">
-          <Typography className="nav-label">{section.label}</Typography>
-          <Stack spacing={0.7}>
-            {section.pages.map((item) => <NavItem key={item} active={current === item && serviceOf(item) === service} icon={pageIcons[item] ?? <DescriptionRounded />} label={pageTitles[item]} onClick={() => onNavigate(item)} />)}
-          </Stack>
-        </Box>
-      ))}
+    <Box className={`${className} ${collapsed ? 'sidebar-collapsed' : ''}`}>
+      <Box className="sidebar-brand-row">
+        <button type="button" className="brand brand-button" aria-label="На главную" onClick={() => onNavigate(startPage(role))}>
+          <Box component="span" className="brand-mark"><HealthAndSafetyRounded /></Box>
+          <Box component="span" className="brand-text"><Typography component="span" className="brand-name">AlphaCRM</Typography><Typography component="span" className="brand-caption">{serviceTitles[service]}</Typography></Box>
+        </button>
+        {onToggleCollapse && <Tooltip title={collapsed ? 'Развернуть меню' : 'Свернуть меню'}><IconButton className="sidebar-collapse" aria-label={collapsed ? 'Развернуть меню' : 'Свернуть меню'} onClick={onToggleCollapse}>{collapsed ? <ChevronRightRounded /> : <ChevronLeftRounded />}</IconButton></Tooltip>}
+      </Box>
+      <Box component="nav" aria-label="Сервисы" className="nav-section">
+        <Typography className="nav-label">РАЗДЕЛЫ</Typography>
+        <Stack spacing={0.7}>
+          {services.map((item) => <NavItem key={item} active={item === service} collapsed={collapsed} icon={serviceIcons[item]} label={serviceTitles[item]} onClick={() => onService(item)} />)}
+        </Stack>
+      </Box>
       {canWriteClinical(role) && visits.length > 0 && <Box component="nav" aria-label="Открытые приёмы" className="nav-section">
         <Typography className="nav-label">ОТКРЫТЫЕ ПРИЁМЫ</Typography>
         <Stack spacing={0.7}>
-          {visits.map((visit) => (
-            <NavItem key={visit.appointmentId ?? visit.encounter?.encounterId ?? visit.patientId} active={activeVisit === visit} icon={<MedicalServicesRounded />} label={`Приём: ${visit.patientName}${visit.time ? ` · ${visit.time}` : ''}`} onClick={() => onVisit(visit)} />
-          ))}
+          {visits.map((visit) => <NavItem key={visit.appointmentId ?? visit.encounter?.encounterId ?? visit.patientId} active={activeVisit === visit} collapsed={collapsed} icon={<MedicalServicesRounded />} label={`Приём: ${visit.patientName}${visit.time ? ` · ${visit.time}` : ''}`} onClick={() => onVisit(visit)} />)}
         </Stack>
       </Box>}
       <Box className="sidebar-bottom">
-        <button type="button" className="nav-item settings-item" onClick={onSettings}><SettingsRounded />Настройки</button>
+        <NavItem active={false} collapsed={collapsed} icon={<SettingsRounded />} label="Настройки" onClick={onSettings} />
         <Box className="profile">
           <Avatar sx={{ bgcolor: 'action.selected', color: 'primary.main' }}>{profile.initials}</Avatar>
-          <Box sx={{ minWidth: 0, flex: 1 }}><Typography noWrap sx={{ fontWeight: 700, fontSize: 14 }}>{profile.name}</Typography><Typography sx={{ color: 'text.secondary', fontSize: 12 }}>{profile.role}{live ? '' : ' · демо'}</Typography></Box>
+          <Box className="profile-text" sx={{ minWidth: 0, flex: 1 }}><Typography noWrap sx={{ fontWeight: 700, fontSize: 14 }}>{profile.name}</Typography><Typography sx={{ color: 'text.secondary', fontSize: 12 }}>{profile.role}{live ? '' : ' · демо'}</Typography></Box>
         </Box>
       </Box>
     </Box>

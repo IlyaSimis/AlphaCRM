@@ -52,11 +52,13 @@ class WebhookChannel {
     }
   }
 
-  /** Тело вебхука: поля шаблона и готовый текст; из адресов — только chat id Telegram. */
+  /** Тело вебхука: поля шаблона, текст и внешние id подключённых мессенджеров, без телефона. */
   static String body(PatientMessage message) {
     var recipient = new LinkedHashMap<String, Object>();
     recipient.put("patientId", message.patientId().toString());
     recipient.put("telegramChatId", message.telegramChatId());
+    recipient.put("maxUserId", message.maxUserId());
+    recipient.put("preferredMessenger", message.preferredMessenger());
     var fields = new LinkedHashMap<String, Object>();
     fields.put("idempotencyKey", message.idempotencyKey());
     fields.put("template", message.template());

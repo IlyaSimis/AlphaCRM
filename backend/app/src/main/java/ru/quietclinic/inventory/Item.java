@@ -4,6 +4,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
@@ -44,6 +45,9 @@ class Item {
 
   @Column(nullable = false)
   boolean active;
+
+  @Column(nullable = false)
+  BigDecimal minStock = BigDecimal.ZERO;
 
   @Column(nullable = false)
   Instant createdAt;

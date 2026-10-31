@@ -16,4 +16,5 @@ record ItemView(
     String markingSystem,
     boolean rxOnly,
     boolean active,
-    BigDecimal stock) {}
+    BigDecimal stock,
+    BigDecimal minStock) {}

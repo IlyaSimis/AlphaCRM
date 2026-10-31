@@ -45,14 +45,16 @@ class ContactTokenService {
                 encryption.blindIndex("phone-exact", phone)
               });
         }
-      } else if (Patient.TELEGRAM.equals(contact.type)) {
+      } else if (Patient.TELEGRAM.equals(contact.type) || Patient.MAX.equals(contact.type)) {
         rows.add(
             new Object[] {
               contact.id,
               patient.id,
               patient.clinicId,
-              Patient.TELEGRAM,
-              encryption.blindIndex("telegram-exact", contact.value.trim())
+              contact.type,
+              encryption.blindIndex(
+                  Patient.TELEGRAM.equals(contact.type) ? "telegram-exact" : "max-exact",
+                  contact.value.trim())
             });
       }
     }
@@ -85,11 +87,18 @@ class ContactTokenService {
   }
 
   List<UUID> telegramMatches(UUID clinicId, String chatId) {
+    return channelMatches(clinicId, MessengerChannel.TELEGRAM, chatId);
+  }
+
+  List<UUID> channelMatches(UUID clinicId, MessengerChannel channel, String externalId) {
     return jdbc.queryForList(
         "select distinct patient_id from patient_contact_token"
-            + " where clinic_id = ? and kind = 'TELEGRAM' and token = ?",
+            + " where clinic_id = ? and kind = ? and token = ?",
         UUID.class,
         clinicId,
-        encryption.blindIndex("telegram-exact", chatId.trim()));
+        channel.name(),
+        encryption.blindIndex(
+            channel == MessengerChannel.TELEGRAM ? "telegram-exact" : "max-exact",
+            externalId.trim()));
   }
 }

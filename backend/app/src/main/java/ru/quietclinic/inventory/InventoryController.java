@@ -127,6 +127,11 @@ public class InventoryController {
     return stock.balances(warehouse, category, q, includeZero);
   }
 
+  @GetMapping("/metrics")
+  StockMetricsView metrics(@RequestParam java.time.LocalDate from, @RequestParam java.time.LocalDate to) {
+    return stock.metrics(from, to);
+  }
+
   @PostMapping("/marking/scan")
   ScanView scan(@Valid @RequestBody ScanRequest request) {
     return marking.scan(request);

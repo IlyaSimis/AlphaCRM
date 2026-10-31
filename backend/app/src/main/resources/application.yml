@@ -77,8 +77,18 @@ clinic:
     webhook-secret: ${CLINIC_OUTBOUND_WEBHOOK_SECRET:}
     telegram-bot-token: ${TELEGRAM_BOT_TOKEN:}
     telegram-api-url: ${TELEGRAM_API_URL:https://api.telegram.org}
+    # Основной путь: подписанный relay на зарубежном VPS, доступный МИС через WireGuard.
+    telegram-relay-url: ${CLINIC_OUTBOUND_TELEGRAM_RELAY_URL:}
+    telegram-relay-secret: ${CLINIC_OUTBOUND_TELEGRAM_RELAY_SECRET:}
     # Под напоминанием в Telegram — кнопки «Подтвердить» и «Отменить запись»; их обрабатывает бот клиники.
     telegram-reminder-buttons: ${TELEGRAM_REMINDER_BUTTONS:true}
+    max-bot-token: ${CLINIC_OUTBOUND_MAX_BOT_TOKEN:}
+    max-api-url: ${CLINIC_OUTBOUND_MAX_API_URL:https://platform-api2.max.ru}
+    max-reminder-buttons: ${CLINIC_OUTBOUND_MAX_REMINDER_BUTTONS:true}
+  messenger:
+    # Адреса ботов без одноразового токена; backend добавляет параметр start к ссылке привязки.
+    telegram-public-url: ${CLINIC_MESSENGER_TELEGRAM_PUBLIC_URL:}
+    max-public-url: ${CLINIC_MESSENGER_MAX_PUBLIC_URL:}
   cashbox:
     # Онлайн-касса для чеков. Пусто — чек остаётся QUEUED.
     url: ${CLINIC_CASHBOX_URL:}

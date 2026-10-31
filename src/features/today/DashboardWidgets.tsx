@@ -53,7 +53,7 @@ export function DashboardWidgets({ apiOnline, role, codes, stacked = false, onOp
 function Widget({ widget, role, onOpen }: { widget: DashboardWidget; role: Role; onOpen?: (page: Page) => void }) {
   const text = widgetText(widget)
   if (!text) return null
-  const value = widget.unit === 'money' ? formatMoney(widget.value) : widget.unit === 'bytes' ? formatBytes(widget.value) : String(widget.value)
+  const value = widget.unit === 'money' ? formatMoney(widget.value) : widget.unit === 'bytes' ? formatBytes(widget.value) : widget.unit === 'percent' ? `${widget.value}%` : String(widget.value)
   const note = widget.code === 'salary.month' ? salaryNote(widget.items[0]) : text.note
   const destination = dashboardDestination(widget.code)
   const content = <>

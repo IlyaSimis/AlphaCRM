@@ -62,13 +62,14 @@ export function SalesPage({ apiOnline }: { apiOnline: boolean }) {
         <Metric value={formatMoney(totals.netMinor, currency)} label="выручка" note="оплаты минус возвраты" accent />
         <Metric value={formatMoney(totals.amountMinor, currency)} label="оплачено" note={`оплат: ${totals.payments}`} />
         <Metric value={formatMoney(totals.refundedMinor, currency)} label="возвраты" note={`возвратов: ${totals.refunds}`} />
-        <Metric value={formatMoney(totals.openPriceMinor, currency)} label="свободная цена" note="часть оплат" />
+        <Metric value={formatMoney(totals.payments ? Math.round(totals.amountMinor / totals.payments) : 0, currency)} label="средний чек" note="оплачено / число оплат" />
+        <Metric value={formatMoney(totals.openPriceMinor, currency)} label="свободная цена" note={totals.amountMinor ? `${Math.round((totals.openPriceMinor / totals.amountMinor) * 100)}% оплат` : 'часть оплат'} />
       </Box>}
       <Box className="panel audit-panel">
         {!report && !error ? <Box className="empty" sx={{ minHeight: 160 }}><CircularProgress aria-label="Загрузка отчёта" /></Box>
           : report && report.lines.length === 0 ? <Box className="empty" sx={{ minHeight: 160 }}><InsightsRounded /><Typography sx={{ fontWeight: 700 }}>За период оплат нет</Typography></Box>
           : report && <table className="audit-table sales-table">
-            <thead><tr><th>{group === 'day' ? 'День' : group === 'service' ? 'Услуга' : 'Врач'}</th><th>Оплат</th><th>Оплачено</th><th>Возвраты</th><th>Выручка</th></tr></thead>
+            <thead><tr><th>{group === 'day' ? 'День' : group === 'weekday' ? 'День недели' : group === 'service' ? 'Услуга' : 'Врач'}</th><th>Оплат</th><th>Оплачено</th><th>Возвраты</th><th>Выручка</th></tr></thead>
             <tbody>
               {report.lines.map((line) => (
                 <tr key={line.key}>

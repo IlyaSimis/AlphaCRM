@@ -24,7 +24,7 @@ const NOBODY = ''
 
 export function PatientDialog({ open, mode = 'create', initial, error = '', patients = [], selfId, administrators = [], currentAssigned = null, onClose, onSave }: PatientDialogProps) {
   const edit = mode === 'edit'
-  const start = edit ? initial : undefined
+  const start = initial
   const initialProfile = normalizePatientProfile(start?.profile)
   const nameParts = start?.fullName.trim().split(/\s+/) ?? []
   const initialLastName = initialProfile.lastName ?? nameParts[1] ?? nameParts[0] ?? ''

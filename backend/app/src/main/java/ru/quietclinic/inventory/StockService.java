@@ -466,6 +466,47 @@ class StockService {
         args.toArray());
   }
 
+  /** Остатки и движение по клинике: оборачиваемость = расход / средний остаток. */
+  @Transactional(readOnly = true)
+  StockMetricsView metrics(LocalDate from, LocalDate to) {
+    requirePermission(Permission.INVENTORY_STOCK_READ);
+    if (from == null || to == null || to.isBefore(from)) {
+      throw conflict("INVALID_RANGE", "Period end must not be before its start");
+    }
+    long days = java.time.temporal.ChronoUnit.DAYS.between(from, to) + 1;
+    if (days > 366) throw conflict("RANGE_TOO_LONG", "Period must not exceed one year");
+    var sql =
+        "select i.id, i.name, i.unit, i.min_stock, coalesce(b.stock, 0) as stock,"
+            + " coalesce(m.received, 0) as received, coalesce(m.consumption, 0) as consumption,"
+            + " coalesce(m.write_off, 0) as write_off from inventory.item i"
+            + " left join (select item_id, sum(quantity) as stock from inventory.stock_balance"
+            + " where clinic_id = ? group by item_id) b on b.item_id = i.id"
+            + " left join (select l.item_id,"
+            + " sum(case when d.type = 'RECEIPT' then l.quantity else 0 end) as received,"
+            + " sum(case when d.type = 'CONSUMPTION' then l.quantity else 0 end) as consumption,"
+            + " sum(case when d.type in ('WRITE_OFF', 'RETURN_TO_SUPPLIER') then l.quantity else 0 end) as write_off"
+            + " from inventory.stock_line l join inventory.stock_document d on d.id = l.document_id"
+            + " where d.clinic_id = ? and d.status = 'POSTED' and d.document_date >= ? and d.document_date <= ?"
+            + " group by l.item_id) m on m.item_id = i.id where i.clinic_id = ? order by i.name";
+    var rows = jdbc.query(sql, (rs, n) -> {
+      var stock = rs.getBigDecimal("stock");
+      var received = rs.getBigDecimal("received");
+      var consumption = rs.getBigDecimal("consumption");
+      var writeOff = rs.getBigDecimal("write_off");
+      var outgoing = consumption.add(writeOff);
+      var opening = stock.subtract(received).add(outgoing);
+      var average = opening.add(stock).divide(BigDecimal.valueOf(2), 6, java.math.RoundingMode.HALF_UP);
+      var turnover = average.signum() > 0
+          ? outgoing.divide(average, 2, java.math.RoundingMode.HALF_UP) : null;
+      var daysStock = outgoing.signum() > 0 && stock.signum() > 0
+          ? stock.multiply(BigDecimal.valueOf(days)).divide(outgoing, 1, java.math.RoundingMode.HALF_UP) : null;
+      return new StockMetricsView.Row(
+          rs.getObject("id", UUID.class), rs.getString("name"), rs.getString("unit"),
+          stock, rs.getBigDecimal("min_stock"), received, consumption, writeOff, turnover, daysStock);
+    }, clinicId(), clinicId(), Date.valueOf(from), Date.valueOf(to), clinicId());
+    return new StockMetricsView(from, to, rows);
+  }
+
   // ---------- помощники ----------
 
   private void applyHeader(StockDocument document, DocumentRequest request) {

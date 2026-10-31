@@ -129,41 +129,40 @@ const sidebar = () => document.querySelector('.desktop-sidebar') as HTMLElement
 const content = () => document.querySelector('.content') as HTMLElement
 
 describe('«Сегодня» — домашняя страница', () => {
-  it('services are tabs at the top, their sections are in the side menu; the AlphaCRM button returns home', async () => {
+  it('services are in the side menu, their sections are tabs at the top; the AlphaCRM button returns home', async () => {
     goOffline()
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user, 'ADMINISTRATOR')
-    const tabs = screen.getByRole('tablist', { name: 'Сервисы' })
-    expect(within(tabs).getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Мое пространство', 'Управление', 'База данных пациентов', 'Документы', 'Склад', 'Финансы', 'Диск'])
-    expect(within(tabs).getByRole('tab', { name: 'Мое пространство' })).toHaveAttribute('aria-selected', 'true')
-    const overview = within(sidebar()).getByRole('navigation', { name: 'Обзор' })
-    expect(within(overview).getAllByRole('button').map((button) => button.textContent)).toEqual(['Сегодня', 'Дашборды', 'Аналитика', 'Мои условия работы'])
-    expect(within(sidebar()).queryByRole('navigation', { name: 'Управление' })).not.toBeInTheDocument()
-    expect(within(overview).getByRole('button', { name: 'Сегодня' })).toHaveClass('active')
-    await user.click(within(tabs).getByRole('tab', { name: 'Управление' }))
-    expect(within(within(sidebar()).getByRole('navigation', { name: 'Управление' })).getAllByRole('button').map((button) => button.textContent)).toEqual(['Сотрудники', 'График врачей', 'Журнал аудита', 'Внешние выводы'])
+    const services = () => within(sidebar()).getByRole('navigation', { name: 'Сервисы' })
+    const tabs = () => screen.getByRole('tablist', { name: 'Разделы сервиса' })
+    expect(within(services()).getAllByRole('button').map((button) => button.textContent)).toEqual(['Мое пространство', 'Управление', 'База данных пациентов', 'Документы', 'Склад', 'Финансы', 'Диск'])
+    expect(within(services()).getByRole('button', { name: 'Мое пространство' })).toHaveClass('active')
+    expect(within(tabs()).getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Сегодня', 'Дашборды', 'Аналитика', 'Мои условия работы'])
+    expect(within(tabs()).getByRole('tab', { name: 'Сегодня' })).toHaveAttribute('aria-selected', 'true')
 
-    // Вкладка сервиса открывает его первый раздел; разделы другого сервиса из меню уходят.
-    await user.click(within(tabs).getByRole('tab', { name: 'База данных пациентов' }))
-    const patients = within(sidebar()).getByRole('navigation', { name: 'Работа с пациентами' })
-    expect(within(patients).getAllByRole('button').map((button) => button.textContent)).toEqual(['Расписание', 'Пациенты', 'Регистратура'])
-    expect(within(sidebar()).queryByRole('button', { name: 'Сегодня' })).not.toBeInTheDocument()
+    await user.click(within(services()).getByRole('button', { name: 'Управление' }))
+    expect(within(tabs()).getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Сотрудники', 'График врачей', 'Журнал аудита', 'Внешние выводы'])
+
+    // Сервис слева открывает первый раздел; сверху остаются только его собственные вкладки.
+    await user.click(within(services()).getByRole('button', { name: 'База данных пациентов' }))
+    expect(within(tabs()).getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Расписание', 'Пациенты', 'Регистратура'])
+    expect(within(tabs()).queryByRole('tab', { name: 'Сегодня' })).not.toBeInTheDocument()
     expect(screen.getByLabelText('День расписания')).toBeInTheDocument()
-    await user.click(within(tabs).getByRole('tab', { name: 'Финансы' }))
-    expect(within(sidebar()).getAllByRole('button').map((button) => button.textContent)).toContain('Услуги и цены')
+    await user.click(within(services()).getByRole('button', { name: 'Финансы' }))
+    expect(within(tabs()).getAllByRole('tab').map((tab) => tab.textContent)).toContain('Услуги и цены')
 
-    // Карточка пациента подсвечивает пункт «Пациенты»; вкладка возвращает на последнюю страницу сервиса.
+    // Карточка пациента подсвечивает вкладку «Пациенты»; сервис возвращает на последнюю страницу.
     await openPage(user, 'Пациенты')
     await user.click(screen.getByText('Анна Михайлова'))
-    expect(within(sidebar()).getByRole('button', { name: 'Пациенты' })).toHaveClass('active')
-    await user.click(within(tabs).getByRole('tab', { name: 'Мое пространство' }))
-    await user.click(within(tabs).getByRole('tab', { name: 'База данных пациентов' }))
-    expect(within(sidebar()).getByRole('button', { name: 'Пациенты' })).toHaveClass('active')
+    expect(within(tabs()).getByRole('tab', { name: 'Пациенты' })).toHaveAttribute('aria-selected', 'true')
+    await user.click(within(services()).getByRole('button', { name: 'Мое пространство' }))
+    await user.click(within(services()).getByRole('button', { name: 'База данных пациентов' }))
+    expect(within(tabs()).getByRole('tab', { name: 'Пациенты' })).toHaveAttribute('aria-selected', 'true')
 
     await user.click(within(sidebar()).getByRole('button', { name: 'На главную' }))
     expect(screen.getByRole('heading', { name: '20 октября 2026, вторник', level: 4 })).toBeInTheDocument()
-    expect(within(tabs).getByRole('tab', { name: 'Мое пространство' })).toHaveAttribute('aria-selected', 'true')
+    expect(within(services()).getByRole('button', { name: 'Мое пространство' })).toHaveClass('active')
     // Повторное нажатие на уже открытой «Сегодня» ничего не ломает.
     await user.click(within(sidebar()).getByRole('button', { name: 'На главную' }))
     expect(screen.getByRole('heading', { name: '20 октября 2026, вторник', level: 4 })).toBeInTheDocument()
@@ -181,19 +180,31 @@ describe('«Сегодня» — домашняя страница', () => {
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user, 'DOCTOR')
-    expect(screen.getByRole('tab', { name: 'База данных пациентов' })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.queryByRole('tab', { name: 'Финансы' })).not.toBeInTheDocument()
-    expect(within(sidebar()).queryByRole('button', { name: 'Сегодня' })).not.toBeInTheDocument()
+    expect(within(sidebar()).getByRole('button', { name: 'База данных пациентов' })).toHaveClass('active')
+    expect(within(sidebar()).queryByRole('button', { name: 'Финансы' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Сегодня' })).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Начать приём 09:00 Анна Михайлова' }))
     expect(await screen.findByLabelText('Диагноз')).toBeInTheDocument()
     await user.click(within(sidebar()).getByRole('button', { name: 'На главную' }))
     expect(screen.getByLabelText('День расписания')).toBeInTheDocument()
     expect(within(sidebar()).getByRole('navigation', { name: 'Открытые приёмы' })).toHaveTextContent('Приём: Анна Михайлова · 09:00')
     // Открытый приём виден и из другого сервиса.
-    await user.click(screen.getByRole('tab', { name: 'Диск' }))
+    await user.click(within(sidebar()).getByRole('button', { name: 'Диск' }))
     expect(within(sidebar()).getByRole('navigation', { name: 'Открытые приёмы' })).toBeInTheDocument()
     await user.click(within(sidebar()).getByRole('button', { name: 'На главную' }))
     expect(screen.getByLabelText('День расписания')).toBeInTheDocument()
+  })
+
+  it('collapses the service sidebar to icons and expands it again', async () => {
+    goOffline()
+    const user = userEvent.setup()
+    renderApp()
+    await enterDemo(user, 'ADMINISTRATOR')
+    await user.click(screen.getByRole('button', { name: 'Свернуть меню' }))
+    expect(sidebar()).toHaveClass('collapsed')
+    expect(within(sidebar()).getByRole('button', { name: 'Управление' })).toHaveAttribute('title', 'Управление')
+    await user.click(screen.getByRole('button', { name: 'Развернуть меню' }))
+    expect(sidebar()).not.toHaveClass('collapsed')
   })
 
   it('quick actions by role: administrator and manager — three, cashier — only the cashier, nurse — booking', async () => {
@@ -209,7 +220,7 @@ describe('«Сегодня» — домашняя страница', () => {
     await enterDemo(user, 'CASHIER')
     expect(visible()).toEqual(['Касса'])
     await user.click(within(actions() as HTMLElement).getByRole('button', { name: 'Касса' }))
-    expect(screen.getAllByText('Счёт не выставлен').length).toBeGreaterThan(0)
+    expect((await screen.findAllByText('Счёт не выставлен')).length).toBeGreaterThan(0)
     await user.click(screen.getByRole('button', { name: 'Выйти' }))
     await enterDemo(user, 'MANAGER')
     expect(visible()).toEqual(names)

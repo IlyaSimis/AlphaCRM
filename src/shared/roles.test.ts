@@ -12,7 +12,7 @@ describe('interface roles', () => {
     expect(profileOf({ fullName: 'Ольга Лебедева', role: 'DOCTOR' })).toEqual({ name: 'Ольга Лебедева', initials: 'ОЛ', role: 'Врач' })
   })
 
-  it('cashier: payments; manager: charges read-only; analytics for administrators, manager and support', () => {
+  it('cashier: payments; manager: charges read-only; support has no patient analytics', () => {
     expect(canSeeCashier('CASHIER')).toBe(true)
     expect(canTakePayments('CASHIER')).toBe(true)
     expect(canTakePayments('ADMINISTRATOR')).toBe(true)
@@ -21,6 +21,7 @@ describe('interface roles', () => {
     expect(canSeeCashier('DOCTOR')).toBe(false)
     expect(canSeeAnalytics('CASHIER')).toBe(false)
     expect(canSeeAnalytics('MANAGER')).toBe(true)
+    expect(canSeeAnalytics('SUPPORT')).toBe(false)
     expect(canSeeAudit('SUPPORT')).toBe(true)
     expect(canSeeAudit('NURSE')).toBe(false)
   })

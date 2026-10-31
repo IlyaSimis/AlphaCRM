@@ -127,6 +127,14 @@ class FinanceFlowTest {
         .andExpect(jsonPath("$.totals.netMinor").isNumber());
     mvc.perform(
             get("/api/v1/finance/sales")
+                .with(staff.role("MANAGER"))
+                .param("from", today.minusDays(1).toString())
+                .param("to", today.plusDays(1).toString())
+                .param("groupBy", "weekday"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.groupBy").value("weekday"));
+    mvc.perform(
+            get("/api/v1/finance/sales")
                 .with(staff.role("CASHIER"))
                 .param("from", today.toString())
                 .param("to", today.toString()))

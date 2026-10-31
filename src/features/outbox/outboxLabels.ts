@@ -11,6 +11,7 @@ export const templateLabels: Record<string, string> = {
 export const channelLabels: Record<string, string> = {
   WEBHOOK: 'Вебхук клиники',
   TELEGRAM: 'Telegram',
+  MAX: 'MAX',
   CASHBOX: 'Онлайн-касса',
   MOCK: 'Не настроен',
 }
@@ -28,6 +29,8 @@ export const reasonLabels: Record<string, string> = {
   CHANNEL_NOT_CONFIGURED: 'канал не настроен',
   WEBHOOK_SECRET_MISSING: 'не задан секрет вебхука',
   NO_TELEGRAM_CONTACT: 'у пациента нет Telegram',
+  NO_MAX_CONTACT: 'у пациента нет MAX',
+  TELEGRAM_RELAY_SECRET_MISSING: 'не задан секрет Telegram relay',
   FISCAL_NOT_CONFIGURED: 'касса не подключена',
   NO_CONSENT: 'нет действующего согласия',
   SHOWN_IN_BOT: 'подтверждение показано в боте',

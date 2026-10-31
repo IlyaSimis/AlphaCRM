@@ -78,6 +78,8 @@ class DashboardControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.widgets[*].code").value(hasItem("delivery.failed")))
         .andExpect(jsonPath("$.widgets[*].code").value(hasItem("events.backlog")))
-        .andExpect(jsonPath("$.widgets[*].code").value(not(hasItem("charges.unpaid"))));
+        .andExpect(jsonPath("$.widgets[*].code").value(not(hasItem("charges.unpaid"))))
+        .andExpect(jsonPath("$.widgets[*].code").value(not(hasItem("appointments.month"))))
+        .andExpect(jsonPath("$.widgets[*].code").value(not(hasItem("schedule.load"))));
   }
 }

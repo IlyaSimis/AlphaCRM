@@ -262,10 +262,12 @@ export function useClinicData(doctorId: string, live: boolean) {
     return result
   }
 
-  const book = async (draft: BookingDraft): Promise<DialogResult> => {
-    const invalid = validateBooking(draft, patientItems, services, practitioners, apiOnline ? new Date() : undefined)
+  const book = async (draft: BookingDraft, patientOverride?: PatientItem): Promise<DialogResult> => {
+    // Только что созданный пациент уже есть в ответе API, но ещё не успел попасть в React state.
+    const patients = patientOverride ? [patientOverride, ...patientItems.filter((item) => item.id !== patientOverride.id)] : patientItems
+    const invalid = validateBooking(draft, patients, services, practitioners, apiOnline ? new Date() : undefined)
     if (invalid) return { status: 'error', message: invalid }
-    const patient = patientItems.find((item) => item.id === draft.patientId) as PatientItem
+    const patient = patients.find((item) => item.id === draft.patientId) as PatientItem
     const service = services.find((item) => item.id === draft.serviceId) as ServiceItem
     const showLocal = (message: string): DialogResult => {
       loadGeneration.current += 1
@@ -297,24 +299,29 @@ export function useClinicData(doctorId: string, live: boolean) {
     }
   }
 
-  /** Возвращает текст ошибки для формы или null. assigned — подпись администратора для песочницы. */
-  const createPatient = async (input: PatientInput, assigned: AssignedStaff | null = null): Promise<string | null> => {
+  /** Возвращает текст ошибки для формы или null. onCreated нужен связанному сценарию записи. */
+  const createPatient = async (input: PatientInput, assigned: AssignedStaff | null = null, onCreated?: (patient: PatientItem) => void): Promise<string | null> => {
     const local = () => localPatient(crypto.randomUUID(), input, undefined, assigned)
     if (apiOnline) {
       try {
         const created = await createPatientApi(input)
         setPatientItems((items) => [created, ...items])
+        onCreated?.(created)
         notify('Пациент сохранён')
         return null
       } catch (error) {
         if (error instanceof ApiError && error.status < 500) return error.message
         setApiOnline(false)
-        setPatientItems((items) => [local(), ...items])
+        const created = local()
+        setPatientItems((items) => [created, ...items])
+        onCreated?.(created)
         notify('Сервер недоступен: пациент виден только до обновления страницы')
         return null
       }
     }
-    setPatientItems((items) => [local(), ...items])
+    const created = local()
+    setPatientItems((items) => [created, ...items])
+    onCreated?.(created)
     notify('Демо-режим: пациент виден только до обновления страницы')
     return null
   }

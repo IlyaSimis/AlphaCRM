@@ -1,42 +1,42 @@
-import { AdminPanelSettingsRounded, AutoAwesomeRounded, DashboardRounded, DescriptionRounded, FolderSharedRounded, Inventory2Rounded, LogoutRounded, MenuRounded, PaymentsRounded, PeopleAltRounded } from '@mui/icons-material'
+import { ArticleRounded, AssignmentTurnedInRounded, AutoAwesomeRounded, BadgeRounded, CalendarMonthRounded, ContactPhoneRounded, DeleteOutlineRounded, DescriptionRounded, EventNoteRounded, FolderRounded, FolderSharedRounded, HealthAndSafetyRounded, HistoryRounded, InsightsRounded, Inventory2Rounded, ListAltRounded, LogoutRounded, MenuRounded, OutboxRounded, PaymentsRounded, PeopleAltRounded, QrCode2Rounded, QueryStatsRounded, ReceiptLongRounded, SellRounded, TodayRounded, WorkOutlineRounded, WorkRounded } from '@mui/icons-material'
 import { Box, Button, Chip, IconButton, Tab, Tabs, Typography } from '@mui/material'
 import type { ReactElement } from 'react'
-import { serviceTitles, type Service } from './pages'
+import { pageTitles, type Page } from './pages'
 
-const serviceIcons: Record<Service, ReactElement> = {
-  dashboards: <DashboardRounded />,
-  management: <AdminPanelSettingsRounded />,
-  patients: <PeopleAltRounded />,
-  documents: <DescriptionRounded />,
-  inventory: <Inventory2Rounded />,
-  finance: <PaymentsRounded />,
-  drive: <FolderSharedRounded />,
+const pageIcons: Partial<Record<Page, ReactElement>> = {
+  today: <TodayRounded />, workspace: <AssignmentTurnedInRounded />, analytics: <InsightsRounded />,
+  staff: <BadgeRounded />, hr: <WorkRounded />, 'hr-me': <WorkOutlineRounded />, audit: <HistoryRounded />,
+  'break-glass': <HealthAndSafetyRounded />, outbox: <OutboxRounded />, schedule: <CalendarMonthRounded />,
+  patients: <PeopleAltRounded />, registry: <ContactPhoneRounded />, documents: <ArticleRounded />,
+  'contract-templates': <DescriptionRounded />, hours: <EventNoteRounded />, 'stock-balances': <Inventory2Rounded />,
+  'stock-items': <ListAltRounded />, 'stock-documents': <ReceiptLongRounded />, 'stock-marking': <QrCode2Rounded />,
+  'stock-norms': <AssignmentTurnedInRounded />, cashier: <PaymentsRounded />, sales: <QueryStatsRounded />,
+  prices: <SellRounded />, drive: <FolderRounded />, 'drive-shared': <FolderSharedRounded />, 'drive-trash': <DeleteOutlineRounded />,
 }
 
 type TopbarProps = {
   eyebrow: string
   title: string
-  /** Сервисы, доступные роли, — вкладки верхней панели. */
-  services: Service[]
-  service: Service
-  onService: (service: Service) => void
-  /** false — демо-песочница без сервера. */
+  /** Разделы выбранного в левом меню сервиса. */
+  pages: Page[]
+  page: Page
+  onNavigate: (page: Page) => void
   live: boolean
-  /** Клиника сотрудника — с сервера; в песочнице её нет. */
   clinicName?: string | null
   onAssistant: () => void
   onSignOut: () => void
   onMenu: () => void
 }
 
-/** Шапка: сервисы, ИИ-навигатор и выход. Тема и пароль находятся в настройках слева внизу. */
-export function Topbar({ eyebrow, title, services, service, onService, live, clinicName, onAssistant, onSignOut, onMenu }: TopbarProps) {
+/** Шапка: разделы текущего сервиса, ИИ-навигатор и выход. */
+export function Topbar({ eyebrow, title, pages, page, onNavigate, live, clinicName, onAssistant, onSignOut, onMenu }: TopbarProps) {
+  const current = page === 'patient' ? 'patients' : page === 'visit' ? 'schedule' : page
   return (
     <Box className="topbar">
       <Box className="topbar-row">
-        <IconButton className="mobile-menu" aria-label="Разделы" onClick={onMenu}><MenuRounded /></IconButton>
-        <Tabs className="service-tabs" value={service} onChange={(_event: unknown, next: Service) => onService(next)} variant="scrollable" scrollButtons="auto" aria-label="Сервисы">
-          {services.map((item) => <Tab key={item} value={item} icon={serviceIcons[item]} iconPosition="start" label={serviceTitles[item]} />)}
+        <IconButton className="mobile-menu" aria-label="Сервисы" onClick={onMenu}><MenuRounded /></IconButton>
+        <Tabs className="service-tabs" value={current} onChange={(_event: unknown, next: Page) => onNavigate(next)} variant="scrollable" scrollButtons="auto" aria-label="Разделы сервиса">
+          {pages.map((item) => <Tab key={item} value={item} icon={pageIcons[item] ?? <DescriptionRounded />} iconPosition="start" label={pageTitles[item]} onClick={() => { if (item === current && item !== page) onNavigate(item) }} />)}
         </Tabs>
         <Box className="role-switch">
           {live && clinicName && <Typography className="topbar-clinic" sx={{ fontSize: 13, color: 'text.secondary' }}>{clinicName}</Typography>}

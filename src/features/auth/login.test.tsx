@@ -43,7 +43,7 @@ describe('staff sign-in', () => {
     expect(screen.queryByText('ADMINISTRATOR')).not.toBeInTheDocument()
     expect(screen.getByText('AlphaCRM', { selector: '.topbar *' })).toBeInTheDocument()
     expect(screen.queryByText(/временным паролем/)).not.toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Управление' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Управление' })).toBeInTheDocument()
     expect(screen.queryByLabelText('Роль пользователя')).not.toBeInTheDocument()
     expect(screen.queryByText(/Демо-песочница/)).not.toBeInTheDocument()
 

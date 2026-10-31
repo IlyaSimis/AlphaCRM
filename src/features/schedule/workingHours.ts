@@ -21,6 +21,25 @@ export function fitsWorkingHours(practitioner: Practitioner | undefined, date: s
   return practitioner.workingHours.some((shift) => shift.dayOfWeek === day && start >= minutesOf(shift.startsAt) && end <= minutesOf(shift.endsAt))
 }
 
+/** Время, в которое выбранная услуга целиком помещается в смену; шаг списка — 15 минут. */
+export function bookingTimeOptions(practitioner: Practitioner | undefined, date: string, durationMinutes: number) {
+  if (!practitioner || !date || durationMinutes <= 0) return []
+  const day = isoWeekday(date)
+  const values = practitioner.workingHours
+    .filter((shift) => shift.dayOfWeek === day)
+    .flatMap((shift) => {
+      const first = minutesOf(shift.startsAt)
+      const last = minutesOf(shift.endsAt) - durationMinutes
+      const result: string[] = []
+      for (let minutes = first; minutes <= last; minutes += 15) {
+        const time = `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
+        if (fitsWorkingHours(practitioner, date, time, durationMinutes)) result.push(time)
+      }
+      return result
+    })
+  return [...new Set(values)].sort()
+}
+
 export const DAY_OFF = 'Выходной'
 
 /** Смены в этот день недели нет — выходной, запись не принимается. */

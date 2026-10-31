@@ -415,4 +415,40 @@ class InventoryControllerTest {
                 .formatted(UUID.randomUUID()))
         .andExpect(status().isForbidden());
   }
+
+  @Test
+  void stockMetricsUsePostedMovementsAndMinimumStock() throws Exception {
+    var gloves = item(
+        category("CONSUMABLE"),
+        "{\"categoryId\":\"%s\",\"name\":\"Metric gloves %s\",\"unit\":\"pair\",\"minStock\":8}");
+    var receipt = send(
+        document(staff.role("NURSE"), "RECEIPT",
+            "[{\"itemId\":\"%s\",\"quantity\":10}]".formatted(gloves)),
+        "$.id");
+    postDoc(staff.role("NURSE"), receipt, "{}").andExpect(status().isOk());
+    var consumption = send(
+        document(staff.role("NURSE"), "CONSUMPTION",
+            "[{\"itemId\":\"%s\",\"quantity\":4}]".formatted(gloves)),
+        "$.id");
+    postDoc(staff.role("NURSE"), consumption, "{}").andExpect(status().isOk());
+
+    var today = java.time.LocalDate.now();
+    mvc.perform(get("/api/v1/inventory/metrics")
+            .param("from", today.minusDays(29).toString())
+            .param("to", today.toString())
+            .with(staff.role("NURSE")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rows[?(@.itemId == '" + gloves + "')].stock").value(6.0))
+        .andExpect(jsonPath("$.rows[?(@.itemId == '" + gloves + "')].minStock").value(8.0))
+        .andExpect(jsonPath("$.rows[?(@.itemId == '" + gloves + "')].received").value(10.0))
+        .andExpect(jsonPath("$.rows[?(@.itemId == '" + gloves + "')].consumption").value(4.0))
+        .andExpect(jsonPath("$.rows[?(@.itemId == '" + gloves + "')].turnover").value(1.33))
+        .andExpect(jsonPath("$.rows[?(@.itemId == '" + gloves + "')].daysStock").value(45.0));
+    mvc.perform(get("/api/v1/inventory/metrics")
+            .param("from", today.toString())
+            .param("to", today.minusDays(1).toString())
+            .with(staff.role("NURSE")))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("INVALID_RANGE"));
+  }
 }

@@ -87,6 +87,8 @@ export function toPatient(row: Record<string, unknown>): PatientItem {
     registryNote: (row.registryNote as string | null | undefined) ?? null,
     phoneSharedWith: (row.phoneSharedWith as PatientItem['phoneSharedWith']) ?? [],
     telegramConnected: row.telegramConnected === true,
+    maxConnected: row.maxConnected === true,
+    preferredMessenger: (row.preferredMessenger as PatientItem['preferredMessenger'] | undefined) ?? null,
     email: (row.email as string | null | undefined) ?? null,
     secondPhone: (row.secondPhone as string | null | undefined) ?? null,
     assignedStaff: (row.assignedStaff as AssignedStaff | null | undefined) ?? null,

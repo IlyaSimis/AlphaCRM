@@ -7,6 +7,7 @@ import { greeting } from '../../shared/greeting'
 import type { Role } from '../../shared/roles'
 import { overdueTasks, todayActions, todayBlocks } from './today'
 import { DashboardWidgets } from './DashboardWidgets'
+import { dashboardCodes } from './dashboardCodes'
 import { TodayBlock } from './TodayBlock'
 import { TodayNotes } from './TodayNotes'
 import { TodayAppointments } from './TodayAppointments'
@@ -57,7 +58,7 @@ export function TodayPage(props: TodayPageProps) {
       <Box className="today-grid">
         <Box className="today-column">
           <TodayNotes apiOnline={apiOnline} selfId={props.selfId} onOpen={() => props.onOpen('workspace')} />
-          <DashboardWidgets apiOnline={apiOnline} role={role} codes={['appointments.month', 'salary.month']} stacked onOpen={props.onOpen} />
+          <DashboardWidgets apiOnline={apiOnline} role={role} codes={dashboardCodes(role)} stacked onOpen={props.onOpen} />
         </Box>
         <Box className="today-column">
           {blocks.tasks && <TodayBlock title="Просроченные задачи" empty="Просроченных задач нет" count={overdue.length} error={props.tasksError} more={{ label: 'Все задачи', onClick: () => props.onOpen('registry') }}>

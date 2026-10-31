@@ -4,7 +4,7 @@
 
 Сотрудник видит продукт как **AlphaCRM**. Внутренние имена прежние — пакет `ru.quietclinic`, Maven-координаты, имя Compose-проекта, база и пользователь `quiet_clinic`: от них зависит уже созданная база и её том, поэтому они не переименовываются.
 
-Подробная документация: [архитектура проекта](docs/architecture.md) и [хранение данных — схема базы](docs/data-model.md).
+Подробная документация: [архитектура проекта](docs/architecture.md), [хранение данных — схема базы](docs/data-model.md) и [интеграции Telegram/MAX с раздельным развёртыванием](docs/messengers.md).
 
 ## Содержание
 
@@ -48,15 +48,16 @@
 
 ## Что запускается
 
-`compose.yaml` поднимает три сервиса:
+`compose.yaml` поднимает три основных сервиса; MAX-бот включается отдельным профилем:
 
 | Сервис | Что внутри | Доступ |
 |---|---|---|
 | `frontend` | nginx без root: статика интерфейса, прокси `/api` → backend, gzip, кэш для файлов сборки, CSP и security headers | `http://127.0.0.1:8080` |
-| `backend` | Spring Boot на JRE 21 без root, профиль `prod` | только из nginx, наружу не публикуется |
+| `backend` | Spring Boot на JRE 21 без root, профиль `prod` | только из nginx и внутренней сети/VPN, наружу не публикуется |
 | `postgres` | PostgreSQL 18, данные в томе `quiet-clinic_quiet-clinic-postgres` | `127.0.0.1:55432` — для IDE и утилит |
+| `max-bot` (профиль `max-bot`) | независимый MAX-бот из `../alphacrm-max-bot` | `127.0.0.1:8082` для локального reverse proxy |
 
-Интерфейс и API работают на одном адресе, поэтому CORS не нужен. Все сервисы перезапускаются автоматически (`restart: unless-stopped`) и стартуют по порядку: база → backend → frontend.
+Интерфейс и API работают на одном адресе, поэтому CORS не нужен. Все сервисы перезапускаются автоматически (`restart: unless-stopped`) и стартуют по порядку: база → backend → frontend и необязательный MAX-бот. Telegram-бот поднимается из своего репозитория на зарубежном VPS.
 
 Профиль `prod` (`application-prod.yml`):
 
@@ -119,7 +120,10 @@ docker compose exec postgres pg_restore -U quiet_clinic -d quiet_clinic --clean 
 | `SESSION_COOKIE_SECURE` | `false` | `true` — cookie сессии только по HTTPS. Включите за reverse proxy с сертификатом |
 | `CLINIC_OUTBOUND_WEBHOOK_URL` | пусто | Вебхук клиники для сообщений пациентам (свой бот, SMS-шлюз). Пусто — канал выключен |
 | `CLINIC_OUTBOUND_WEBHOOK_SECRET` | пусто | Секрет подписи HMAC-SHA256 запросов вебхука. Обязателен при заданном URL, минимум 32 символа |
-| `TELEGRAM_BOT_TOKEN` | пусто | Токен бота Telegram. Используется, только если вебхук не задан |
+| `CLINIC_OUTBOUND_TELEGRAM_RELAY_URL`, `CLINIC_OUTBOUND_TELEGRAM_RELAY_SECRET` | пусто | HTTPS/HMAC relay Telegram-бота на зарубежном VPS; для новой схемы используется вместо прямого Bot API на сервере МИС |
+| `CLINIC_OUTBOUND_MAX_BOT_TOKEN` | пусто | Токен MAX Bot API для отправки уведомлений из backend в РФ |
+| `CLINIC_MESSENGER_TELEGRAM_PUBLIC_URL`, `CLINIC_MESSENGER_MAX_PUBLIC_URL` | пусто | Публичные адреса ботов для формирования одноразовых ссылок привязки |
+| `CLINIC_BOT_API_TOKEN` | пусто | Общий сервисный токен приватного `/api/v1/messenger/**`; обязателен для работы ботов, минимум 32 символа |
 | `CLINIC_CASHBOX_URL`, `CLINIC_CASHBOX_SECRET` | пусто | Онлайн-касса для чеков и секрет подписи (минимум 32 символа). Пусто — чек остаётся `QUEUED` |
 | `CLINIC_TIME_ZONE` | `UTC` | Часовой пояс клиники (IANA, например `Europe/Moscow`). В нём расписание, смены врачей, «сегодня», журнал и сообщения пациентам; в базе — моменты UTC. Записи, сделанные при другом поясе, после смены сдвинутся на экране на разницу поясов |
 | `CLINIC_OUTBOX_ENABLED`, `CLINIC_OUTBOX_POLL_INTERVAL` | `true`, `PT30S` | Доставщик outbox и пауза между проходами |
@@ -328,8 +332,10 @@ Frontend запускается так же, как в варианте 1. Не 
 | `PUT /api/v1/patients/{id}` | администраторы, `MANAGER` | карточка целиком `{fullName, birthDate, phone, email, secondPhone, assignedStaffId}`: пустой или отсутствующий необязательный контакт удаляется. E-mail — простая проверка формата, до 255 символов (`400 VALIDATION_ERROR`). Постоянный администратор — активный `ADMINISTRATOR` своей клиники (`409 INVALID_ASSIGNED_STAFF`, чужой или неизвестный — `404 STAFF_NOT_FOUND`); уже привязанный и потом отключённый остаётся. В аудит — имена изменённых полей (`email,secondPhone,assignedStaff`) без значений |
 | `POST /api/v1/patients/{id}/consents` | администраторы, `MANAGER` | новая действующая версия согласия `{version, basis}`; прежние не удаляются |
 | `POST /api/v1/patients/{id}/consents/{consentId}/revoke` | администраторы, `MANAGER` | отзыв: ставит `revokedAt`, повторный отзыв — `409 ALREADY_REVOKED` |
-
-| `PUT /api/v1/patients/{id}/registry` | администраторы, `MANAGER` | административные поля `{referralSource, registryNote, telegramChatId, removeTelegram}`: chat id Telegram пациента (только цифры; пусто — не менять, `removeTelegram: true` — отключить; в ответе — только `telegramConnected`, сам chat id сервер не отдаёт никому); откуда пришёл (`RECOMMENDATION`, `WEBSITE`, `INSURANCE`, `DOCTOR_REFERRAL`, `OTHER`, иначе `409 INVALID_REFERRAL_SOURCE`) и заметка регистратуры до 1000 символов |
+| `POST /api/v1/patients/{id}/messenger/link` | администраторы, `MANAGER` | `{channel: TELEGRAM \| MAX}` → одноразовый токен и ссылка привязки на 10 минут |
+| `POST /api/v1/patients/{id}/messenger/{channel}/disconnect` | администраторы, `MANAGER` | отключение канала и сброс его предпочтения |
+| `PUT /api/v1/patients/{id}/messenger/preference` | администраторы, `MANAGER` | `{channel}` — основной канал; пусто — автоматический выбор; неподключённый — `409 MESSENGER_NOT_CONNECTED` |
+| `PUT /api/v1/patients/{id}/registry` | администраторы, `MANAGER` | административные поля `{referralSource, registryNote, telegramChatId, removeTelegram}`; поля Telegram оставлены для совместимости, новая привязка выполняется ссылкой выше. Откуда пришёл (`RECOMMENDATION`, `WEBSITE`, `INSURANCE`, `DOCTOR_REFERRAL`, `OTHER`, иначе `409 INVALID_REFERRAL_SOURCE`) и заметка регистратуры до 1000 символов |
 
 Согласие «действует», если есть хотя бы одно без `revokedAt`. В аудит — факт и id согласия, без текста основания.
 
@@ -516,26 +522,24 @@ Frontend запускается так же, как в варианте 1. Не 
 
 **Что уходит пациенту.** Только нейтральный шаблон (`backend/app/src/main/resources/patient-notices.properties`): подтверждение, напоминание или отмена; поля — название клиники, услуга, врач, дата и время. Например: «Напоминаем о записи в AlphaCRM: Повторный приём, врач Александр Петров, 03.11.2026 в 09:00.» Без действующего согласия пациента не отправляется ничего (статус `SKIPPED`, причина `NO_CONSENT`).
 
-**Куда.** Решает порт `NotificationPort`, не контроллер записи:
+**Куда.** Решает порт `NotificationPort`, не контроллер записи. Сначала выбирается основной мессенджер пациента, если канал подключён и настроен; затем второй подключённый мессенджер. Если ни Telegram, ни MAX недоступны, используется настроенный `CLINIC_OUTBOUND_WEBHOOK_URL`, а без него — безопасный mock: сообщение остаётся `PENDING` с причиной `CHANNEL_NOT_CONFIGURED` и уйдёт после настройки канала.
 
-1. Задан `CLINIC_OUTBOUND_WEBHOOK_URL` — `POST` на него. Так клиника подключает своего бота или SMS-шлюз, не встраивая их в CRM.
-2. Иначе задан `TELEGRAM_BOT_TOKEN` и у пациента есть контакт Telegram — тот же текст уходит в Telegram Bot API (`sendMessage`). Телефона недостаточно: chat id пациент получает, только начав диалог с ботом клиники. Администратор вводит chat id в карточке пациента («Регистратура» → «Изменить» → «Telegram chat id»).
-3. Иначе — безопасный mock: в лог пишутся шаблон и пометка, что адрес скрыт; сообщение остаётся `PENDING` с причиной `CHANNEL_NOT_CONFIGURED` и уйдёт, когда канал настроят.
+Telegram-уведомления отправляются через `CLINIC_OUTBOUND_TELEGRAM_RELAY_URL` на зарубежный VPS с HMAC-подписью и ключом идемпотентности. MAX отправляется напрямую из backend в РФ с `CLINIC_OUTBOUND_MAX_BOT_TOKEN`. Прямой `TELEGRAM_BOT_TOKEN` на backend оставлен только для совместимости со старыми установками; для новой схемы его на сервере МИС не задают.
 
-**Тело вебхука** (JSON, UTF-8):
+**Тело вебхука и Telegram relay** (JSON, UTF-8):
 
 ```json
 {"idempotencyKey":"appointment-reminder:<appointmentId>:<epoch>","template":"appointment-reminder",
  "appointmentId":"…","clinic":"AlphaCRM","service":"Повторный приём","practitioner":"Александр Петров",
  "startsAt":"2026-11-03T09:00:00Z","date":"2026-11-03","time":"09:00","text":"Напоминаем о записи…",
- "recipient":{"patientId":"…","telegramChatId":"123456789"}}
+ "recipient":{"patientId":"…","telegramChatId":"123456789","maxUserId":null,"preferredMessenger":"TELEGRAM"}}
 ```
 
-Заголовки: `Idempotency-Key` (тот же, что в теле), `X-AlphaCRM-Timestamp` (секунды Unix), `X-AlphaCRM-Signature: sha256=<hex>` — HMAC-SHA256 секретом `CLINIC_OUTBOUND_WEBHOOK_SECRET` от строки `<timestamp>.<тело>`. Получатель проверяет подпись, отклоняет старые timestamp и не отправляет второй раз сообщение с уже виденным `Idempotency-Key`. Телефон пациента в вебхук не уходит; из адресов — только `telegramChatId`, если он есть.
+Заголовки: `Idempotency-Key` (тот же, что в теле), `X-AlphaCRM-Timestamp` (секунды Unix), `X-AlphaCRM-Signature: sha256=<hex>` — HMAC-SHA256 от строки `<timestamp>.<тело>`. Для обычного вебхука секрет — `CLINIC_OUTBOUND_WEBHOOK_SECRET`, для relay — `CLINIC_OUTBOUND_TELEGRAM_RELAY_SECRET`. Получатель проверяет подпись, отклоняет старые timestamp и не отправляет повтор с уже виденным ключом. Телефон пациента не уходит; из адресов — только внешние id подключённых мессенджеров.
 
-**Онлайн-касса.** Чек (`FISCALIZATION`) в Telegram и вебхук пациента не уходит: для него отдельный порт `FiscalPort`. При заданном `CLINIC_CASHBOX_URL` — `POST {idempotencyKey, operation: "receipt", paymentId, chargeId, amountMinor, currency, paidAt}` с теми же заголовками подписи (секрет `CLINIC_CASHBOX_SECRET`). Без ФИО, контактов и данных приёма.
+**Онлайн-касса.** Чек (`FISCALIZATION`) в мессенджеры и вебхук пациента не уходит: для него отдельный порт `FiscalPort`. При заданном `CLINIC_CASHBOX_URL` — `POST {idempotencyKey, operation: "receipt", paymentId, chargeId, amountMinor, currency, paidAt}` с теми же заголовками подписи (секрет `CLINIC_CASHBOX_SECRET`). Без ФИО, контактов и данных приёма.
 
-**Доставщик.** Каждые 30 секунд берёт `PENDING` и `FAILED`, чьё время пришло: помечает попытку (`SENDING`), отправляет и ставит `SENT`. Сетевая ошибка или ответ 5xx/429 — `FAILED` и повтор через 1, 5, 15 минут, 1 и 6 часов (до 5 попыток); 4xx — `FAILED` без повтора. Повтор уходит с тем же ключом идемпотентности, а `SENT`-сообщение второй раз не берётся. Если процесс остановили посреди отправки, через 10 минут вебхук повторяется с тем же ключом, а Telegram — нет (у Bot API нет ключа идемпотентности, второе сообщение пациенту хуже пропущенного).
+**Доставщик.** Каждые 30 секунд берёт `PENDING` и `FAILED`, чьё время пришло: помечает попытку (`SENDING`), отправляет и ставит `SENT`. Сетевая ошибка или ответ 5xx/429 — `FAILED` и повтор через 1, 5, 15 минут, 1 и 6 часов (до 5 попыток); 4xx — `FAILED` без повтора. Повтор уходит с тем же ключом идемпотентности, а `SENT`-сообщение второй раз не берётся. Если процесс остановили посреди отправки, через 10 минут вебхук повторяется с тем же ключом; неопределённая доставка Telegram/MAX требует ручного повтора, чтобы не создать второе сообщение пациенту.
 
 **Аудит.** `NOTIFICATION_DELIVERED` и `FISCAL_RECEIPT_SENT` — от имени клиники, объект — id строки outbox, основание — `шаблон:канал` (`appointment-reminder:telegram`). Без текста сообщения и без телефона.
 
@@ -545,39 +549,34 @@ Frontend запускается так же, как в варианте 1. Не 
 |---|---|---|
 | `GET /api/v1/outbox[?status=]` | администраторы, `SUPPORT` | последние 100 внешних выводов клиники; `status=FAILED` (или другой статус) — только с ним, неизвестный — `409 INVALID_OUTBOX_STATUS` |
 
-Секреты (`CLINIC_OUTBOUND_WEBHOOK_SECRET`, `TELEGRAM_BOT_TOKEN`, `CLINIC_CASHBOX_SECRET`) — только из окружения (`.env`), не из Git и не из Liquibase. Токен Telegram входит в адрес запроса, поэтому адреса запросов наружу не логируются. В профиле `prod` приложение не стартует, если адрес вебхука или кассы задан, а секрет короче 32 символов.
+Секреты (`CLINIC_OUTBOUND_WEBHOOK_SECRET`, `CLINIC_OUTBOUND_TELEGRAM_RELAY_SECRET`, `CLINIC_OUTBOUND_MAX_BOT_TOKEN`, `CLINIC_CASHBOX_SECRET`) — только из окружения (`.env`), не из Git и не из Liquibase. В профиле `prod` приложение не стартует, если адрес вебхука, relay или кассы задан, а секрет короче 32 символов.
 
-## Telegram-бот клиники
+## Боты Telegram и MAX
 
-Бот (отдельный проект ClinicaBot) показывает пациенту врачей и свободное время, записывает на приём и принимает ответ на напоминание. Данные он берёт из CRM через отдельный API, а сообщения пациенту по-прежнему уходят из outbox.
+Два независимых репозитория находятся в `../alphacrm-telegram-bot/` и `../alphacrm-max-bot/`. Telegram-бот работает на зарубежном VPS и обращается к МИС через WireGuard; MAX-бот запускается в РФ рядом с МИС профилем `max-bot`. Пошаговая настройка доменов, секретов, VPN и боевой приёмки — [docs/messengers.md](docs/messengers.md).
 
-**Как включить.** В `.env`: `TELEGRAM_BOT_TOKEN` (токен от @BotFather), `COMPOSE_PROFILES=bot`, `BOT_SOURCE_DIR` — путь к папке бота (по умолчанию `../ClinicaBot`), `CLINIC_TIME_ZONE` — пояс клиники. `CLINIC_BOT_API_TOKEN` создаёт `scripts/init-env.sh`. Дальше обычный `./scripts/start.sh`: сервис `bot` поднимется вместе со стеком и пойдёт в `backend:8081` по внутренней сети.
+**Привязка.** В карточке пациента сотрудник с правом редактирования открывает блок «Мессенджеры» и создаёт ссылку Telegram или MAX. Пациент открывает её в течение 10 минут; токен одноразовый, в базе лежит только его HMAC. Внешний id сохраняется зашифрованным, API сотруднику отдаёт лишь признаки `telegramConnected` / `maxConnected`. Там же выбирается основной канал или автоматическая маршрутизация.
 
-**Что видит пациент.** Врачи — карточки, у которых есть хотя бы одна смена. Окна — под одну услугу `CLINIC_BOT_SERVICE` (по умолчанию «Первичный приём»): длина окна равна длительности услуги, начала идут каждые 30 минут от начала смены, на 14 дней вперёд и не раньше чем через 2 часа (`CLINIC_BOT_SLOT_STEP`, `CLINIC_BOT_BOOKING_DAYS`, `CLINIC_BOT_MIN_LEAD`). Занятое время считается так же, как при записи из регистратуры.
-
-**Что происходит в CRM.**
+**Что видит пациент.** Команды `/book`, `/appointments`, `/operator`, `/cancel`: врачи и свободные окна, ближайшие записи, обращение оператору и отмена текущего диалога. Под напоминанием — кнопки подтверждения и отмены записи. Окна строятся под услугу `CLINIC_BOT_SERVICE` с теми же проверками занятости, что в регистратуре.
 
 | Действие в боте | В CRM |
 |---|---|
-| Запись | Ищется карточка с тем же ФИО, датой рождения и телефоном; иначе заводится новая. Карточка получает контакт Telegram (chat id) и, если действующего нет, согласие с основанием `telegram-bot`. Запись создаётся с теми же проверками слота, статус «Ожидает». Подтверждение в outbox сразу закрывается как `SKIPPED` / `SHOWN_IN_BOT` — пациент уже видел ответ бота; напоминание за сутки ставится как обычно |
-| «Подтвердить» под напоминанием | «Ожидает» → «Подтверждён» |
-| «Отменить запись» под напоминанием | запись отменяется; сообщение об отмене не отправляется — пациент только что видел ответ бота |
+| Запись | Ищется карточка с тем же ФИО, датой рождения и телефоном; иначе заводится новая. Внешний id привязывается к каналу, при отсутствии действующего согласия создаётся согласие с основанием соответствующего бота. Подтверждение в outbox закрывается как `SKIPPED` / `SHOWN_IN_BOT`, напоминание ставится как обычно |
+| «Подтвердить» / «Отменить запись» | меняется только запись пациента, связанного с внешним id нажавшего; чужой callback возвращает `404` |
 | «Связаться с оператором» | задача регистратуры на сегодня исполнителю `CLINIC_BOT_TASK_ASSIGNEE` или первому активному администратору |
 
-В журнале аудита автор этих действий — клиника, основание — «через Telegram-бота». Кнопки под напоминанием (`TELEGRAM_REMINDER_BUTTONS=true`) несут `callback_data` вида `cf:<id записи>:yes|no`; бот подтверждает или отменяет запись, только если она принадлежит пациенту с chat id того, кто нажал кнопку.
-
-**API бота.** Вход — заголовок `X-Bot-Token: <CLINIC_BOT_API_TOKEN>`, без сессии и CSRF; сессия сотрудника здесь не действует, а токен бота — на остальных маршрутах. Пустой токен выключает API (`401 BOT_API_DISABLED`), в `prod` токен короче 32 символов не даёт стартовать. nginx этот путь наружу не отдаёт (`404`). Время — в поясе клиники (`2026-11-03T12:00:00+03:00`).
+**Приватный API.** Вход — заголовок `X-Bot-Token: <CLINIC_BOT_API_TOKEN>`, без сессии и CSRF. Пустой токен выключает API (`401 BOT_API_DISABLED`), в `prod` токен короче 32 символов не даёт стартовать. nginx не отдаёт наружу `/api/v1/messenger/**` и `/api/v1/bot/**` (`404`). Старые маршруты `/api/v1/bot/**` сохранены для совместимости; новые боты используют:
 
 | Маршрут | Что делает |
 |---|---|
-| `GET /api/v1/bot/clinic` | название клиники, пояс, услуга онлайн-записи |
-| `GET /api/v1/bot/practitioners`, `GET /api/v1/bot/practitioners/{id}` | врачи со сменами: ФИО, специальность, кабинет |
-| `GET /api/v1/bot/practitioners/{id}/slots` | свободные окна `[{startsAt, endsAt}]` |
-| `GET /api/v1/bot/patients/by-telegram/{chatId}` | самая новая карточка с этим chat id или `404 PATIENT_NOT_FOUND` |
-| `POST /api/v1/bot/appointments` | `{telegramChatId, lastName, firstName, patronymic?, birthDate, phone, practitionerId, startsAt, consentVersion}` → `201` запись; занято — `409 SLOT_ALREADY_BOOKED`, вне смены — `409 OUTSIDE_WORKING_HOURS` |
-| `GET /api/v1/bot/appointments/{id}?telegramChatId=` | запись этого пациента; чужая — `404 APPOINTMENT_NOT_FOUND` |
-| `POST /api/v1/bot/appointments/{id}/confirm`, `…/cancel` | `{telegramChatId}`; повторное подтверждение ничего не меняет, повторная отмена — `409 ALREADY_CANCELLED` |
-| `POST /api/v1/bot/operator-requests` | `{telegramChatId, title}` → `201 {id, patientId}` — задача регистратуры |
+| `GET /api/v1/messenger/clinic`, `/practitioners`, `/practitioners/{id}/slots` | клиника, врачи со сменами и свободные окна |
+| `POST /api/v1/messenger/link/consume` | `{channel, externalId, token}` — одноразовая привязка выбранной карточки |
+| `GET /api/v1/messenger/patients/{channel}/{externalId}` | самая новая связанная карточка или `404 PATIENT_NOT_FOUND` |
+| `POST /api/v1/messenger/appointments` | запись с каналом, внешним id, данными пациента, врачом, временем и версией согласия |
+| `GET /api/v1/messenger/appointments?channel=&externalId=` | до 20 ближайших активных записей всех карточек, связанных с этим внешним id |
+| `GET /api/v1/messenger/appointments/{id}?channel=&externalId=` | запись этого пациента; чужая — `404 APPOINTMENT_NOT_FOUND` |
+| `POST /api/v1/messenger/appointments/{id}/confirm`, `…/cancel` | `{channel, externalId}`; только владелец связанного внешнего id |
+| `POST /api/v1/messenger/operator-requests` | `{channel, externalId, title}` → `201 {id, patientId}` — задача регистратуры |
 
 ## Архитектура
 

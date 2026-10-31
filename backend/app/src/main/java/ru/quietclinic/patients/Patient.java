@@ -52,6 +52,10 @@ class Patient {
 
   @Transient PatientProfile profile;
 
+  /** Канал, в который уведомления уходят первыми; null — автоматический выбор. */
+  @Column(length = 16)
+  String preferredMessenger;
+
   @OneToMany(mappedBy = "patient", cascade = CascadeType.ALL, orphanRemoval = true)
   List<Contact> contacts = new ArrayList<>();
 
@@ -59,6 +63,7 @@ class Patient {
   List<Consent> consents = new ArrayList<>();
 
   static final String TELEGRAM = "TELEGRAM";
+  static final String MAX = "MAX";
   static final String PHONE = "PHONE";
   static final String SECOND_PHONE = "SECOND_PHONE";
   static final String EMAIL = "EMAIL";
@@ -158,26 +163,40 @@ class Patient {
     return changed;
   }
 
-  /**
-   * Chat id Telegram пациента — контакт TELEGRAM, один на пациента. Пациент получает его, только
-   * начав диалог с ботом клиники. {@code remove} — отключить; пустое значение — не менять.
-   */
+  /** Внешний id мессенджера — зашифрованный контакт; remove отключает только этот канал. */
   boolean updateTelegram(String chatId, boolean remove) {
-    var current = contacts.stream().filter(c -> TELEGRAM.equals(c.type)).findFirst();
+    return updateMessenger(MessengerChannel.TELEGRAM, chatId, remove);
+  }
+
+  boolean updateMessenger(MessengerChannel channel, String externalId, boolean remove) {
+    var type = channel.name();
+    var current = contacts.stream().filter(c -> type.equals(c.type)).findFirst();
     if (remove) {
       if (current.isEmpty()) return false;
       contacts.remove(current.get());
+      if (type.equals(preferredMessenger)) preferredMessenger = null;
       return true;
     }
-    var value = blankToNull(chatId);
+    var value = blankToNull(externalId);
     if (value == null || current.map(c -> c.value.equals(value)).orElse(false)) return false;
     if (current.isPresent()) current.get().value = value;
-    else contacts.add(new Contact(this, TELEGRAM, value));
+    else contacts.add(new Contact(this, type, value));
     return true;
   }
 
+  boolean messengerConnected(MessengerChannel channel) {
+    return contacts.stream().anyMatch(c -> channel.name().equals(c.type));
+  }
+
   boolean telegramConnected() {
-    return contacts.stream().anyMatch(c -> TELEGRAM.equals(c.type));
+    return messengerConnected(MessengerChannel.TELEGRAM);
+  }
+
+  void preferMessenger(MessengerChannel channel) {
+    if (channel != null && !messengerConnected(channel)) {
+      throw conflict("MESSENGER_NOT_CONNECTED", "Connect this messenger before making it preferred");
+    }
+    preferredMessenger = channel == null ? null : channel.name();
   }
 
   String phone() {

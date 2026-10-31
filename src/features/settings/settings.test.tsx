@@ -81,7 +81,7 @@ describe('working hours and prices', () => {
     expect(screen.getByText(/Психиатр · кабинет 204 · время клиники/)).toBeInTheDocument()
 
     await openPage(user, 'Расписание')
-    expect(screen.getByText(/Психиатр · кабинет 204 · /)).toBeInTheDocument()
+    expect(screen.getByText('Психиатр · кабинет 204')).toBeInTheDocument()
     // Без кабинета подписи нет.
     expect(screen.queryByText(/Психотерапевт · кабинет/)).not.toBeInTheDocument()
   })

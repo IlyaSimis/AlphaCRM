@@ -20,6 +20,7 @@ describe('sales report', () => {
 
   it('a day row reads as date and weekday', () => {
     expect(lineLabel(line('2026-10-28', 1), 'day')).toBe('28.10, ср')
+    expect(lineLabel(line('3', 1), 'weekday')).toBe('Среда')
     expect(lineLabel({ ...line('id', 1), label: 'Первичный приём' }, 'service')).toBe('Первичный приём')
   })
 })

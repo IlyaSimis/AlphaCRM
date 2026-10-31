@@ -28,9 +28,10 @@ class NoticeSource {
     List<AppointmentNotice> rows =
         jdbc.query(
             "select a.id, a.patient_id, a.status, a.starts_at, a.service_name,"
-                + " p.full_name as practitioner_name, c.name as clinic_name"
+                + " p.full_name as practitioner_name, c.name as clinic_name, pt.preferred_messenger"
                 + " from appointment a join practitioner p on p.id = a.practitioner_id"
-                + " join clinic c on c.id = p.clinic_id where a.id = ?",
+                + " join clinic c on c.id = p.clinic_id join patient pt on pt.id = a.patient_id"
+                + " where a.id = ?",
             (row, index) -> {
               var patientId = row.getObject("patient_id", UUID.class);
               return new AppointmentNotice(
@@ -42,7 +43,9 @@ class NoticeSource {
                   row.getString("practitioner_name"),
                   row.getString("clinic_name"),
                   hasActiveConsent(patientId),
-                  telegramChatId(patientId));
+                  contact(patientId, "TELEGRAM"),
+                  contact(patientId, "MAX"),
+                  row.getString("preferred_messenger"));
             },
             appointmentId);
     return rows.stream().findFirst();
@@ -71,7 +74,7 @@ class NoticeSource {
     return count != null && count > 0;
   }
 
-  private String telegramChatId(UUID patientId) {
-    return patientContacts.value(patientId, "TELEGRAM").orElse(null);
+  private String contact(UUID patientId, String channel) {
+    return patientContacts.value(patientId, channel).orElse(null);
   }
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { PaymentsRounded, RefreshRounded } from '@mui/icons-material'
-import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField, Typography } from '@mui/material'
+import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Stack, TextField, Typography } from '@mui/material'
 import { createCharge, loadCharges, payCharge, setChargeAmount, startTerminalPayment } from '../../api/billing'
 import type { ApiError } from '../../api/client'
 import { loadAppointments } from '../../api/schedule'
@@ -10,7 +10,7 @@ import { can } from '../../shared/permissions'
 import { canTakePayments, type Role } from '../../shared/roles'
 import { Metric } from '../../shared/ui'
 import { formatMoney, rublesFromInput } from '../schedule/booking'
-import { buildCashierRows, stateLabels, totals, type CashierRow } from './cashierRules'
+import { buildCashierRows, paymentStructure, stateLabels, totals, type CashierRow } from './cashierRules'
 import { CloseChargeDialog } from './CloseChargeDialog'
 import { refundReasonLabels, voidReasonLabels } from '../finance/finance'
 import type { RefundReason, VoidReason } from '../../api/types'
@@ -29,7 +29,6 @@ type CashierProps = {
   notify: (message: string) => void
 }
 
-const PERIOD_DAYS = 90
 const terminalStatusLabels: Record<string, string> = {
   PENDING: 'Оплата на терминале',
   CANCELLED: 'Оплата отменена',
@@ -57,6 +56,7 @@ export function Cashier({ role, apiOnline, practitioners, localAppointments, loc
   const [error, setError] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
   const [revision, setRevision] = useState(0)
+  const [periodDays, setPeriodDays] = useState(90)
   /** Введённые суммы свободной цены по счёту, в рублях. */
   const [amounts, setAmounts] = useState<Record<string, string>>({})
   const payments = canTakePayments(role)
@@ -71,11 +71,11 @@ export function Cashier({ role, apiOnline, practitioners, localAppointments, loc
   useEffect(() => {
     if (!apiOnline) return
     let cancelled = false
-    Promise.all([loadAppointments({ from: shiftDate(today, -PERIOD_DAYS), to: today, status: 'COMPLETED' }), loadCharges()])
+    Promise.all([loadAppointments({ from: shiftDate(today, -(periodDays - 1)), to: today, status: 'COMPLETED' }), loadCharges()])
       .then(([appointments, charges]) => { if (!cancelled) { setRemote({ appointments, charges }); setError('') } })
       .catch((reason: Error) => { if (!cancelled) setError(reason.message) })
     return () => { cancelled = true }
-  }, [apiOnline, today, revision])
+  }, [apiOnline, today, periodDays, revision])
 
   const terminalPending = remote?.charges.some((charge) => charge.paymentStatus === 'PENDING') ?? false
   useEffect(() => {
@@ -84,9 +84,15 @@ export function Cashier({ role, apiOnline, practitioners, localAppointments, loc
     return () => window.clearInterval(timer)
   }, [apiOnline, terminalPending])
 
-  const source = apiOnline ? remote : { appointments: localAppointments.filter((item) => item.statusCode === 'COMPLETED'), charges: localCharges }
+  const source = apiOnline ? remote : {
+    appointments: localAppointments.filter((item) => item.statusCode === 'COMPLETED' && item.date >= shiftDate(today, -(periodDays - 1)) && item.date <= today),
+    charges: localCharges,
+  }
   const rows = source ? buildCashierRows(source.appointments, source.charges) : []
   const sums = totals(rows)
+  const methods = paymentStructure(rows)
+  const paymentCount = methods.CARD.count + methods.SBP.count + methods.MANUAL.count
+  const paymentAmount = methods.CARD.amountMinor + methods.SBP.amountMinor + methods.MANUAL.amountMinor
   const doctorName = (id: string) => practitioners.find((doctor) => doctor.id === id)?.fullName ?? 'Врач'
 
   const act = async (key: string, action: () => Promise<void>, message: string | (() => string)) => {
@@ -201,8 +207,11 @@ export function Cashier({ role, apiOnline, practitioners, localAppointments, loc
   return (
     <>
       <Box className="section-intro">
-        <Box><Typography variant="h4" sx={{ fontWeight: 750 }}>Касса</Typography><Typography sx={{ color: 'text.secondary' }}>Завершённые приёмы за {PERIOD_DAYS} дней: к оплате и оплаченные</Typography></Box>
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+        <Box><Typography variant="h4" sx={{ fontWeight: 750 }}>Касса</Typography><Typography sx={{ color: 'text.secondary' }}>{periodDays === 1 ? 'Завершённые приёмы сегодня' : `Завершённые приёмы за ${periodDays} дней`}: к оплате и оплаченные</Typography></Box>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }} useFlexGap>
+          <TextField select size="small" label="Период" value={periodDays} onChange={(event) => setPeriodDays(Number(event.target.value))} sx={{ minWidth: 130 }}>
+            <MenuItem value={1}>Сегодня</MenuItem><MenuItem value={30}>30 дней</MenuItem><MenuItem value={90}>90 дней</MenuItem>
+          </TextField>
           <Chip size="small" label={apiOnline ? 'Данные API' : 'Демо-режим'} color={apiOnline ? 'success' : 'default'} variant="outlined" />
           {payments && sums.withoutCharge > 0 && <Button variant="contained" disabled={busy !== null} onClick={() => void issueAll()}>Выставить все счета ({sums.withoutCharge})</Button>}
           <Button variant="outlined" startIcon={<RefreshRounded />} disabled={!apiOnline} onClick={() => setRevision((value) => value + 1)}>Обновить</Button>
@@ -211,8 +220,17 @@ export function Cashier({ role, apiOnline, practitioners, localAppointments, loc
       <Box className="summary-grid" sx={{ mb: 2 }}>
         <Metric value={formatMoney(sums.pending)} label="ожидает оплаты" note="выставленные счета" accent={sums.pending > 0} />
         <Metric value={formatMoney(sums.paid)} label="оплачено" note={sums.refunded > 0 ? `за период; возвращено ${formatMoney(sums.refunded)}` : 'за период'} />
+        <Metric value={formatMoney(paymentCount ? Math.round(paymentAmount / paymentCount) : 0)} label="средний чек" note={`${paymentCount} оплат`} />
         <Metric value={String(sums.withoutCharge)} label="без счёта" note={payments ? 'можно выставить' : 'выставляют касса и администратор'} />
         {sums.awaitingAmount > 0 && <Metric value={String(sums.awaitingAmount)} label="ждут суммы" note="свободная цена" accent />}
+      </Box>
+      <Box className="panel chart-panel" sx={{ mb: 2 }}>
+        <Typography sx={{ fontWeight: 750, mb: 1 }}>Структура оплат</Typography>
+        <Box className="summary-grid" sx={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
+          <Metric value={formatMoney(methods.CARD.amountMinor)} label="картой" note={`${methods.CARD.count} оплат`} />
+          <Metric value={formatMoney(methods.SBP.amountMinor)} label="через СБП" note={`${methods.SBP.count} оплат`} />
+          <Metric value={formatMoney(methods.MANUAL.amountMinor)} label="внешние оплаты" note={`${methods.MANUAL.count} оплат`} />
+        </Box>
       </Box>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       <Box className="panel audit-panel">

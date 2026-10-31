@@ -4,7 +4,7 @@ import { dateFrom, decodeText, emptyRow, gtinFrom, kindFrom, matchItem, receiptL
 
 const gloves: InventoryItem = {
   id: 'i-1', categoryId: 'c', categoryName: 'Расходники', kind: 'CONSUMABLE', name: 'Перчатки нитриловые', unit: 'пара',
-  gtin: '04601234567893', marked: false, markingSystem: 'NONE', rxOnly: false, active: true, stock: 0,
+  gtin: '04601234567893', marked: false, markingSystem: 'NONE', rxOnly: false, active: true, stock: 0, minStock: 0,
 }
 
 describe('receipt from a file or a paste', () => {

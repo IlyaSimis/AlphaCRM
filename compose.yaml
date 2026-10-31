@@ -47,11 +47,16 @@ services:
       # Внешние выводы: секреты только из .env. Пусто — канал выключен, сообщения ждут в outbox.
       CLINIC_OUTBOUND_WEBHOOK_URL: ${CLINIC_OUTBOUND_WEBHOOK_URL:-}
       CLINIC_OUTBOUND_WEBHOOK_SECRET: ${CLINIC_OUTBOUND_WEBHOOK_SECRET:-}
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      # Telegram — только relay на зарубежном VPS через WireGuard; токен Telegram здесь не нужен.
+      CLINIC_OUTBOUND_TELEGRAM_RELAY_URL: ${CLINIC_OUTBOUND_TELEGRAM_RELAY_URL:-}
+      CLINIC_OUTBOUND_TELEGRAM_RELAY_SECRET: ${CLINIC_OUTBOUND_TELEGRAM_RELAY_SECRET:-}
+      CLINIC_OUTBOUND_MAX_BOT_TOKEN: ${CLINIC_OUTBOUND_MAX_BOT_TOKEN:-}
+      CLINIC_MESSENGER_TELEGRAM_PUBLIC_URL: ${CLINIC_MESSENGER_TELEGRAM_PUBLIC_URL:-}
+      CLINIC_MESSENGER_MAX_PUBLIC_URL: ${CLINIC_MESSENGER_MAX_PUBLIC_URL:-}
       CLINIC_CASHBOX_URL: ${CLINIC_CASHBOX_URL:-}
       CLINIC_CASHBOX_SECRET: ${CLINIC_CASHBOX_SECRET:-}
       CLINIC_TIME_ZONE: ${CLINIC_TIME_ZONE:-UTC}
-      # API Telegram-бота (/api/v1/bot/**). Пусто — API выключено. Снаружи nginx этот путь не отдаёт.
+      # Приватный API ботов (/api/v1/messenger/**; /api/v1/bot/** — совместимость). Наружу не отдаётся.
       CLINIC_BOT_API_TOKEN: ${CLINIC_BOT_API_TOKEN:-}
       CLINIC_BOT_CLINIC_ID: ${CLINIC_BOT_CLINIC_ID:-}
       CLINIC_BOT_SERVICE: ${CLINIC_BOT_SERVICE:-Первичный приём}
@@ -103,26 +108,26 @@ services:
     ports:
       - "${APP_BIND:-127.0.0.1}:${APP_PORT:-8080}:8080"
 
-  # Telegram-бот клиники (проект ClinicaBot). Включается профилем: COMPOSE_PROFILES=bot в .env.
-  # Ходит в backend напрямую по внутренней сети, наружу портов не открывает.
-  bot:
+  # MAX-бот развёртывается в РФ рядом с МИС. Telegram-бот запускается отдельно на зарубежном VPS.
+  max-bot:
     <<: *restart
-    profiles: ["bot"]
+    profiles: ["max-bot"]
     build:
-      context: ${BOT_SOURCE_DIR:-../ClinicaBot}
-    image: quiet-clinic-bot:${APP_VERSION:-local}
+      context: ../alphacrm-max-bot
+    image: alphacrm-max-bot:${APP_VERSION:-local}
     environment:
-      # Тот же бот, через который CRM шлёт пациентам подтверждения и напоминания.
-      BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
-      CLINIC_API_URL: http://backend:8081/api/v1/bot
-      CLINIC_API_TOKEN: ${CLINIC_BOT_API_TOKEN:-}
-      OPERATOR_CHAT_ID: ${BOT_OPERATOR_CHAT_ID:-}
-      ADMIN_IDS: ${BOT_ADMIN_IDS:-}
-      CLINIC_ADDRESS: ${CLINIC_ADDRESS:-}
-      CLINIC_PHONE: ${CLINIC_PHONE:-}
-      CLINIC_HOURS: ${CLINIC_HOURS:-}
+      MAX_BOT_TOKEN: ${CLINIC_OUTBOUND_MAX_BOT_TOKEN:-}
+      MAX_WEBHOOK_SECRET: ${MAX_WEBHOOK_SECRET:-}
+      PUBLIC_URL: ${MAX_BOT_PUBLIC_URL:-}
+      CRM_API_URL: http://backend:8081/api/v1/messenger
+      CRM_BOT_TOKEN: ${CLINIC_BOT_API_TOKEN:-}
+      BOT_CONSENT_VERSION: max-bot-v1
       CLINIC_PRIVACY_URL: ${CLINIC_PRIVACY_URL:-}
-      BOT_CONSENT_VERSION: ${BOT_CONSENT_VERSION:-telegram-bot-v1}
+      STATE_DB: /data/max-bot.db
+    ports:
+      - "127.0.0.1:${MAX_BOT_PORT:-8082}:8080"
+    volumes:
+      - max-bot-state:/data
     depends_on:
       backend:
         condition: service_healthy
@@ -134,3 +139,4 @@ services:
 volumes:
   quiet-clinic-postgres:
   quiet-clinic-drive:
+  max-bot-state:

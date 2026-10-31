@@ -2,7 +2,7 @@
 
 Документ описывает, где и как AlphaCRM хранит данные: таблицы, связи, ограничения, что шифруется, что попадает в журнал аудита и как схема меняется. Общая схема проекта — в [architecture.md](architecture.md).
 
-Источник истины — миграции Liquibase в `backend/app/src/main/resources/db/changelog/` (`db.changelog-master.yaml` → `001-core.sql` … `018-assistant-commercial.sql`). JPA работает с `ddl-auto: validate`: Hibernate только сверяет сущности со схемой и ничего не создаёт сам. Если таблица в этом документе расходится с миграциями, правы миграции.
+Источник истины — миграции Liquibase в `backend/app/src/main/resources/db/changelog/` (`db.changelog-master.yaml` → `001-core.sql` … `025-messenger-integrations.sql`). JPA работает с `ddl-auto: validate`: Hibernate только сверяет сущности со схемой и ничего не создаёт сам. Если таблица в этом документе расходится с миграциями, правы миграции.
 
 ## Содержание
 
@@ -45,7 +45,9 @@ erDiagram
     practitioner ||--o| staff_user : "practitioner_id (только DOCTOR)"
     practitioner ||--o{ practitioner_schedule : "смены по дням недели"
 
-    patient ||--o{ patient_contact : "телефоны, e-mail, Telegram"
+    patient ||--o{ patient_contact : "телефоны, e-mail, Telegram, MAX"
+    patient ||--o{ patient_contact_token : "HMAC-индексы контактов"
+    patient ||--o{ messenger_link_token : "одноразовые ссылки привязки"
     staff_user |o--o{ patient : "assigned_staff_id (постоянный администратор)"
     patient ||--o{ patient_file : "PDF"
     appointment |o--o{ patient_file : "appointment_id (необязателен)"
@@ -167,6 +169,7 @@ erDiagram
 | `assigned_staff_id` | UUID | FK → `staff_user` | постоянный администратор. Новым назначается только активный `ADMINISTRATOR` своей клиники (приложение); отключённый остаётся привязанным, пока карточку не поправят |
 | `created_at` | TIMESTAMPTZ | NN | |
 | `profile` | TEXT | | AES-GCM шифртекст расширенной карточки: документы, адрес, работа, договор, представители, СНИЛС, ИНН и настройки уведомлений |
+| `preferred_messenger` | VARCHAR(16) | CHECK | `TELEGRAM`, `MAX` или `NULL` — автоматический выбор доступного канала |
 
 #### `patient_contact`
 
@@ -174,7 +177,7 @@ erDiagram
 |---|---|---|---|
 | `id` | UUID | PK | |
 | `patient_id` | UUID | FK → `patient`, NN | |
-| `type` | VARCHAR(40) | NN | `PHONE` (основной), `SECOND_PHONE`, `EMAIL`, `TELEGRAM`; каждого типа — не больше одного на пациента (приложение) |
+| `type` | VARCHAR(40) | NN | `PHONE` (основной), `SECOND_PHONE`, `EMAIL`, `TELEGRAM`, `MAX`; каждого типа — не больше одного на пациента (приложение) |
 | `contact_value` | VARCHAR(2048) | NN | AES-GCM шифртекст контакта с AAD клиники, пациента, контакта и типа; открытое значение не хранится. Пустое значение удаляет контакт |
 
 #### `patient_contact_token`
@@ -183,10 +186,23 @@ erDiagram
 |---|---|---|---|
 | `contact_id` | UUID | PK, FK → `patient_contact` | контакт, для которого построен индекс |
 | `patient_id`, `clinic_id` | UUID | NN | область поиска; `patient_id` также FK → `patient` |
-| `kind` | VARCHAR(40) | NN | `PHONE` или `TELEGRAM` |
-| `token` | CHAR(64) | PK | HMAC-SHA256 префикса нормализованного телефона либо точного Telegram chat id |
+| `kind` | VARCHAR(40) | NN | `PHONE`, `PHONE_EXACT`, `TELEGRAM` или `MAX` |
+| `token` | CHAR(64) | PK | HMAC-SHA256 префикса или точного нормализованного телефона либо точного внешнего id мессенджера; составной PK — `(contact_id, token)` |
 
-Для каждого телефона хранятся HMAC всех префиксов: поиск по части номера не требует открытого телефона или детерминированного шифрования. Ключ HMAC отделён от ключа содержимого и не меняется при ротации версий шифрования.
+Для каждого телефона хранятся HMAC всех префиксов: поиск по части номера не требует открытого телефона или детерминированного шифрования. Для Telegram и MAX хранится только точный HMAC внешнего id. Ключ HMAC отделён от ключа содержимого и не меняется при ротации версий шифрования.
+
+#### `messenger_link_token` — одноразовая привязка мессенджера
+
+| Колонка | Тип | | Смысл |
+|---|---|---|---|
+| `id` | UUID | PK | |
+| `patient_id`, `clinic_id` | UUID | NN | карточка и её клиника; `patient_id` — FK → `patient` |
+| `channel` | VARCHAR(16) | NN, CHECK | `TELEGRAM` или `MAX` |
+| `token_hash` | CHAR(64) | NN, U | HMAC-SHA256 одноразового токена; сам токен в базе не хранится |
+| `created_at`, `expires_at` | TIMESTAMPTZ | NN | выдача и срок действия (10 минут) |
+| `consumed_at` | TIMESTAMPTZ | | когда ссылку погасил бот; повторное использование отклоняется |
+
+Новая ссылка для того же пациента и канала отзывает прежние непогашенные. Погашение атомарно отмечает токен и привязывает внешний id именно к выбранной сотрудником карточке, не создавая дубль.
 
 #### `patient_consent` — версии согласия
 
@@ -554,16 +570,16 @@ CHECK `patient_file_signed_complete`: у `SIGNED_LOCKED` заполнены хе
 | `next_attempt_at` | TIMESTAMPTZ | | не раньше: напоминание — за 24 часа до приёма, повтор — после паузы; `NULL` — больше не пробовать |
 | `last_attempt_at`, `sent_at` | TIMESTAMPTZ | | последняя попытка и доставка |
 | `attempts` | INTEGER | NN | неудачные попытки (до 5) |
-| `channel` | VARCHAR(40) | | `WEBHOOK`, `TELEGRAM`, `CASHBOX`, `MOCK` |
-| `last_error` | VARCHAR(80) | | машинный код причины: `CHANNEL_NOT_CONFIGURED`, `NO_TELEGRAM_CONTACT`, `NO_CONSENT`, `RESCHEDULED`, `APPOINTMENT_CANCELLED`, `NO_SHOW`, `EXPIRED`, `HTTP_503`, `NETWORK_ERROR`, `FISCAL_NOT_CONFIGURED`… |
+| `channel` | VARCHAR(40) | | `WEBHOOK`, `TELEGRAM`, `MAX`, `CASHBOX`, `MOCK` |
+| `last_error` | VARCHAR(80) | | машинный код причины: `CHANNEL_NOT_CONFIGURED`, `NO_TELEGRAM_CONTACT`, `NO_MAX_CONTACT`, `NO_CONSENT`, `RESCHEDULED`, `APPOINTMENT_CANCELLED`, `NO_SHOW`, `EXPIRED`, `HTTP_503`, `NETWORK_ERROR`, `FISCAL_NOT_CONFIGURED`… |
 | `version` | BIGINT | NN | оптимистичная блокировка: два доставщика не возьмут одну строку |
 | `created_at` | TIMESTAMPTZ | NN | |
 
 Индексы: `outbox_message_due_idx (status, next_attempt_at)` — очередь доставщика; `outbox_message_clinic_idx (clinic_id, created_at)` — экран; `outbox_message_aggregate_idx (aggregate_id)`.
 
-Строка пишется в той же транзакции, что и событие (запись, отмена, оплата). **Текста сообщения, ФИО, телефона, chat id, жалоб, диагноза, заметки и снимка документа в строке нет** — текст собирается из записи в момент доставки и в базу не сохраняется. Как работает доставка и что уходит наружу — README, раздел «Внешние выводы».
+Строка пишется в той же транзакции, что и событие (запись, отмена, оплата). **Текста сообщения, ФИО, телефона, внешнего id мессенджера, жалоб, диагноза, заметки и снимка документа в строке нет** — текст собирается из записи в момент доставки и в базу не сохраняется. Как работает доставка и что уходит наружу — README, раздел «Внешние выводы».
 
-Контакт Telegram пациента — строка `patient_contact` с `type = 'TELEGRAM'` и chat id в `contact_value`; один на пациента, вводит администратор. API отдаёт только признак `telegramConnected`.
+Контакты Telegram и MAX — строки `patient_contact` с соответствующим `type` и зашифрованным внешним id; по одному на канал. Подключение выполняется одноразовой ссылкой из карточки, а не ручным вводом id. API отдаёт только `telegramConnected`, `maxConnected` и `preferredMessenger`; доставщик сначала выбирает предпочтительный доступный канал, затем второй подключённый.
 
 ### audit — журнал
 
@@ -671,6 +687,7 @@ CHECK `patient_file_signed_complete`: у `SIGNED_LOCKED` заполнены хе
 | `022-patient-privacy.sql` | 092, 093 | профиль пациента переведён в TEXT для шифртекста, расширено хранение контактов, добавлены HMAC-индексы `patient_contact_token` |
 | `023-patient-contracts.sql` | 094 | версии DOCX-шаблонов, счётчик номеров и неизменяемые зашифрованные договоры пациентов |
 | `024-senior-nurse.sql` | 095 | роль `SENIOR_NURSE` в CHECK `staff_user.role` и `staff_role.role` |
+| `025-messenger-integrations.sql` | 096, 097 | `patient.preferred_messenger`, одноразовые `messenger_link_token` и CHECK для каналов `TELEGRAM`/`MAX` |
 
 Как добавить изменение:
 

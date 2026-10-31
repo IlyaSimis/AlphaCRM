@@ -73,7 +73,7 @@ export function ItemsTab({ role, notify }: ItemsTabProps) {
         : items && items.length === 0
           ? <Typography sx={{ color: 'text.secondary' }}>{query || category || kind || marked ? 'Ничего не нашлось.' : 'Позиций пока нет. Заведите позицию кнопкой «Новая позиция» или сразу оформите «Поступление» — новые позиции из него попадут сюда сами.'}</Typography>
           : <table className="audit-table">
-            <thead><tr><th>Название</th><th>Категория</th><th>Вид</th><th>Ед.</th><th>GTIN</th><th>Маркировка</th><th>Остаток</th>{editable && <th />}</tr></thead>
+            <thead><tr><th>Название</th><th>Категория</th><th>Вид</th><th>Ед.</th><th>GTIN</th><th>Маркировка</th><th>Остаток</th><th>Минимум</th>{editable && <th />}</tr></thead>
             <tbody>
               {(items ?? []).map((item) => (
                 <tr key={item.id} style={{ opacity: item.active ? 1 : 0.6 }}>
@@ -83,7 +83,8 @@ export function ItemsTab({ role, notify }: ItemsTabProps) {
                   <td>{item.unit}</td>
                   <td className="nowrap">{item.gtin ?? '—'}</td>
                   <td>{markingLabels[item.markingSystem]}</td>
-                  <td className="nowrap">{formatQuantity(item.stock)}</td>
+                  <td className="nowrap">{formatQuantity(item.stock)}{item.stock < item.minStock && <Chip size="small" color="error" variant="outlined" label="ниже min" sx={{ ml: 1 }} />}</td>
+                  <td>{formatQuantity(item.minStock)}</td>
                   {editable && <td><IconButton size="small" aria-label={`Изменить ${item.name}`} onClick={() => setEditing(item)}><EditRounded fontSize="small" /></IconButton></td>}
                 </tr>
               ))}
@@ -97,8 +98,8 @@ export function ItemsTab({ role, notify }: ItemsTabProps) {
 
 function ItemDialog({ item, categories, onClose, onSaved }: { item: InventoryItem | null; categories: InventoryCategory[]; onClose: () => void; onSaved: (item: InventoryItem) => void }) {
   const [draft, setDraft] = useState<ItemInput>(() => item
-    ? { categoryId: item.categoryId, name: item.name, unit: item.unit, gtin: item.gtin, marked: item.marked, markingSystem: item.markingSystem, rxOnly: item.rxOnly, active: item.active }
-    : { categoryId: null, kind: 'CONSUMABLE', name: '', unit: 'шт', gtin: null, marked: false, markingSystem: 'NONE', rxOnly: false })
+    ? { categoryId: item.categoryId, name: item.name, unit: item.unit, gtin: item.gtin, marked: item.marked, markingSystem: item.markingSystem, rxOnly: item.rxOnly, active: item.active, minStock: item.minStock }
+    : { categoryId: null, kind: 'CONSUMABLE', name: '', unit: 'шт', gtin: null, marked: false, markingSystem: 'NONE', rxOnly: false, minStock: 0 })
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const set = (patch: Partial<ItemInput>) => setDraft((current) => ({ ...current, ...patch }))
@@ -147,6 +148,7 @@ function ItemDialog({ item, categories, onClose, onSaved }: { item: InventoryIte
             <TextField label="Единица" value={draft.unit} onChange={(event) => set({ unit: event.target.value })} sx={{ width: 140 }} />
             <TextField label="GTIN (14 цифр)" value={draft.gtin ?? ''} onChange={(event) => set({ gtin: event.target.value.trim() || null })} fullWidth />
           </Stack>
+          <TextField label="Минимальный остаток" type="number" value={draft.minStock ?? 0} onChange={(event) => set({ minStock: Number(event.target.value) })} slotProps={{ htmlInput: { min: 0, step: 0.001 } }} helperText="При остатке ниже этого значения позиция попадёт в критичные" />
           <FormControlLabel control={<Checkbox checked={draft.marked} onChange={(event) => set({ marked: event.target.checked, markingSystem: event.target.checked ? (kind === 'DRUG' ? 'MDLP' : 'GIS_MT') : 'NONE' })} />} label="Маркируется (Честный знак): при движении сканируются марки упаковок" />
           {draft.marked && <TextField select label="Система маркировки" value={draft.markingSystem} onChange={(event) => set({ markingSystem: event.target.value as MarkingSystem })} helperText="Лекарства — МДЛП (вывод из оборота через регистратор выбытия); медизделия и товары — ГИС МТ.">
             <MenuItem value="MDLP">{markingLabels.MDLP}</MenuItem>

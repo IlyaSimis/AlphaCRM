@@ -1,5 +1,5 @@
 import { apiFetch, failure } from './client'
-import type { InventoryCategory, InventoryItem, ItemKind, MarkingCodeItem, MarkingOperationItem, MarkingStatus, MarkingSystem, ScannedCode, StockBalance, StockDocument, StockDocumentType, Warehouse } from './types'
+import type { InventoryCategory, InventoryItem, ItemKind, MarkingCodeItem, MarkingOperationItem, MarkingStatus, MarkingSystem, ScannedCode, StockBalance, StockDocument, StockDocumentType, StockMetrics, Warehouse } from './types'
 
 async function json<T>(path: string, fallback: string, init?: RequestInit): Promise<T> {
   const response = await apiFetch(path, init)
@@ -27,7 +27,7 @@ export function loadItems(filter: ItemFilter = {}) {
 }
 
 /** categoryId null — основная категория вида kind (сервер заведёт её сам). */
-export type ItemInput = { categoryId: string | null; kind?: ItemKind; name: string; unit: string; gtin: string | null; marked: boolean; markingSystem: MarkingSystem; rxOnly: boolean; active?: boolean }
+export type ItemInput = { categoryId: string | null; kind?: ItemKind; name: string; unit: string; gtin: string | null; marked: boolean; markingSystem: MarkingSystem; rxOnly: boolean; active?: boolean; minStock?: number }
 
 export function saveItem(id: string | null, input: ItemInput) {
   return json<InventoryItem>(id ? `/inventory/items/${id}` : '/inventory/items', 'Не удалось сохранить позицию', { method: id ? 'PUT' : 'POST', body: JSON.stringify(input) })
@@ -93,6 +93,10 @@ export function loadBalances(filter: { warehouse?: string; category?: string; q?
   if (filter.q) query.set('q', filter.q)
   const suffix = query.toString() ? `?${query}` : ''
   return json<StockBalance[]>(`/inventory/balances${suffix}`, 'Остатки недоступны')
+}
+
+export function loadInventoryMetrics(from: string, to: string) {
+  return json<StockMetrics>(`/inventory/metrics?from=${from}&to=${to}`, 'Складские метрики недоступны')
 }
 
 /** Разбор строки со сканера DataMatrix. */

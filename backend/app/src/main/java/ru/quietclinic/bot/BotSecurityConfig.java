@@ -21,7 +21,7 @@ class BotSecurityConfig {
   SecurityFilterChain botSecurity(
       HttpSecurity http, BotClinicResolver clinics, @Value("${clinic.bot.api-token:}") String token)
       throws Exception {
-    return http.securityMatcher("/api/v1/bot/**")
+    return http.securityMatcher("/api/v1/bot/**", "/api/v1/messenger/**")
         .csrf(AbstractHttpConfigurer::disable)
         .cors(AbstractHttpConfigurer::disable)
         .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

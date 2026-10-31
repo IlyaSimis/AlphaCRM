@@ -20,6 +20,8 @@ class ProductionReadinessCheck {
       @Value("${clinic.admin-password:}") String adminPassword,
       @Value("${clinic.outbound.webhook-url:}") String webhookUrl,
       @Value("${clinic.outbound.webhook-secret:}") String webhookSecret,
+      @Value("${clinic.outbound.telegram-relay-url:}") String telegramRelayUrl,
+      @Value("${clinic.outbound.telegram-relay-secret:}") String telegramRelaySecret,
       @Value("${clinic.cashbox.url:}") String cashboxUrl,
       @Value("${clinic.cashbox.secret:}") String cashboxSecret,
       @Value("${clinic.bot.api-token:}") String botToken) {
@@ -35,6 +37,9 @@ class ProductionReadinessCheck {
     var problem = adminPasswordProblem(adminPassword);
     if (problem != null) throw new IllegalStateException(problem);
     problem = signingSecretProblem("CLINIC_OUTBOUND_WEBHOOK", webhookUrl, webhookSecret);
+    if (problem != null) throw new IllegalStateException(problem);
+    problem = signingSecretProblem(
+        "CLINIC_OUTBOUND_TELEGRAM_RELAY", telegramRelayUrl, telegramRelaySecret);
     if (problem != null) throw new IllegalStateException(problem);
     problem = signingSecretProblem("CLINIC_CASHBOX", cashboxUrl, cashboxSecret);
     if (problem != null) throw new IllegalStateException(problem);

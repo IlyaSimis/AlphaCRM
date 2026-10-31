@@ -66,6 +66,8 @@ class NoticeText {
         local.toLocalDate().toString(),
         time,
         text,
-        notice.telegramChatId());
+        notice.telegramChatId(),
+        notice.maxUserId(),
+        notice.preferredMessenger());
   }
 }

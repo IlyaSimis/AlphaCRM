@@ -15,7 +15,7 @@ export const refundReasonLabels: Record<RefundReason, string> = {
   OTHER: 'Другое',
 }
 
-export const groupLabels: Record<SalesGroup, string> = { day: 'По дням', service: 'По услугам', practitioner: 'По врачам' }
+export const groupLabels: Record<SalesGroup, string> = { day: 'По дням', weekday: 'По дням недели', service: 'По услугам', practitioner: 'По врачам' }
 
 export type PeriodPreset = 'month' | 'previous-month' | 'week' | 'custom'
 
@@ -45,6 +45,7 @@ export function barWidth(line: SalesLine, lines: SalesLine[]) {
 
 /** Подпись строки: день — «28.10, ср», остальное — как есть. */
 export function lineLabel(line: SalesLine, group: SalesGroup) {
+  if (group === 'weekday') return ['', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'][Number(line.key)] ?? line.label
   if (group !== 'day') return line.label
   const date = new Date(`${line.key}T12:00:00Z`)
   const day = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'][date.getUTCDay()]

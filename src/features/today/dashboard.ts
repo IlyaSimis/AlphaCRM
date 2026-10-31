@@ -31,6 +31,8 @@ export function widgetText(widget: DashboardWidget): { label: string; note: stri
       return { label: 'неявок за месяц', note: `отмен ${second}`, accent: widget.value > 0 }
     case 'appointments.today':
       return { label: own ? 'моих приёмов сегодня' : 'приёмов сегодня', note: 'активные записи', accent: false }
+    case 'schedule.load':
+      return { label: own ? 'моя загрузка за месяц' : 'загрузка расписания', note: `занято ${second} мин`, accent: false }
     case 'documents.unsigned':
       return { label: 'неподписанных документов', note: 'черновики приёмов и PDF', accent: widget.value > 0 }
     case 'charges.unpaid':
@@ -68,6 +70,7 @@ export function dashboardDestination(code: string): Page | null {
     case 'appointments.month':
     case 'appointments.month.noShow':
     case 'appointments.today': return 'schedule'
+    case 'schedule.load': return 'analytics'
     case 'salary.month': return 'hr-me'
     case 'documents.unsigned': return 'documents'
     case 'charges.unpaid':

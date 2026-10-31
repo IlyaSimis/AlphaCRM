@@ -3,6 +3,7 @@ import { Box, CircularProgress, Typography } from '@mui/material'
 import type { EncounterView, PatientItem, ScheduleItem, StaffItem } from '../api/types'
 import type { WorkspaceNavigationIntent } from '../features/assistant/navigationCatalog'
 import { DashboardWidgets } from '../features/today/DashboardWidgets'
+import { dashboardCodes } from '../features/today/dashboardCodes'
 import { TodayPage } from '../features/today/TodayPage'
 import { Schedule } from '../features/schedule/Schedule'
 import type { Registry } from '../features/registry/useRegistry'
@@ -39,7 +40,7 @@ type WorkspaceContentProps = {
   onQuery: (query: string) => void
   onDoctorFilter: (id: string) => void
   onNavigate: (page: Page) => void
-  onOpenBooking: (date?: string, practitionerId?: string) => void
+  onOpenBooking: (date?: string, practitionerId?: string, time?: string) => void
   onNewPatient: () => void
   onCreatePatient: () => void
   onImportPatients: () => void
@@ -72,7 +73,7 @@ export function WorkspaceContent(props: WorkspaceContentProps) {
       {page === 'workspace' && <WorkspacePage key={staff.id} apiOnline={clinic.apiOnline} selfId={staff.id} patients={canSeePatients(role) ? patientItems : []} appointments={scheduleItems} notify={clinic.notify} navigationIntent={workspaceIntent} />}
       {/* Врача встречают на расписании; остальных — на «Сегодня». */}
       {page === 'schedule' && canWriteClinical(role) && <Typography className="greeting" sx={{ mb: 1.5 }}>{greeting(staff.fullName)}</Typography>}
-      {page === 'schedule' && canWriteClinical(role) && <DashboardWidgets apiOnline={clinic.apiOnline} role={role} onOpen={onNavigate} />}
+      {page === 'schedule' && canWriteClinical(role) && <DashboardWidgets apiOnline={clinic.apiOnline} role={role} codes={dashboardCodes(role)} onOpen={onNavigate} />}
       {page === 'schedule' && <Schedule role={role} doctorId={doctorId} date={scheduleDate} view={clinic.scheduleView} appointments={scheduleItems} practitioners={practitioners} doctorFilter={doctorFilter} onDoctorFilter={onDoctorFilter} apiOnline={clinic.apiOnline} onDate={clinic.setScheduleDate} onView={clinic.setScheduleView} onBooking={onOpenBooking} onStatus={(item, to) => clinic.changeStatus(item, to, role)} onPatient={onOpenPatientOf} onStartVisit={onStartVisit} onReschedule={onReschedule} onCancel={(item) => clinic.cancelBooking(item, role)} waitlistCount={(item) => registry.matches(item.practitionerId, item.date).length} onWaitlist={onWaitlist} />}
       {page === 'patients' && <PatientsList query={query} setQuery={onQuery} patients={visiblePatients} onPatient={onOpenPatient} onCreate={onCreatePatient} onImport={clinic.apiOnline && canEditPatients(role) ? onImportPatients : undefined} />}
       {page === 'patient' && selectedPatient && <PatientCard key={selectedPatient.id} patient={selectedPatient} role={role} doctorId={doctorId} apiOnline={clinic.apiOnline} appointments={scheduleItems} practitioners={practitioners} revision={clinic.revision}

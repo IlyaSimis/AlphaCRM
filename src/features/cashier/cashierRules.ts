@@ -41,6 +41,22 @@ export function totals(rows: CashierRow[]) {
   return { pending: sum('PENDING'), paid: sum('PAID'), refunded: sum('REFUNDED'), withoutCharge: rows.filter((row) => row.state === 'NO_CHARGE').length, awaitingAmount: rows.filter((row) => row.state === 'AWAITING_AMOUNT').length }
 }
 
+/** Структура принятых оплат по способу; возвращённые оплаты остаются в исходной структуре. */
+export function paymentStructure(rows: CashierRow[]) {
+  const result = {
+    CARD: { count: 0, amountMinor: 0 },
+    SBP: { count: 0, amountMinor: 0 },
+    MANUAL: { count: 0, amountMinor: 0 },
+  }
+  for (const row of rows) {
+    if (row.state !== 'PAID' && row.state !== 'REFUNDED') continue
+    const method = row.charge?.paymentMethod === 'CARD' || row.charge?.paymentMethod === 'SBP' ? row.charge.paymentMethod : 'MANUAL'
+    result[method].count += 1
+    result[method].amountMinor += row.charge?.amountMinor ?? row.appointment.amountMinor ?? 0
+  }
+  return result
+}
+
 /** Счёт без сервера — так же, как его создаёт сервер при завершении приёма. */
 export function localCharge(appointment: ScheduleItem): ChargeItem | null {
   if (!appointment.id) return null
