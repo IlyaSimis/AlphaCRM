@@ -1,4 +1,5 @@
 import type { DashboardWidget } from '../../api/types'
+import type { Page } from '../../app/pages'
 import { formatMoney } from '../schedule/booking'
 
 /** Байты для подписи квоты: 1,5 ГБ, 230 МБ. */
@@ -58,5 +59,29 @@ export function widgetText(widget: DashboardWidget): { label: string; note: stri
       return { label: 'занято на диске', note: widget.secondary == null ? 'квота не задана' : `из ${formatBytes(widget.secondary)}`, accent: false }
     default:
       return null
+  }
+}
+
+/** Раздел, в котором пользователь может увидеть данные за числом на плашке. */
+export function dashboardDestination(code: string): Page | null {
+  switch (code) {
+    case 'appointments.month':
+    case 'appointments.month.noShow':
+    case 'appointments.today': return 'schedule'
+    case 'salary.month': return 'hr-me'
+    case 'documents.unsigned': return 'documents'
+    case 'charges.unpaid':
+    case 'charges.awaitingAmount': return 'cashier'
+    case 'clinical.break-glass': return 'break-glass'
+    case 'revenue.month': return 'sales'
+    case 'tasks.due': return 'registry'
+    case 'workspace.due': return 'workspace'
+    case 'stock.shortage':
+    case 'stock.expiring': return 'stock-balances'
+    case 'marking.queue': return 'stock-marking'
+    case 'delivery.failed':
+    case 'events.backlog': return 'outbox'
+    case 'drive.quota': return 'drive'
+    default: return null
   }
 }

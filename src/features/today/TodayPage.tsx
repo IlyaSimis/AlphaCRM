@@ -1,6 +1,7 @@
 import { AddRounded, PaymentsRounded, PersonAddAlt1Rounded } from '@mui/icons-material'
 import { Box, Button, Stack, Typography } from '@mui/material'
 import type { PatientItem, Practitioner, ScheduleItem, TaskItem } from '../../api/types'
+import type { Page } from '../../app/pages'
 import { formatDay, localToday, shortDate } from '../../shared/dates'
 import { greeting } from '../../shared/greeting'
 import type { Role } from '../../shared/roles'
@@ -23,7 +24,7 @@ type TodayPageProps = {
   dueTasks: TaskItem[]
   tasksError: string
   staffName: (id: string) => string
-  onOpen: (page: 'registry' | 'cashier' | 'workspace' | 'schedule') => void
+  onOpen: (page: Page) => void
   /** Те же сценарии, что на расписании и в списке пациентов, — не отдельные мастера. */
   onNewAppointment: () => void
   onNewPatient: () => void
@@ -56,7 +57,7 @@ export function TodayPage(props: TodayPageProps) {
       <Box className="today-grid">
         <Box className="today-column">
           <TodayNotes apiOnline={apiOnline} selfId={props.selfId} onOpen={() => props.onOpen('workspace')} />
-          <DashboardWidgets apiOnline={apiOnline} codes={['appointments.month', 'salary.month']} stacked />
+          <DashboardWidgets apiOnline={apiOnline} role={role} codes={['appointments.month', 'salary.month']} stacked onOpen={props.onOpen} />
         </Box>
         <Box className="today-column">
           {blocks.tasks && <TodayBlock title="Просроченные задачи" empty="Просроченных задач нет" count={overdue.length} error={props.tasksError} more={{ label: 'Все задачи', onClick: () => props.onOpen('registry') }}>

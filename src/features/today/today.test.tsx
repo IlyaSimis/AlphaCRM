@@ -60,6 +60,20 @@ describe('«Сегодня»', () => {
     expect(await screen.findByRole('heading', { name: 'Дашборды', level: 4 })).toBeInTheDocument()
   })
 
+  it('opens salary details and the schedule from analytical widgets', async () => {
+    withAuth(server(), 'admin', { dashboard })
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByText('API подключён')).toBeInTheDocument()
+
+    await user.click(await screen.findByRole('button', { name: 'Открыть раздел: зарплата за месяц' }))
+    expect(await screen.findByRole('heading', { name: 'Мои условия работы' })).toBeInTheDocument()
+
+    await openPage(user, 'Сегодня')
+    await user.click(await screen.findByRole('button', { name: 'Открыть раздел: приёмы за месяц' }))
+    expect(screen.getByLabelText('День расписания')).toBeInTheDocument()
+  })
+
   it('shows all of today’s appointments in a table and excludes cancelled ones', async () => {
     withAuth(server([], [
       { id: 'a-1', startsAt: '2026-10-20T09:00:00Z', endsAt: '2026-10-20T09:50:00Z', status: 'CONFIRMED', patientId: anna.id, serviceName: 'Первичный приём', practitionerId: '00000000-0000-0000-0000-000000000201' },
