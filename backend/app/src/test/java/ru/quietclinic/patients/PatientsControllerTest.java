@@ -12,6 +12,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import org.assertj.core.api.Assertions;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,7 +46,7 @@ class PatientsControllerTest {
 
   @Test
   void onlyAdministratorUpdatesContactData() throws Exception {
-    var body =
+    String body =
         """
         {"fullName":"Maria Sokolova-Ershova","birthDate":"1996-02-28","phone":"+79250000000"}
         """;
@@ -65,7 +70,7 @@ class PatientsControllerTest {
     mvc.perform(get(MARIA).with(staff.role("CASHIER")))
         .andExpect(jsonPath("$.fullName").value("Maria Sokolova-Ershova"))
         .andExpect(jsonPath("$.contacts").isEmpty())
-        .andExpect(jsonPath("$.birthDate").value(org.hamcrest.Matchers.nullValue()));
+        .andExpect(jsonPath("$.birthDate").value(Matchers.nullValue()));
   }
 
   @Test
@@ -99,18 +104,18 @@ class PatientsControllerTest {
   @Test
   void patientListIsOneAuditEventNotOnePerPatient() throws Exception {
     mvc.perform(get("/api/v1/patients").with(staff.role("MANAGER"))).andExpect(status().isOk());
-    var reasons =
+    List<String> reasons =
         jdbc.queryForList(
             "select reason from audit_event where action = 'PATIENT_LIST_READ'"
                 + " order by occurred_at desc",
             String.class);
-    org.assertj.core.api.Assertions.assertThat(reasons).isNotEmpty();
-    org.assertj.core.api.Assertions.assertThat(reasons.get(0)).startsWith("list:");
+    Assertions.assertThat(reasons).isNotEmpty();
+    Assertions.assertThat(reasons.get(0)).startsWith("list:");
   }
 
   @Test
   void administratorGrantsAndRevokesConsentWithoutDeletingHistory() throws Exception {
-    var created =
+    String created =
         mvc.perform(
                 post("/api/v1/patients")
                     .with(staff.role("ADMINISTRATOR"))
@@ -125,7 +130,7 @@ class PatientsControllerTest {
             .getContentAsString();
     String id = JsonPath.read(created, "$.id");
     String firstConsent = JsonPath.read(created, "$.consents[0].id");
-    var consents = "/api/v1/patients/" + id + "/consents";
+    String consents = "/api/v1/patients/" + id + "/consents";
 
     mvc.perform(
             post(consents)
@@ -141,7 +146,7 @@ class PatientsControllerTest {
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.consents.length()").value(2));
 
-    var revoke = consents + "/" + firstConsent + "/revoke";
+    String revoke = consents + "/" + firstConsent + "/revoke";
     mvc.perform(post(revoke).with(staff.role("ADMINISTRATOR")))
         .andExpect(status().isOk())
         .andExpect(
@@ -157,13 +162,13 @@ class PatientsControllerTest {
 
   @Test
   void searchFindsNameAndEitherPhoneAcrossFormatsWithinClinic() throws Exception {
-    var id =
+    String id =
         createPatient(
             """
             {"fullName":"Search Target","birthDate":"1990-06-06","phone":"+7 912 555-40-01",
              "secondPhone":"8 (903) 555-40-02","consentVersion":"v1.2","consentBasis":"SIGNED_FORM"}
             """);
-    for (var query : java.util.List.of("search target", "89125554001", "912 555", "89035554002")) {
+    for (String query : List.of("search target", "89125554001", "912 555", "89035554002")) {
       mvc.perform(get("/api/v1/patients").param("query", query).with(staff.admin()))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$[*].id").value(hasItem(id)));
@@ -178,7 +183,7 @@ class PatientsControllerTest {
   }
 
   private String createPatient(String fullName, String phone) throws Exception {
-    var created =
+    String created =
         mvc.perform(
                 post("/api/v1/patients")
                     .with(staff.admin())
@@ -198,8 +203,8 @@ class PatientsControllerTest {
 
   @Test
   void registryFieldsAreSavedAndAuditedWithoutNoteText() throws Exception {
-    var id = createPatient("Registry Test", "+79990000001");
-    var registry = "/api/v1/patients/" + id + "/registry";
+    String id = createPatient("Registry Test", "+79990000001");
+    String registry = "/api/v1/patients/" + id + "/registry";
 
     mvc.perform(
             put(registry)
@@ -235,8 +240,8 @@ class PatientsControllerTest {
 
   @Test
   void administratorConnectsTelegramChatIdThatIsNeverShown() throws Exception {
-    var id = createPatient("Telegram Test", "+79990000071");
-    var registry = "/api/v1/patients/" + id + "/registry";
+    String id = createPatient("Telegram Test", "+79990000071");
+    String registry = "/api/v1/patients/" + id + "/registry";
     mvc.perform(
             put(registry)
                 .with(staff.admin())
@@ -251,12 +256,12 @@ class PatientsControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.telegramConnected").value(true))
         .andExpect(content().string(not(containsString("987654321"))));
-    var stored =
+    String stored =
         jdbc.queryForObject(
             "select contact_value from patient_contact where patient_id = ? and type = 'TELEGRAM'",
             String.class,
-            java.util.UUID.fromString(id));
-    org.assertj.core.api.Assertions.assertThat(stored)
+            UUID.fromString(id));
+    Assertions.assertThat(stored)
         .isNotEqualTo("987654321")
         .doesNotContain("987654321")
         .startsWith("dev-v1.");
@@ -279,8 +284,8 @@ class PatientsControllerTest {
 
   @Test
   void warnsWhenPhoneBelongsToAnotherCard() throws Exception {
-    var first = createPatient("Phone First", "+7 912 555-44-33");
-    var second = createPatient("Phone Second", "89125554433");
+    String first = createPatient("Phone First", "+7 912 555-44-33");
+    String second = createPatient("Phone Second", "89125554433");
 
     mvc.perform(get("/api/v1/patients/" + second).with(staff.admin()))
         .andExpect(jsonPath("$.phoneSharedWith[0].id").value(first))
@@ -292,7 +297,7 @@ class PatientsControllerTest {
   @Test
   void patientsOfAnotherClinicAreInvisible() throws Exception {
     SecondClinic.ensure(jdbc);
-    var anna = "/api/v1/patients/00000000-0000-0000-0000-000000000101";
+    String anna = "/api/v1/patients/00000000-0000-0000-0000-000000000101";
     mvc.perform(get("/api/v1/patients").with(staff.admin()))
         .andExpect(jsonPath("$[*].id").value(not(hasItem(SecondClinic.PATIENT))));
     mvc.perform(get("/api/v1/patients/" + SecondClinic.PATIENT).with(staff.admin()))
@@ -301,7 +306,8 @@ class PatientsControllerTest {
     mvc.perform(get(anna).with(staff.admin()))
         .andExpect(jsonPath("$.phoneSharedWith[*].id").value(not(hasItem(SecondClinic.PATIENT))));
 
-    var other = staff.login(SecondClinic.ADMIN_USERNAME, SecondClinic.ADMIN_PASSWORD);
+    StaffSessions.Login other =
+        staff.login(SecondClinic.ADMIN_USERNAME, SecondClinic.ADMIN_PASSWORD);
     mvc.perform(get("/api/v1/patients").with(other))
         .andExpect(jsonPath("$[*].fullName").value(contains(SecondClinic.PATIENT_NAME)));
     mvc.perform(get(anna).with(other)).andExpect(status().isNotFound());
@@ -312,7 +318,7 @@ class PatientsControllerTest {
   }
 
   private String createPatient(String json) throws Exception {
-    var body =
+    String body =
         mvc.perform(
                 post("/api/v1/patients")
                     .with(staff.admin())
@@ -327,8 +333,8 @@ class PatientsControllerTest {
 
   @Test
   void emailSecondPhoneAndPermanentAdministratorAreStoredSeparately() throws Exception {
-    var adminId = staff.userId(StaffSessions.ADMIN);
-    var id =
+    String adminId = staff.userId(StaffSessions.ADMIN);
+    String id =
         createPatient(
             """
             {"fullName":"Contacts Test","birthDate":"1990-03-03","phone":"+70000000301",
@@ -336,7 +342,7 @@ class PatientsControllerTest {
              "assignedStaffId":"%s","consentVersion":"v1.2","consentBasis":"SIGNED_FORM"}
             """
                 .formatted(adminId));
-    var card = "/api/v1/patients/" + id;
+    String card = "/api/v1/patients/" + id;
     // Второй телефон совпадает с основным у Анны Михайловой: предупреждение видно с обеих сторон.
     // Врачу без связи с лечением карточка не видна; менеджер видит административную карточку.
     mvc.perform(get(card).with(staff.doctor(StaffSessions.PETROV)))
@@ -352,11 +358,11 @@ class PatientsControllerTest {
                 .value(hasItem("00000000-0000-0000-0000-000000000101")));
     mvc.perform(get("/api/v1/patients/00000000-0000-0000-0000-000000000101").with(staff.admin()))
         .andExpect(jsonPath("$.phoneSharedWith[*].id").value(hasItem(id)));
-    org.assertj.core.api.Assertions.assertThat(
+    Assertions.assertThat(
             jdbc.queryForList(
                 "select type from patient_contact where patient_id = ?",
                 String.class,
-                java.util.UUID.fromString(id)))
+                UUID.fromString(id)))
         .containsExactlyInAnyOrder("PHONE", "EMAIL", "SECOND_PHONE");
 
     // Пустые необязательные поля убирают контакт, а не хранят пустую строку; в аудите — имена
@@ -375,23 +381,21 @@ class PatientsControllerTest {
         .andExpect(jsonPath("$.secondPhone").doesNotExist())
         .andExpect(jsonPath("$.assignedStaff").doesNotExist())
         .andExpect(jsonPath("$.phoneSharedWith").isEmpty());
-    org.assertj.core.api.Assertions.assertThat(
+    Assertions.assertThat(
             jdbc.queryForList(
                 "select contact_value from patient_contact where patient_id = ?",
                 String.class,
-                java.util.UUID.fromString(id)))
+                UUID.fromString(id)))
         .singleElement()
         .satisfies(
             value ->
-                org.assertj.core.api.Assertions.assertThat(value)
-                    .doesNotContain("70000000301")
-                    .startsWith("dev-v1."));
-    org.assertj.core.api.Assertions.assertThat(
+                Assertions.assertThat(value).doesNotContain("70000000301").startsWith("dev-v1."));
+    Assertions.assertThat(
             jdbc.queryForObject(
                 "select reason from audit_event where action = 'PATIENT_UPDATED'"
                     + " and object_id = ? order by occurred_at desc limit 1",
                 String.class,
-                java.util.UUID.fromString(id)))
+                UUID.fromString(id)))
         .isEqualTo("email,secondPhone,assignedStaff")
         .doesNotContain("@")
         .doesNotContain("916");
@@ -399,19 +403,19 @@ class PatientsControllerTest {
 
   @Test
   void permanentAdministratorMustBeAnActiveAdministratorOfTheClinic() throws Exception {
-    var body =
+    String body =
         """
         {"fullName":"Assignee Test","birthDate":"1990-04-04","phone":"+70000000302",
          "assignedStaffId":"%s"}
         """;
-    var id =
+    String id =
         createPatient(
             """
             {"fullName":"Assignee Test","birthDate":"1990-04-04","phone":"+70000000302",
              "consentVersion":"v1.2","consentBasis":"SIGNED_FORM"}
             """);
-    var card = "/api/v1/patients/" + id;
-    var cashierId = staff.userId("t.cashier");
+    String card = "/api/v1/patients/" + id;
+    String cashierId = staff.userId("t.cashier");
     mvc.perform(
             put(card)
                 .with(staff.admin())
@@ -420,10 +424,10 @@ class PatientsControllerTest {
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("INVALID_ASSIGNED_STAFF"));
     SecondClinic.ensure(jdbc);
-    var foreignAdmin =
+    UUID foreignAdmin =
         jdbc.queryForObject(
             "select id from staff_user where username = ?",
-            java.util.UUID.class,
+            UUID.class,
             SecondClinic.ADMIN_USERNAME);
     mvc.perform(
             put(card)
@@ -446,9 +450,8 @@ class PatientsControllerTest {
 
     // Отключённый администратор остаётся привязанным, но заново его выбрать нельзя.
     staff.create("spare.admin", "Spare Administrator", "ADMINISTRATOR", "", "spare-admin-1");
-    var spare =
-        jdbc.queryForObject(
-                "select id from staff_user where username = 'spare.admin'", java.util.UUID.class)
+    String spare =
+        jdbc.queryForObject("select id from staff_user where username = 'spare.admin'", UUID.class)
             .toString();
     mvc.perform(
             put(card)
@@ -468,7 +471,7 @@ class PatientsControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body.formatted(spare)))
         .andExpect(status().isOk());
-    var other =
+    String other =
         createPatient(
             """
             {"fullName":"Assignee Other","birthDate":"1990-05-05","phone":"+70000000303",
@@ -491,7 +494,7 @@ class PatientsControllerTest {
 
   @Test
   void storesEveryExtendedProfileFieldAndKeepsItForLegacyUpdates() throws Exception {
-    var created =
+    String created =
         mvc.perform(
                 post("/api/v1/patients")
                     .with(staff.admin())
@@ -521,16 +524,14 @@ class PatientsControllerTest {
             .getResponse()
             .getContentAsString();
     String id = JsonPath.read(created, "$.id");
-    var storedProfile =
+    String storedProfile =
         jdbc.queryForObject(
-            "select profile from patient where id = ?",
-            String.class,
-            java.util.UUID.fromString(id));
-    org.assertj.core.api.Assertions.assertThat(storedProfile)
+            "select profile from patient where id = ?", String.class, UUID.fromString(id));
+    Assertions.assertThat(storedProfile)
         .startsWith("dev-v1.")
         .doesNotContain("4523 293608", "123-456-789 01", "Борис Симис", "После 18:00");
-    java.util.Map<String, Object> profile = JsonPath.read(created, "$.profile");
-    org.assertj.core.api.Assertions.assertThat(profile)
+    Map<String, Object> profile = JsonPath.read(created, "$.profile");
+    Assertions.assertThat(profile)
         .containsEntry("lastName", "Симис")
         .containsEntry("firstName", "Илья")
         .containsEntry("middleName", "Борисович")
@@ -557,14 +558,14 @@ class PatientsControllerTest {
         .containsEntry("snils", "123-456-789 01")
         .containsEntry("inn", "771234567890")
         .containsEntry("referralAgent", "Партнёр")
-        .containsEntry("tags", java.util.List.of("vip", "family"))
+        .containsEntry("tags", List.of("vip", "family"))
         .containsEntry("ambulatoryNumber", "0328")
         .containsEntry("ambulatoryNotes", "После 18:00")
         .containsEntry("emailNotifications", true)
         .containsEntry("smsNotifications", false)
         .containsEntry("messengerNotifications", true)
         .containsEntry("pushNotifications", false);
-    org.assertj.core.api.Assertions.assertThat(profile.get("representatives").toString())
+    Assertions.assertThat(profile.get("representatives").toString())
         .contains("Борис Симис")
         .contains("Отец")
         .contains("\"primary\":true");

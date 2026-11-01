@@ -52,14 +52,14 @@ class OpenAiCompatibleAssistantGateway implements AssistantGateway {
   public GatewayResult navigate(String query, String currentPage, List<Destination> destinations) {
     if (!enabled())
       throw conflict("ASSISTANT_NOT_CONFIGURED", "AI navigation provider is not configured");
-    var system =
+    String system =
         "Ты навигатор AlphaCRM. Выбери ровно один destinationId из каталога по запросу на русском."
             + " Ничего не создавай и не изменяй. Не выдумывай страницы. Ответь только JSON"
             + " {\"destinationId\":\"id\"}. Если подходят специальные представления задач,"
             + " выбирай их перед общей страницей. Текущая страница: "
             + currentPage;
-    var user = Map.of("query", query, "destinations", destinations);
-    var body =
+    Map<String, Object> user = Map.of("query", query, "destinations", destinations);
+    Map<String, Object> body =
         Map.of(
             "model",
             model,
@@ -71,7 +71,7 @@ class OpenAiCompatibleAssistantGateway implements AssistantGateway {
             List.of(
                 Map.of("role", "system", "content", system),
                 Map.of("role", "user", "content", json.writeValueAsString(user))));
-    var request =
+    HttpRequest request =
         HttpRequest.newBuilder(URI.create(apiUrl + "/chat/completions"))
             .timeout(Duration.ofSeconds(30))
             .header("Authorization", "Bearer " + apiKey)
@@ -79,14 +79,15 @@ class OpenAiCompatibleAssistantGateway implements AssistantGateway {
             .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body)))
             .build();
     try {
-      var response = http.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+      HttpResponse<String> response =
+          http.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
       if (response.statusCode() < 200 || response.statusCode() >= 300) {
         throw conflict("ASSISTANT_PROVIDER_ERROR", "AI provider rejected the request");
       }
-      var root = json.readValue(response.body(), JsonNode.class);
-      var content = root.path("choices").path(0).path("message").required("content").asText();
-      var answer = json.readValue(content, JsonNode.class);
-      var usage = root.path("usage");
+      JsonNode root = json.readValue(response.body(), JsonNode.class);
+      String content = root.path("choices").path(0).path("message").required("content").asText();
+      JsonNode answer = json.readValue(content, JsonNode.class);
+      JsonNode usage = root.path("usage");
       return new GatewayResult(
           answer.required("destinationId").asText(),
           usage.path("prompt_tokens").asLong(0),

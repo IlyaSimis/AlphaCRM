@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 import com.jayway.jsonpath.JsonPath;
 import java.time.Duration;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,7 +35,7 @@ class CareRelationshipServiceTest {
   @Autowired CareRelationshipRepository relationships;
 
   private UUID newPatient() throws Exception {
-    var body =
+    String body =
         mvc.perform(
                 post("/api/v1/patients")
                     .with(staff.role("ADMINISTRATOR"))
@@ -58,7 +59,7 @@ class CareRelationshipServiceTest {
 
   @Test
   void createsOneActiveRelationshipForAYearAndIsIdempotent() throws Exception {
-    var patient = newPatient();
+    UUID patient = newPatient();
     assertThat(service.isActive(PETROV, patient)).isFalse();
 
     service.ensureCareRelationship(PETROV, patient);
@@ -66,7 +67,7 @@ class CareRelationshipServiceTest {
 
     assertThat(count(patient)).isEqualTo(1);
     assertThat(service.isActive(PETROV, patient)).isTrue();
-    var relationship =
+    Optional<CareRelationship> relationship =
         relationships.findAll().stream().filter(r -> r.patientId.equals(patient)).findFirst();
     assertThat(relationship).isPresent();
     assertThat(Duration.between(relationship.get().validFrom, relationship.get().validUntil))

@@ -14,6 +14,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -52,7 +53,7 @@ public class DomainEventRelay {
 
   /** Все события, срок повтора которых наступил. Возвращает число обработанных событий. */
   public int runOnce(Instant now) {
-    var due =
+    List<UUID> due =
         jdbc.queryForList(
             "select id from domain_event_outbox where status = 'PENDING' and next_attempt_at <= ?"
                 + " order by occurred_at limit 100",
@@ -64,11 +65,12 @@ public class DomainEventRelay {
 
   /** Раздать одно событие всем его потребителям. */
   public void dispatch(UUID eventId) {
-    var rows = jdbc.query("select * from domain_event_outbox where id = ?", this::event, eventId);
+    List<DomainEvent> rows =
+        jdbc.query("select * from domain_event_outbox where id = ?", this::event, eventId);
     if (rows.isEmpty()) return;
-    var event = rows.get(0);
+    DomainEvent event = rows.get(0);
     String error = null;
-    for (var handler : handlers) {
+    for (DomainEventHandler handler : handlers) {
       if (!handler.types().contains(event.type())) continue;
       try {
         newTransaction.executeWithoutResult(status -> deliver(handler, event));
@@ -85,11 +87,11 @@ public class DomainEventRelay {
           Timestamp.from(Instant.now()),
           eventId);
     } else {
-      var attempts =
+      int attempts =
           jdbc.queryForObject(
                   "select attempts from domain_event_outbox where id = ?", Integer.class, eventId)
               + 1;
-      var pause = Duration.ofSeconds(Math.min(3600, 30L * (1L << Math.min(attempts, 7))));
+      Duration pause = Duration.ofSeconds(Math.min(3600, 30L * (1L << Math.min(attempts, 7))));
       jdbc.update(
           "update domain_event_outbox set attempts = ?, last_error = ?, next_attempt_at = ?,"
               + " status = ? where id = ?",
@@ -111,8 +113,8 @@ public class DomainEventRelay {
     } catch (DuplicateKeyException ex) {
       return; // уже обработано: повтор безопасен
     }
-    var previous = SecurityContextHolder.getContext();
-    var context = SecurityContextHolder.createEmptyContext();
+    SecurityContext previous = SecurityContextHolder.getContext();
+    SecurityContext context = SecurityContextHolder.createEmptyContext();
     context.setAuthentication(
         UsernamePasswordAuthenticationToken.authenticated(
             new SystemPrincipal(event.clinicId(), event.actorId()),

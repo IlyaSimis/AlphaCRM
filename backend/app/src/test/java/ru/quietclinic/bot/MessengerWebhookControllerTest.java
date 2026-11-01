@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.jayway.jsonpath.JsonPath;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.ThreadLocalRandom;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -47,8 +48,8 @@ class MessengerWebhookControllerTest {
 
   @Test
   void webhookRequiresActiveIntegrationAndItsOwnSecret() throws Exception {
-    var key = configure("TELEGRAM", TELEGRAM_SECRET);
-    var body = "{\"update_id\":1}";
+    String key = configure("TELEGRAM", TELEGRAM_SECRET);
+    String body = "{\"update_id\":1}";
     mvc.perform(post(path("TELEGRAM", key)).contentType(MediaType.APPLICATION_JSON).content(body))
         .andExpect(status().isUnauthorized())
         .andExpect(jsonPath("$.code").value("MESSENGER_WEBHOOK_UNAUTHORIZED"));
@@ -77,9 +78,9 @@ class MessengerWebhookControllerTest {
 
   @Test
   void telegramLinkAndReminderCallbackRunInsideClinic() throws Exception {
-    var key = configure("TELEGRAM", TELEGRAM_SECRET);
-    var linked = patientAndLink("TELEGRAM", staff.admin());
-    var chatId = externalId();
+    String key = configure("TELEGRAM", TELEGRAM_SECRET);
+    LinkedPatient linked = patientAndLink("TELEGRAM", staff.admin());
+    String chatId = externalId();
     mvc.perform(
             post(path("TELEGRAM", key))
                 .header(MessengerWebhookFilter.TELEGRAM_HEADER, TELEGRAM_SECRET)
@@ -95,7 +96,7 @@ class MessengerWebhookControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.telegramConnected").value(true));
 
-    var appointment = book("TELEGRAM", chatId);
+    String appointment = book("TELEGRAM", chatId);
     mvc.perform(
             post(path("TELEGRAM", key))
                 .header(MessengerWebhookFilter.TELEGRAM_HEADER, TELEGRAM_SECRET)
@@ -118,9 +119,9 @@ class MessengerWebhookControllerTest {
 
   @Test
   void maxLinkAndCallbacksUseMaxUserId() throws Exception {
-    var key = configure("MAX", MAX_SECRET);
-    var linked = patientAndLink("MAX", staff.admin());
-    var userId = externalId();
+    String key = configure("MAX", MAX_SECRET);
+    LinkedPatient linked = patientAndLink("MAX", staff.admin());
+    String userId = externalId();
     mvc.perform(
             post(path("MAX", key))
                 .header(MessengerWebhookFilter.MAX_HEADER, MAX_SECRET)
@@ -136,8 +137,8 @@ class MessengerWebhookControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.maxConnected").value(true));
 
-    var appointment = book("MAX", userId);
-    for (var action : List.of("yes", "no", "no")) {
+    String appointment = book("MAX", userId);
+    for (String action : List.of("yes", "no", "no")) {
       mvc.perform(
               post(path("MAX", key))
                   .header(MessengerWebhookFilter.MAX_HEADER, MAX_SECRET)
@@ -163,10 +164,11 @@ class MessengerWebhookControllerTest {
 
   @Test
   void webhookCannotConsumeAnotherClinicsLink() throws Exception {
-    var key = configure("TELEGRAM", TELEGRAM_SECRET);
+    String key = configure("TELEGRAM", TELEGRAM_SECRET);
     SecondClinic.ensure(jdbc);
-    var secondAdmin = staff.login(SecondClinic.ADMIN_USERNAME, SecondClinic.ADMIN_PASSWORD);
-    var linked = patientAndLink("TELEGRAM", secondAdmin);
+    StaffSessions.Login secondAdmin =
+        staff.login(SecondClinic.ADMIN_USERNAME, SecondClinic.ADMIN_PASSWORD);
+    LinkedPatient linked = patientAndLink("TELEGRAM", secondAdmin);
     mvc.perform(
             post(path("TELEGRAM", key))
                 .header(MessengerWebhookFilter.TELEGRAM_HEADER, TELEGRAM_SECRET)
@@ -182,8 +184,9 @@ class MessengerWebhookControllerTest {
   }
 
   private String configure(String type, String webhookSecret) throws Exception {
-    var route = "/api/v1/integrations/" + type.toLowerCase(java.util.Locale.ROOT);
-    var apiUrl = "MAX".equals(type) ? "https://platform-api2.max.ru" : "https://api.telegram.org";
+    String route = "/api/v1/integrations/" + type.toLowerCase(Locale.ROOT);
+    String apiUrl =
+        "MAX".equals(type) ? "https://platform-api2.max.ru" : "https://api.telegram.org";
     mvc.perform(
             put(route + "/settings")
                 .with(staff.admin())
@@ -192,18 +195,17 @@ class MessengerWebhookControllerTest {
                     "{\"apiUrl\":\""
                         + apiUrl
                         + "\",\"publicUrl\":\"https://example.test/"
-                        + type.toLowerCase(java.util.Locale.ROOT)
+                        + type.toLowerCase(Locale.ROOT)
                         + "\",\"relayUrl\":\"\",\"reminderButtons\":true}"))
         .andExpect(status().isOk());
     mvc.perform(
             put(route + "/secret")
                 .with(staff.admin())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(
-                    "{\"botToken\":\"" + type.toLowerCase(java.util.Locale.ROOT) + "-token\"}"))
+                .content("{\"botToken\":\"" + type.toLowerCase(Locale.ROOT) + "-token\"}"))
         .andExpect(status().isOk());
     // Секрет webhook обновляется отдельно: write-only bot token при этом сохраняется.
-    var response =
+    String response =
         mvc.perform(
                 put(route + "/secret")
                     .with(staff.admin())
@@ -219,8 +221,8 @@ class MessengerWebhookControllerTest {
 
   private LinkedPatient patientAndLink(String channel, RequestPostProcessor administrator)
       throws Exception {
-    var suffix = externalId();
-    var created =
+    String suffix = externalId();
+    String created =
         mvc.perform(
                 post("/api/v1/patients")
                     .with(administrator)
@@ -236,7 +238,7 @@ class MessengerWebhookControllerTest {
             .getResponse()
             .getContentAsString();
     String patientId = JsonPath.read(created, "$.id");
-    var link =
+    String link =
         mvc.perform(
                 post("/api/v1/patients/" + patientId + "/messenger/link")
                     .with(administrator)
@@ -250,14 +252,14 @@ class MessengerWebhookControllerTest {
   }
 
   private String book(String channel, String externalId) throws Exception {
-    var slotsResponse =
+    String slotsResponse =
         mvc.perform(get("/api/v1/messenger/practitioners/" + PETROV + "/slots").with(legacyBot()))
             .andExpect(status().isOk())
             .andReturn()
             .getResponse()
             .getContentAsString();
     List<String> slots = JsonPath.read(slotsResponse, "$[*].startsAt");
-    var created =
+    String created =
         mvc.perform(
                 post("/api/v1/messenger/appointments")
                     .with(legacyBot())
@@ -289,7 +291,7 @@ class MessengerWebhookControllerTest {
   }
 
   private static String path(String type, String key) {
-    return "/api/v1/integrations/" + type.toLowerCase(java.util.Locale.ROOT) + "/events/" + key;
+    return "/api/v1/integrations/" + type.toLowerCase(Locale.ROOT) + "/events/" + key;
   }
 
   private static String externalId() {

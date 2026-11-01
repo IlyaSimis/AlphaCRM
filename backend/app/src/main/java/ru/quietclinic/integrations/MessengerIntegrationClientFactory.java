@@ -35,7 +35,7 @@ public class MessengerIntegrationClientFactory {
         .filter(integration -> "ACTIVE".equals(integration.status()))
         .flatMap(
             integration -> {
-              var secrets = load(integration).secrets();
+              MessengerSecrets secrets = load(integration).secrets();
               if (secrets == null
                   || secrets.webhookSecret() == null
                   || secrets.webhookSecret().isBlank()) {
@@ -47,12 +47,12 @@ public class MessengerIntegrationClientFactory {
   }
 
   void requireValid(IntegrationRecord integration) {
-    var loaded = load(integration);
+    MessengerIntegration loaded = load(integration);
     if (loaded.secrets() == null) {
       throw conflict("INTEGRATION_SECRET_MISSING", "Integration secret is required");
     }
-    var settings = loaded.settings();
-    var secrets = loaded.secrets();
+    MessengerSettings settings = loaded.settings();
+    MessengerSecrets secrets = loaded.secrets();
     if (IntegrationService.TELEGRAM.equals(integration.type()) && !settings.relayUrl().isEmpty()) {
       if (secrets.relaySecret().isBlank()) {
         throw conflict("INTEGRATION_SECRET_MISSING", "Telegram relay secret is required");
@@ -63,11 +63,11 @@ public class MessengerIntegrationClientFactory {
   }
 
   private MessengerIntegration load(IntegrationRecord integration) {
-    var settings = json.readValue(integration.settings(), MessengerSettings.class);
+    MessengerSettings settings = json.readValue(integration.settings(), MessengerSettings.class);
     MessengerSecrets secrets = null;
     if (integration.activeSecretVersion() != null) {
-      var version = integration.activeSecretVersion();
-      var sealed =
+      Integer version = integration.activeSecretVersion();
+      IntegrationSecretRecord sealed =
           repository
               .findSecret(integration.id(), version)
               .orElseThrow(

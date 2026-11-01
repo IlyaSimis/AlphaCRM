@@ -20,7 +20,7 @@ class CorrelationIdFilter extends OncePerRequestFilter {
   protected void doFilterInternal(
       HttpServletRequest request, HttpServletResponse response, FilterChain chain)
       throws ServletException, IOException {
-    var correlation = request.getHeader("X-Correlation-Id");
+    String correlation = request.getHeader("X-Correlation-Id");
     if (correlation == null || correlation.isBlank() || correlation.length() > 80) {
       correlation = UUID.randomUUID().toString();
     }

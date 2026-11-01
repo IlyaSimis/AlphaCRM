@@ -11,6 +11,7 @@ import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -37,18 +38,18 @@ class AppointmentStatsService {
   AppointmentStatsView stats(LocalDate from, LocalDate to, UUID practitionerId) {
     requirePermission(Permission.ANALYTICS_READ, Permission.ANALYTICS_READ_OWN);
     // Врач видит аналитику только своих приёмов.
-    var practitioner = can(Permission.ANALYTICS_READ) ? practitionerId : actorId();
+    UUID practitioner = can(Permission.ANALYTICS_READ) ? practitionerId : actorId();
     if (to.isBefore(from)) {
       throw conflict("INVALID_RANGE", "Period end must not be before its start");
     }
     if (ChronoUnit.DAYS.between(from, to) >= MAX_RANGE_DAYS) {
       throw conflict("RANGE_TOO_LONG", "Period must not exceed one year");
     }
-    var inRange =
+    List<Appointment> inRange =
         appointments.findByStartsAtGreaterThanEqualAndStartsAtLessThanOrderByStartsAt(
             time.startOf(from), time.startOf(to.plusDays(1)));
-    var ownPractitioners = clinic.practitionerIds();
-    var filtered =
+    Set<UUID> ownPractitioners = clinic.practitionerIds();
+    List<Appointment> filtered =
         inRange.stream()
             .filter(a -> ownPractitioners.contains(a.practitionerId))
             .filter(a -> practitioner == null || a.practitionerId.equals(practitioner))

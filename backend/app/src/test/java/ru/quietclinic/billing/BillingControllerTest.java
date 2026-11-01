@@ -33,7 +33,7 @@ class BillingControllerTest {
   }
 
   private String book(String startsAt, String endsAt) throws Exception {
-    var body =
+    String body =
         mvc.perform(
                 post("/api/v1/appointments")
                     .with(staff.role("ADMINISTRATOR"))
@@ -73,10 +73,10 @@ class BillingControllerTest {
 
   @Test
   void administratorIssuesOneChargeAndPaymentNeedsFinanceRole() throws Exception {
-    var appointment = book("2026-11-24T09:00:00Z", "2026-11-24T09:30:00Z");
+    String appointment = book("2026-11-24T09:00:00Z", "2026-11-24T09:30:00Z");
 
     createCharge("DOCTOR", appointment).andExpect(status().isForbidden());
-    var created =
+    String created =
         createCharge("ADMINISTRATOR", appointment)
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.status").value("PENDING"))

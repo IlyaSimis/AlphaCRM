@@ -49,31 +49,31 @@ final class ScopedMangoClient implements MangoClient {
     if (!configured()) {
       throw conflict("TELEPHONY_NOT_CONFIGURED", "Mango integration is not configured");
     }
-    var from = new LinkedHashMap<String, Object>();
+    Map<String, Object> from = new LinkedHashMap<>();
     from.put("extension", extension);
-    var payload = new LinkedHashMap<String, Object>();
+    Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("command_id", commandId);
     payload.put("from", from);
     payload.put("to_number", phone);
     if (!settings.lineNumber().isEmpty()) payload.put("line_number", settings.lineNumber());
-    var body = json.writeValueAsString(payload);
-    var form =
+    String body = json.writeValueAsString(payload);
+    Map<String, String> form =
         Map.of(
             "vpbx_api_key", secrets.apiKey(),
             "sign", sign(secrets.apiKey(), body, secrets.apiSalt()),
             "json", body);
-    var encoded =
+    String encoded =
         form.entrySet().stream()
             .map(entry -> encode(entry.getKey()) + "=" + encode(entry.getValue()))
             .collect(Collectors.joining("&"));
-    var request =
+    HttpRequest request =
         HttpRequest.newBuilder(URI.create(settings.apiUrl() + "/vpbx/commands/callback"))
             .timeout(Duration.ofSeconds(10))
             .header("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
             .POST(HttpRequest.BodyPublishers.ofString(encoded, StandardCharsets.UTF_8))
             .build();
     try {
-      var response = http.send(request, HttpResponse.BodyHandlers.discarding());
+      HttpResponse<Void> response = http.send(request, HttpResponse.BodyHandlers.discarding());
       if (response.statusCode() < 200 || response.statusCode() >= 300) {
         throw conflict("MANGO_REQUEST_REJECTED", "Mango rejected the call request");
       }
@@ -87,7 +87,7 @@ final class ScopedMangoClient implements MangoClient {
 
   private static String sign(String key, String body, String salt) {
     try {
-      var digest = MessageDigest.getInstance("SHA-256");
+      MessageDigest digest = MessageDigest.getInstance("SHA-256");
       return HexFormat.of()
           .formatHex(digest.digest((key + body + salt).getBytes(StandardCharsets.UTF_8)));
     } catch (NoSuchAlgorithmException error) {

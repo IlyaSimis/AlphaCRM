@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import ru.quietclinic.integrations.MangoClient;
+import ru.quietclinic.platform.PlatformConfig;
 
 /** Звонки сотрудников и отдельные подписанные уведомления Mango. */
 @RestController
@@ -27,7 +29,7 @@ public class TelephonyController {
 
   @GetMapping("/api/v1/telephony/status")
   StatusView status() {
-    var client = mango.forClinic(ru.quietclinic.platform.PlatformConfig.clinicId());
+    MangoClient client = mango.forClinic(PlatformConfig.clinicId());
     return new StatusView(client.configured(), client.defaultExtension());
   }
 

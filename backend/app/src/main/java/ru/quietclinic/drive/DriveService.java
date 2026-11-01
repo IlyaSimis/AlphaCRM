@@ -9,6 +9,7 @@ import static ru.quietclinic.platform.PlatformConfig.payloadTooLarge;
 import static ru.quietclinic.platform.PlatformConfig.requirePermission;
 import static ru.quietclinic.platform.PlatformConfig.staffId;
 
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
@@ -35,6 +36,7 @@ import ru.quietclinic.audit.AuditService;
 import ru.quietclinic.contracts.LibreOfficePdfConverter;
 import ru.quietclinic.platform.EncryptionService;
 import ru.quietclinic.platform.Permission;
+import ru.quietclinic.platform.PlatformConfig;
 import ru.quietclinic.platform.RolePermissions;
 
 /**
@@ -99,8 +101,8 @@ class DriveService {
   @Transactional(readOnly = true)
   NodeDetails root() {
     requirePermission(Permission.DRIVE_USE);
-    var names = staffNames();
-    var children =
+    Map<UUID, String> names = staffNames();
+    List<NodeView> children =
         nodes
             .findByClinicIdAndParentIdIsNullAndOwnerIdAndDeletedAtIsNull(clinicId(), staffId())
             .stream()
@@ -114,10 +116,10 @@ class DriveService {
   @Transactional(readOnly = true)
   NodeDetails node(UUID id) {
     requirePermission(Permission.DRIVE_USE);
-    var node = live(id);
-    var permission = require(node, "VIEW");
-    var names = staffNames();
-    var children =
+    DriveNode node = live(id);
+    String permission = require(node, "VIEW");
+    Map<UUID, String> names = staffNames();
+    List<NodeView> children =
         node.folder()
             ? nodes.findByClinicIdAndParentIdAndDeletedAtIsNull(clinicId(), node.id).stream()
                 .map(child -> view(child, max(permission, ownShares(child)), names))
@@ -131,17 +133,18 @@ class DriveService {
   @Transactional(readOnly = true)
   List<NodeView> sharedWithMe() {
     requirePermission(Permission.DRIVE_USE);
-    var me = staffId();
-    var now = Instant.now();
-    var principals = new ArrayList<String>(currentRoles());
+    UUID me = staffId();
+    Instant now = Instant.now();
+    List<String> principals = new ArrayList<>(currentRoles());
     principals.add(me.toString());
-    var direct =
-        new ArrayList<DriveShare>(
+    List<DriveShare> direct =
+        new ArrayList<>(
             shares.findByPrincipalTypeInAndPrincipalIdIn(Set.of("USER", "ROLE"), principals));
     direct.addAll(shares.findByPrincipalType("CLINIC"));
-    var ids = direct.stream().filter(s -> s.active(now)).map(s -> s.nodeId).distinct().toList();
+    List<UUID> ids =
+        direct.stream().filter(s -> s.active(now)).map(s -> s.nodeId).distinct().toList();
     if (ids.isEmpty()) return List.of();
-    var names = staffNames();
+    Map<UUID, String> names = staffNames();
     return nodes.findByClinicIdAndIdInAndDeletedAtIsNull(clinicId(), ids).stream()
         .filter(n -> !me.equals(n.ownerId))
         .filter(n -> !inTrash(n))
@@ -155,7 +158,7 @@ class DriveService {
   @Transactional(readOnly = true)
   List<NodeView> trash() {
     requirePermission(Permission.DRIVE_USE);
-    var names = staffNames();
+    Map<UUID, String> names = staffNames();
     return nodes.findByClinicIdAndDeletedAtIsNotNull(clinicId()).stream()
         .map(n -> view(n, effective(n), names))
         .filter(v -> "MANAGE".equals(v.permission()))
@@ -166,9 +169,9 @@ class DriveService {
   @Transactional(readOnly = true)
   List<VersionView> versions(UUID id) {
     requirePermission(Permission.DRIVE_USE);
-    var node = live(id);
+    DriveNode node = live(id);
     require(node, "VIEW");
-    var names = staffNames();
+    Map<UUID, String> names = staffNames();
     return versions.findByNodeIdOrderByNumberDesc(node.id).stream()
         .map(
             v ->
@@ -187,7 +190,7 @@ class DriveService {
   @Transactional(readOnly = true)
   FileContent content(UUID id, Integer version) {
     requirePermission(Permission.DRIVE_USE);
-    var node = live(id);
+    DriveNode node = live(id);
     require(node, "VIEW");
     return read(node, version, "direct");
   }
@@ -203,10 +206,10 @@ class DriveService {
   @Transactional
   NodeView createFolder(FolderRequest request) {
     requirePermission(Permission.DRIVE_USE);
-    var name = cleanName(request.name());
+    String name = cleanName(request.name());
     if (request.parentId() != null) requireFolder(request.parentId(), "EDIT");
     requireFreeName(request.parentId(), name, null);
-    var folder =
+    DriveNode folder =
         nodes.save(
             new DriveNode(clinicId(), request.parentId(), DriveNode.FOLDER, name, staffId()));
     audit.record(actor(), "DRIVE_FOLDER_CREATED", "DRIVE_NODE", folder.id, "ALLOWED", null);
@@ -216,10 +219,11 @@ class DriveService {
   @Transactional
   NodeView upload(UUID parentId, String filename, String contentType, byte[] bytes) {
     requirePermission(Permission.DRIVE_USE);
-    var name = cleanName(filename);
+    String name = cleanName(filename);
     if (parentId != null) requireFolder(parentId, "EDIT");
     requireFreeName(parentId, name, null);
-    var file = nodes.save(new DriveNode(clinicId(), parentId, DriveNode.FILE, name, staffId()));
+    DriveNode file =
+        nodes.save(new DriveNode(clinicId(), parentId, DriveNode.FILE, name, staffId()));
     store(file, contentType, bytes);
     audit.record(actor(), "DRIVE_FILE_UPLOADED", "DRIVE_NODE", file.id, "ALLOWED", "v1");
     return view(file, "MANAGE", staffNames());
@@ -228,9 +232,9 @@ class DriveService {
   @Transactional
   NodeView newVersion(UUID id, String contentType, byte[] bytes) {
     requirePermission(Permission.DRIVE_USE);
-    var file = live(id);
+    DriveNode file = live(id);
     if (file.folder()) throw conflict("NOT_A_FILE", "Only a file has versions");
-    var permission = require(file, "EDIT");
+    String permission = require(file, "EDIT");
     store(file, contentType, bytes);
     audit.record(
         actor(),
@@ -245,9 +249,9 @@ class DriveService {
   @Transactional
   NodeView update(UUID id, NodeUpdateRequest request) {
     requirePermission(Permission.DRIVE_USE);
-    var node = live(id);
-    var permission = require(node, "EDIT");
-    var targetParent = node.parentId;
+    DriveNode node = live(id);
+    String permission = require(node, "EDIT");
+    UUID targetParent = node.parentId;
     if (Boolean.TRUE.equals(request.moveToRoot()) || request.parentId() != null) {
       require(node, "MANAGE");
       if (Boolean.TRUE.equals(request.moveToRoot())) {
@@ -257,8 +261,8 @@ class DriveService {
         }
         targetParent = null;
       } else {
-        var target = requireFolder(request.parentId(), "EDIT");
-        for (var cursor = target; cursor != null; cursor = parentOf(cursor)) {
+        DriveNode target = requireFolder(request.parentId(), "EDIT");
+        for (DriveNode cursor = target; cursor != null; cursor = parentOf(cursor)) {
           if (cursor.id.equals(node.id)) {
             throw conflict("DRIVE_MOVE_INTO_ITSELF", "A folder cannot be moved into itself");
           }
@@ -266,11 +270,11 @@ class DriveService {
         targetParent = target.id;
       }
     }
-    var name = request.name() == null ? node.name : cleanName(request.name());
+    String name = request.name() == null ? node.name : cleanName(request.name());
     if (!Objects.equals(targetParent, node.parentId) || !name.equalsIgnoreCase(node.name)) {
       requireFreeName(targetParent, name, node.id);
     }
-    var moved = !Objects.equals(targetParent, node.parentId);
+    boolean moved = !Objects.equals(targetParent, node.parentId);
     node.parentId = targetParent;
     node.name = name;
     node.updatedAt = Instant.now();
@@ -287,7 +291,7 @@ class DriveService {
   @Transactional
   NodeView delete(UUID id) {
     requirePermission(Permission.DRIVE_USE);
-    var node = live(id);
+    DriveNode node = live(id);
     require(node, "MANAGE");
     node.deletedAt = Instant.now();
     node.deletedBy = staffId();
@@ -298,10 +302,10 @@ class DriveService {
   @Transactional
   NodeView restore(UUID id) {
     requirePermission(Permission.DRIVE_USE);
-    var node = own(id);
+    DriveNode node = own(id);
     if (node.deletedAt == null) return view(node, effective(node), staffNames());
     if (!"MANAGE".equals(effective(node))) throw forbidden("DRIVE_FORBIDDEN", "Not allowed");
-    var parent = parentOf(node);
+    DriveNode parent = parentOf(node);
     if (parent != null && inTrash(parent)) {
       throw conflict("DRIVE_PARENT_IN_TRASH", "Restore the parent folder first");
     }
@@ -317,9 +321,9 @@ class DriveService {
   @Transactional(readOnly = true)
   List<ShareView> shares(UUID id) {
     requirePermission(Permission.DRIVE_USE);
-    var node = live(id);
+    DriveNode node = live(id);
     require(node, "MANAGE");
-    var names = staffNames();
+    Map<UUID, String> names = staffNames();
     return shares.findByNodeIdOrderByCreatedAt(node.id).stream()
         .map(s -> shareView(s, names, null))
         .toList();
@@ -328,9 +332,9 @@ class DriveService {
   @Transactional
   ShareView share(UUID id, ShareRequest request) {
     requirePermission(Permission.DRIVE_USE);
-    var node = live(id);
+    DriveNode node = live(id);
     require(node, "MANAGE");
-    var type = request.principalType();
+    String type = request.principalType();
     String principal = null;
     switch (type) {
       case "USER" -> {
@@ -347,8 +351,8 @@ class DriveService {
       }
       default -> principal = null;
     }
-    var expires = request.expiresAt();
-    var now = Instant.now();
+    Instant expires = request.expiresAt();
+    Instant now = Instant.now();
     if (expires != null && !expires.isAfter(now)) {
       throw conflict("DRIVE_SHARE_EXPIRED", "The expiry must be in the future");
     }
@@ -356,17 +360,17 @@ class DriveService {
     String hash = null;
     if ("LINK".equals(type)) {
       // Ссылка — только с обязательным сроком не дольше max-link-days и только на просмотр.
-      var limit = now.plus(Duration.ofDays(maxLinkDays));
+      Instant limit = now.plus(Duration.ofDays(maxLinkDays));
       if (expires == null || expires.isAfter(limit)) expires = limit;
       if (!"VIEW".equals(request.permission())) {
         throw conflict("DRIVE_LINK_VIEW_ONLY", "A link grants view access only");
       }
-      var bytes = new byte[24];
+      byte[] bytes = new byte[24];
       RANDOM.nextBytes(bytes);
       token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-      hash = sha256(token.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      hash = sha256(token.getBytes(StandardCharsets.UTF_8));
     }
-    var share =
+    DriveShare share =
         shares.save(
             new DriveShare(
                 node.id, type, principal, request.permission(), expires, hash, staffId()));
@@ -377,9 +381,9 @@ class DriveService {
   @Transactional
   void unshare(UUID id, UUID shareId) {
     requirePermission(Permission.DRIVE_USE);
-    var node = live(id);
+    DriveNode node = live(id);
     require(node, "MANAGE");
-    var share =
+    DriveShare share =
         shares
             .findById(shareId)
             .filter(s -> s.nodeId.equals(node.id))
@@ -398,9 +402,9 @@ class DriveService {
   @Transactional(readOnly = true)
   NodeDetails link(String token, UUID nodeId) {
     requirePermission(Permission.DRIVE_USE);
-    var target = linked(token, nodeId);
-    var names = staffNames();
-    var children =
+    DriveNode target = linked(token, nodeId);
+    Map<UUID, String> names = staffNames();
+    List<NodeView> children =
         target.folder()
             ? nodes.findByClinicIdAndParentIdAndDeletedAtIsNull(clinicId(), target.id).stream()
                 .map(child -> view(child, "VIEW", names))
@@ -413,7 +417,7 @@ class DriveService {
   @Transactional(readOnly = true)
   FileContent linkContent(String token, UUID nodeId) {
     requirePermission(Permission.DRIVE_USE);
-    var target = linked(token, nodeId);
+    DriveNode target = linked(token, nodeId);
     return read(target, null, "link");
   }
 
@@ -440,14 +444,14 @@ class DriveService {
   @Transactional
   QuotaView quota() {
     requirePermission(Permission.DRIVE_USE);
-    var quota = quotaRow(clinicId());
+    DriveQuota quota = quotaRow(clinicId());
     return new QuotaView(quota.bytesUsed, quota.bytesLimit, maxFileBytes);
   }
 
   @Transactional
   QuotaView setQuota(QuotaRequest request) {
     requirePermission(Permission.DRIVE_ADMIN);
-    var quota = quotaRow(clinicId());
+    DriveQuota quota = quotaRow(clinicId());
     quota.bytesLimit = request.bytesLimit();
     audit.record(actor(), "DRIVE_QUOTA_CHANGED", "CLINIC_DRIVE", clinicId(), "ALLOWED", null);
     return new QuotaView(quota.bytesUsed, quota.bytesLimit, maxFileBytes);
@@ -458,23 +462,23 @@ class DriveService {
   /** Узлы, пролежавшие в корзине дольше срока, удаляются вместе с объектами в хранилище. */
   @Transactional
   int purge(Instant before) {
-    var expired = nodes.findByDeletedAtBefore(before);
-    var removedKeys = new ArrayList<String>();
-    for (var node : expired) purgeTree(node, removedKeys);
+    List<DriveNode> expired = nodes.findByDeletedAtBefore(before);
+    List<String> removedKeys = new ArrayList<>();
+    for (DriveNode node : expired) purgeTree(node, removedKeys);
     afterCommit(() -> removedKeys.forEach(storage::delete));
     return expired.size();
   }
 
   private void purgeTree(DriveNode node, List<String> removedKeys) {
-    for (var child : nodes.findByParentId(node.id)) purgeTree(child, removedKeys);
+    for (DriveNode child : nodes.findByParentId(node.id)) purgeTree(child, removedKeys);
     long freed = 0;
-    for (var v : versions.findByNodeIdOrderByNumberDesc(node.id)) {
+    for (DriveVersion v : versions.findByNodeIdOrderByNumberDesc(node.id)) {
       removedKeys.add(v.objectKey);
       freed += v.sizeBytes;
       versions.delete(v);
     }
     shares.deleteByNodeId(node.id);
-    var quota = quotaRow(node.clinicId);
+    DriveQuota quota = quotaRow(node.clinicId);
     quota.bytesUsed = Math.max(0, quota.bytesUsed - freed);
     versions.flush();
     nodes.delete(node);
@@ -488,11 +492,11 @@ class DriveService {
     if (bytes.length > maxFileBytes) {
       throw payloadTooLarge("DRIVE_FILE_TOO_LARGE", "The file is larger than the drive limit");
     }
-    var quota = quotaRow(clinicId());
+    DriveQuota quota = quotaRow(clinicId());
     if (quota.bytesUsed + bytes.length > quota.bytesLimit) {
       throw conflict("DRIVE_QUOTA_EXCEEDED", "The clinic drive is full");
     }
-    var key = clinicId() + "/" + UUID.randomUUID();
+    String key = clinicId() + "/" + UUID.randomUUID();
     storage.put(key, encryption.encryptBytes(bytes));
     // Откат транзакции — объект не нужен.
     if (TransactionSynchronizationManager.isSynchronizationActive()) {
@@ -504,7 +508,7 @@ class DriveService {
             }
           });
     }
-    var number = file.currentVersion + 1;
+    int number = file.currentVersion + 1;
     versions.save(
         new DriveVersion(
             file.id,
@@ -519,10 +523,10 @@ class DriveService {
     file.updatedAt = Instant.now();
     quota.bytesUsed += bytes.length;
     // Хранятся последние keepVersions версий; старые объекты удаляются после фиксации.
-    var all = versions.findByNodeIdOrderByNumberDesc(file.id);
-    var stale = new ArrayList<String>();
-    for (var i = keepVersions; i < all.size(); i++) {
-      var old = all.get(i);
+    List<DriveVersion> all = versions.findByNodeIdOrderByNumberDesc(file.id);
+    List<String> stale = new ArrayList<>();
+    for (int i = keepVersions; i < all.size(); i++) {
+      DriveVersion old = all.get(i);
       if (old.number == number) continue;
       stale.add(old.objectKey);
       quota.bytesUsed = Math.max(0, quota.bytesUsed - old.sizeBytes);
@@ -533,11 +537,11 @@ class DriveService {
 
   private FileContent read(DriveNode node, Integer number, String via) {
     if (node.folder()) throw conflict("NOT_A_FILE", "A folder has no content");
-    var version =
+    DriveVersion version =
         versions
             .findByNodeIdAndNumber(node.id, number == null ? node.currentVersion : number)
             .orElseThrow(() -> notFound("DRIVE_VERSION_NOT_FOUND", "Version not found"));
-    var bytes = encryption.decryptBytes(storage.get(version.objectKey));
+    byte[] bytes = encryption.decryptBytes(storage.get(version.objectKey));
     audit.record(actor(), "DRIVE_FILE_READ", "DRIVE_NODE", node.id, "ALLOWED", via);
     return new FileContent(
         node.name,
@@ -546,13 +550,13 @@ class DriveService {
   }
 
   private FileContent preview(FileContent source) {
-    var lowerName = source.name().toLowerCase(Locale.ROOT);
-    var dot = lowerName.lastIndexOf('.');
-    var extension = dot < 0 ? "" : lowerName.substring(dot + 1);
+    String lowerName = source.name().toLowerCase(Locale.ROOT);
+    int dot = lowerName.lastIndexOf('.');
+    String extension = dot < 0 ? "" : lowerName.substring(dot + 1);
     if ("pdf".equals(extension)) {
       return new FileContent(source.name(), "application/pdf", source.bytes());
     }
-    var imageType =
+    String imageType =
         switch (extension) {
           case "png" -> "image/png";
           case "jpg", "jpeg" -> "image/jpeg";
@@ -562,32 +566,32 @@ class DriveService {
         };
     if (imageType != null) return new FileContent(source.name(), imageType, source.bytes());
     if ("docx".equals(extension) || "xlsx".equals(extension)) {
-      var converted =
+      byte[] converted =
           pdf.convert(source.bytes(), extension)
               .orElseThrow(
                   () ->
                       conflict(
                           "PREVIEW_CONVERSION_UNAVAILABLE",
                           "LibreOffice is not configured for document preview"));
-      var baseName = source.name().substring(0, source.name().lastIndexOf('.'));
+      String baseName = source.name().substring(0, source.name().lastIndexOf('.'));
       return new FileContent(baseName + ".pdf", "application/pdf", converted);
     }
     throw conflict("PREVIEW_UNSUPPORTED", "This file format cannot be previewed");
   }
 
   private DriveNode linked(String token, UUID nodeId) {
-    var hash = sha256(token.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-    var share =
+    String hash = sha256(token.getBytes(StandardCharsets.UTF_8));
+    DriveShare share =
         shares
             .findByLinkTokenHash(hash)
             .filter(s -> "LINK".equals(s.principalType))
             .filter(s -> s.active(Instant.now()))
             .orElseThrow(() -> notFound("DRIVE_LINK_NOT_FOUND", "Link not found or expired"));
-    var root = live(share.nodeId);
+    DriveNode root = live(share.nodeId);
     if (inTrash(root)) throw notFound("DRIVE_LINK_NOT_FOUND", "Link not found or expired");
     if (nodeId == null || nodeId.equals(root.id)) return root;
-    var target = live(nodeId);
-    for (var cursor = parentOf(target); cursor != null; cursor = parentOf(cursor)) {
+    DriveNode target = live(nodeId);
+    for (DriveNode cursor = parentOf(target); cursor != null; cursor = parentOf(cursor)) {
       if (cursor.id.equals(root.id)) return target;
     }
     throw notFound("DRIVE_NODE_NOT_FOUND", "Not found");
@@ -595,18 +599,18 @@ class DriveService {
 
   /** Эффективное право сотрудника на узел или null. */
   String effective(DriveNode node) {
-    var me = staffId();
-    var roles = currentRoles();
-    var now = Instant.now();
-    var chain = new ArrayList<DriveNode>();
-    for (var cursor = node; cursor != null && chain.size() < 64; cursor = parentOf(cursor)) {
+    UUID me = staffId();
+    Set<String> roles = currentRoles();
+    Instant now = Instant.now();
+    List<DriveNode> chain = new ArrayList<>();
+    for (DriveNode cursor = node; cursor != null && chain.size() < 64; cursor = parentOf(cursor)) {
       if (me.equals(cursor.ownerId)) return "MANAGE";
       chain.add(cursor);
     }
     String best = null;
-    for (var share : shares.findByNodeIdIn(chain.stream().map(n -> n.id).toList())) {
+    for (DriveShare share : shares.findByNodeIdIn(chain.stream().map(n -> n.id).toList())) {
       if (!share.active(now)) continue;
-      var matches =
+      boolean matches =
           switch (share.principalType) {
             case "USER" -> me.toString().equals(share.principalId);
             case "ROLE" -> roles.contains(share.principalId);
@@ -621,13 +625,13 @@ class DriveService {
   /** Право по выданным на сам узел записям (для расширения унаследованного). */
   private String ownShares(DriveNode node) {
     if (staffId().equals(node.ownerId)) return "MANAGE";
-    var me = staffId().toString();
-    var roles = currentRoles();
-    var now = Instant.now();
+    String me = staffId().toString();
+    Set<String> roles = currentRoles();
+    Instant now = Instant.now();
     String best = null;
-    for (var share : shares.findByNodeIdIn(List.of(node.id))) {
+    for (DriveShare share : shares.findByNodeIdIn(List.of(node.id))) {
       if (!share.active(now)) continue;
-      var matches =
+      boolean matches =
           ("USER".equals(share.principalType) && me.equals(share.principalId))
               || ("ROLE".equals(share.principalType) && roles.contains(share.principalId))
               || "CLINIC".equals(share.principalType);
@@ -637,7 +641,7 @@ class DriveService {
   }
 
   private String require(DriveNode node, String needed) {
-    var permission = effective(node);
+    String permission = effective(node);
     if (permission == null) {
       // Без права узел выглядит как несуществующий.
       throw notFound("DRIVE_NODE_NOT_FOUND", "Not found");
@@ -650,26 +654,26 @@ class DriveService {
   }
 
   private DriveNode requireFolder(UUID id, String needed) {
-    var folder = live(id);
+    DriveNode folder = live(id);
     if (!folder.folder()) throw conflict("NOT_A_FOLDER", "The target is not a folder");
     require(folder, needed);
     return folder;
   }
 
   private void requireFreeName(UUID parentId, String name, UUID except) {
-    var siblings =
+    List<DriveNode> siblings =
         parentId == null
             ? nodes.findByClinicIdAndParentIdIsNullAndOwnerIdAndDeletedAtIsNull(
                 clinicId(), staffId())
             : nodes.findByClinicIdAndParentIdAndDeletedAtIsNull(clinicId(), parentId);
-    var taken =
+    boolean taken =
         siblings.stream().anyMatch(n -> !n.id.equals(except) && n.name.equalsIgnoreCase(name));
     if (taken) throw conflict("DRIVE_NAME_TAKEN", "A file or folder with this name already exists");
   }
 
   /** Живой узел своей клиники: не в корзине и не внутри удалённой папки. */
   private DriveNode live(UUID id) {
-    var node = own(id);
+    DriveNode node = own(id);
     if (inTrash(node)) throw notFound("DRIVE_NODE_NOT_FOUND", "Not found");
     return node;
   }
@@ -681,7 +685,7 @@ class DriveService {
   }
 
   private boolean inTrash(DriveNode node) {
-    for (var cursor = node; cursor != null; cursor = parentOf(cursor)) {
+    for (DriveNode cursor = node; cursor != null; cursor = parentOf(cursor)) {
       if (cursor.deletedAt != null) return true;
     }
     return false;
@@ -692,8 +696,8 @@ class DriveService {
   }
 
   private List<NodeDetails.Crumb> path(DriveNode node) {
-    var crumbs = new ArrayList<NodeDetails.Crumb>();
-    for (var cursor = parentOf(node); cursor != null; cursor = parentOf(cursor)) {
+    List<NodeDetails.Crumb> crumbs = new ArrayList<>();
+    for (DriveNode cursor = parentOf(node); cursor != null; cursor = parentOf(cursor)) {
       if (effective(cursor) == null) break;
       crumbs.add(0, new NodeDetails.Crumb(cursor.id, cursor.name));
     }
@@ -707,7 +711,7 @@ class DriveService {
   }
 
   private NodeView view(DriveNode n, String permission, Map<UUID, String> names) {
-    var shared = !shares.findByNodeIdIn(List.of(n.id)).isEmpty();
+    boolean shared = !shares.findByNodeIdIn(List.of(n.id)).isEmpty();
     return new NodeView(
         n.id,
         n.parentId,
@@ -725,7 +729,7 @@ class DriveService {
   }
 
   private ShareView shareView(DriveShare s, Map<UUID, String> names, String token) {
-    var label =
+    String label =
         switch (s.principalType) {
           case "USER" -> names.getOrDefault(parseUuid(s.principalId), s.principalId);
           case "ROLE" -> s.principalId;
@@ -736,7 +740,7 @@ class DriveService {
   }
 
   private Map<UUID, String> staffNames() {
-    var result = new HashMap<UUID, String>();
+    Map<UUID, String> result = new HashMap<>();
     jdbc.query(
         "select id, full_name from staff_user where clinic_id = ?",
         rs -> {
@@ -756,7 +760,7 @@ class DriveService {
 
   /** Автор в журнале — тот же, что во всём журнале (у врача — карточка врача). */
   private static UUID actor() {
-    return ru.quietclinic.platform.PlatformConfig.actorId();
+    return PlatformConfig.actorId();
   }
 
   static String max(String left, String right) {
@@ -767,7 +771,7 @@ class DriveService {
 
   /** Имя без пути и управляющих символов, не длиннее 255. */
   static String cleanName(String raw) {
-    var name = raw == null ? "" : raw;
+    String name = raw == null ? "" : raw;
     name = name.substring(Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\')) + 1);
     name = name.replaceAll("\\p{Cntrl}", "").trim();
     if (name.isEmpty() || name.equals(".") || name.equals("..")) {

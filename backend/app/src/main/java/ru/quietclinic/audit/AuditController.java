@@ -8,6 +8,7 @@ import java.sql.ResultSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -36,7 +37,7 @@ public class AuditController {
       @RequestParam(required = false) String result,
       @RequestParam(required = false) String objectType) {
     requirePermission(Permission.AUDIT_READ, Permission.AUDIT_READ_PLATFORM);
-    var actors = clinicActors();
+    Map<UUID, String> actors = clinicActors();
     return audit.recent(actors.keySet()).stream()
         .filter(AuditController::visible)
         .filter(e -> result == null || result.isBlank() || e.result().equals(result))
@@ -53,10 +54,10 @@ public class AuditController {
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size) {
     requirePermission(Permission.AUDIT_READ, Permission.AUDIT_READ_PLATFORM);
-    var actors = clinicActors();
-    var safePage = Math.max(page, 0);
-    var safeSize = Math.min(Math.max(size, 1), 100);
-    var rows =
+    Map<UUID, String> actors = clinicActors();
+    int safePage = Math.max(page, 0);
+    int safeSize = Math.min(Math.max(size, 1), 100);
+    AuditPage rows =
         can(Permission.AUDIT_READ)
             ? audit.page(actors.keySet(), result, safePage, safeSize)
             : audit.page(actors.keySet(), result, CLINICAL_OBJECTS, safePage, safeSize);
@@ -68,8 +69,8 @@ public class AuditController {
    * Объекты клинического контура: техподдержка (audit.event.read-platform) их в журнале не видит —
    * ни действий над пациентами, ни над приёмами и документами.
    */
-  static final java.util.Set<String> CLINICAL_OBJECTS =
-      java.util.Set.of("PATIENT", "CONSENT", "ENCOUNTER", "DOCUMENT", "PATIENT_FILE", "CLINIC");
+  static final Set<String> CLINICAL_OBJECTS =
+      Set.of("PATIENT", "CONSENT", "ENCOUNTER", "DOCUMENT", "PATIENT_FILE", "CLINIC");
 
   private static boolean visible(AuditView event) {
     return can(Permission.AUDIT_READ) || !CLINICAL_OBJECTS.contains(event.objectType());
@@ -77,7 +78,7 @@ public class AuditController {
 
   /** Авторы действий своей клиники и их имена: у врача автор — id карточки врача. */
   private Map<UUID, String> clinicActors() {
-    var actors = new HashMap<UUID, String>();
+    Map<UUID, String> actors = new HashMap<>();
     jdbc.query(
         "select id, full_name from practitioner where clinic_id = ?",
         (ResultSet row) -> {

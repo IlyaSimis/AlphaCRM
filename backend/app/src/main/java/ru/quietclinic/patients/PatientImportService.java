@@ -11,6 +11,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.quietclinic.audit.AuditService;
@@ -49,7 +51,7 @@ class PatientImportService {
   @Transactional(readOnly = true)
   PreviewView preview(ImportRequest request) {
     requirePermission(Permission.PATIENT_WRITE);
-    var processed = process(request, false);
+    Processed processed = process(request, false);
     return new PreviewView(
         processed.total(),
         processed.created(),
@@ -61,7 +63,7 @@ class PatientImportService {
   @Transactional
   ImportResultView commit(ImportRequest request) {
     requirePermission(Permission.PATIENT_WRITE);
-    var processed = process(request, true);
+    Processed processed = process(request, true);
     audit.record(
         actorId(),
         "PATIENT_IMPORT_COMPLETED",
@@ -79,34 +81,34 @@ class PatientImportService {
   }
 
   private Processed process(ImportRequest request, boolean save) {
-    var existing = patients.findByClinicIdOrderByFullName(clinicId());
+    List<Patient> existing = patients.findByClinicIdOrderByFullName(clinicId());
     existing.forEach(privacy::decrypt);
-    var phones = new HashMap<String, Patient>();
-    for (var contact :
+    Map<String, Patient> phones = new HashMap<>();
+    for (Contact contact :
         contacts.findByTypeInAndPatientClinicId(PhoneIndex.PHONE_TYPES, clinicId())) {
       privacy.decrypt(contact);
-      var key = normalizePhone(contact.value);
+      String key = normalizePhone(contact.value);
       if (!key.isEmpty()) phones.putIfAbsent(key, contact.patient);
     }
-    var identities = new HashMap<String, Patient>();
-    for (var patient : existing)
+    Map<String, Patient> identities = new HashMap<>();
+    for (Patient patient : existing)
       identities.putIfAbsent(identity(patient.fullName, patient.birthDate), patient);
-    var sourcePhones = new HashSet<String>();
-    var sourceIdentities = new HashSet<String>();
-    var rows = new ArrayList<ImportRowView>();
-    var candidates = new ArrayList<Patient>();
-    var duplicates = 0;
-    var errors = 0;
-    var number = 0;
-    var newCount = 0;
-    for (var imported : reader.read(request)) {
+    Set<String> sourcePhones = new HashSet<>();
+    Set<String> sourceIdentities = new HashSet<>();
+    List<ImportRowView> rows = new ArrayList<>();
+    List<Patient> candidates = new ArrayList<>();
+    int duplicates = 0;
+    int errors = 0;
+    int number = 0;
+    int newCount = 0;
+    for (ImportedPatient imported : reader.read(request)) {
       number++;
-      var fullName = clean(imported.fullName());
-      var phone = clean(imported.phone());
-      var secondPhone = clean(imported.secondPhone());
-      var email = clean(imported.email());
+      String fullName = clean(imported.fullName());
+      String phone = clean(imported.phone());
+      String secondPhone = clean(imported.secondPhone());
+      String email = clean(imported.email());
       LocalDate birthDate = null;
-      var reason = "";
+      String reason = "";
       if (fullName.isEmpty() || fullName.length() > 255) reason = "INVALID_FULL_NAME";
       try {
         birthDate = LocalDate.parse(clean(imported.birthDate()));
@@ -122,11 +124,11 @@ class PatientImportService {
         rows.add(row(number, imported, "ERROR", reason, null));
         continue;
       }
-      var phoneKey = normalizePhone(phone);
-      var identity = identity(fullName, birthDate);
-      var duplicate = phones.get(phoneKey);
+      String phoneKey = normalizePhone(phone);
+      String identity = identity(fullName, birthDate);
+      Patient duplicate = phones.get(phoneKey);
       if (duplicate == null) duplicate = identities.get(identity);
-      var duplicateReason = "DUPLICATE_IN_CRM";
+      String duplicateReason = "DUPLICATE_IN_CRM";
       if (duplicate == null && (!sourcePhones.add(phoneKey) || !sourceIdentities.add(identity))) {
         duplicateReason = "DUPLICATE_IN_SOURCE";
       }
@@ -144,7 +146,7 @@ class PatientImportService {
       rows.add(row(number, imported, "NEW", "", null));
       newCount++;
       if (save) {
-        var patient = new Patient(fullName, birthDate);
+        Patient patient = new Patient(fullName, birthDate);
         patient.clinicId = clinicId();
         patient.registryNote = "Импортировано из PostgreSQL";
         patient.update(new PatientDetails(fullName, birthDate, phone, email, secondPhone, null));
@@ -180,7 +182,7 @@ class PatientImportService {
 
   private static String normalizePhone(String phone) {
     if (phone == null) return "";
-    var digits = phone.replaceAll("\\D", "");
+    String digits = phone.replaceAll("\\D", "");
     if (digits.length() == 11 && digits.startsWith("8")) digits = "7" + digits.substring(1);
     return digits;
   }

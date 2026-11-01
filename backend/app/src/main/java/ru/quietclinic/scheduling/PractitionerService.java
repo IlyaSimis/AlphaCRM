@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -48,7 +49,7 @@ class PractitionerService {
   @Transactional
   PractitionerView replaceWorkingHours(UUID practitionerId, WorkingHoursRequest request) {
     requirePermission(Permission.PRACTITIONER_MANAGE);
-    var practitioner =
+    Practitioner practitioner =
         practitioners
             .findByIdAndClinicId(practitionerId, clinicId())
             .orElseThrow(() -> notFound("PRACTITIONER_NOT_FOUND", "Practitioner not found"));
@@ -56,7 +57,7 @@ class PractitionerService {
     workingHours.deleteByPractitionerId(practitionerId);
     workingHours.flush();
     saveShifts(practitionerId, request.shifts());
-    var reason =
+    String reason =
         "days:"
             + request.shifts().stream()
                 .map(ShiftRequest::dayOfWeek)
@@ -76,7 +77,7 @@ class PractitionerService {
   PractitionerView create(CreatePractitionerRequest request) {
     requirePermission(Permission.PRACTITIONER_MANAGE);
     validate(request.shifts());
-    var practitioner =
+    Practitioner practitioner =
         practitioners.saveAndFlush(
             new Practitioner(
                 clinicId(),
@@ -86,7 +87,7 @@ class PractitionerService {
     saveShifts(practitioner.id, request.shifts());
     // Сотрудники проверяют карточку через JDBC в этой же транзакции — строки должны быть в базе.
     workingHours.flush();
-    var fields = new ArrayList<>(List.of("fullName", "specialty"));
+    List<String> fields = new ArrayList<>(List.of("fullName", "specialty"));
     if (practitioner.room != null) fields.add("room");
     if (!request.shifts().isEmpty()) fields.add("shifts");
     audit.record(
@@ -103,13 +104,13 @@ class PractitionerService {
   @Transactional
   PractitionerView update(UUID practitionerId, UpdatePractitionerRequest request) {
     requirePermission(Permission.PRACTITIONER_MANAGE);
-    var practitioner =
+    Practitioner practitioner =
         practitioners
             .findByIdAndClinicId(practitionerId, clinicId())
             .orElseThrow(() -> notFound("PRACTITIONER_NOT_FOUND", "Practitioner not found"));
-    var specialty = request.specialty().trim();
-    var room = Practitioner.roomOrNull(request.room());
-    var fields = new ArrayList<String>();
+    String specialty = request.specialty().trim();
+    String room = Practitioner.roomOrNull(request.room());
+    List<String> fields = new ArrayList<>();
     if (!specialty.equals(practitioner.specialty)) fields.add("specialty");
     if (!Objects.equals(room, practitioner.room)) fields.add("room");
     practitioner.specialty = specialty;
@@ -127,8 +128,8 @@ class PractitionerService {
   }
 
   private static void validate(List<ShiftRequest> shifts) {
-    var days = new HashSet<Integer>();
-    for (var shift : shifts) {
+    Set<Integer> days = new HashSet<>();
+    for (ShiftRequest shift : shifts) {
       if (!days.add(shift.dayOfWeek())) {
         throw conflict("INVALID_SHIFT", "A weekday is listed twice");
       }

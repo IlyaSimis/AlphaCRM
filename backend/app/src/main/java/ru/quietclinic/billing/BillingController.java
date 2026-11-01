@@ -8,6 +8,8 @@ import static ru.quietclinic.platform.PlatformConfig.requirePermission;
 import jakarta.validation.Valid;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
@@ -90,12 +92,12 @@ public class BillingController {
   @Transactional
   BillingView pay(@PathVariable UUID chargeId, @Valid @RequestBody PaymentRequest request) {
     requirePermission(Permission.INVOICE_WRITE);
-    var charge =
+    Charge charge =
         charges
             .findById(chargeId)
             .filter(chargeService::inClinic)
             .orElseThrow(() -> notFound("CHARGE_NOT_FOUND", "Charge not found"));
-    var existing = payments.findByIdempotencyKey(request.idempotencyKey());
+    Optional<PaymentRecord> existing = payments.findByIdempotencyKey(request.idempotencyKey());
     if (existing.isPresent()) return view(charge, existing.get());
     // Свободная цена без суммы: оплатить нельзя, пока сумму не ввели.
     if (Charge.AWAITING_AMOUNT.equals(charge.status)) {
@@ -107,9 +109,9 @@ public class BillingController {
     if (!charge.status.equals("PENDING")) {
       throw conflict("CHARGE_NOT_PAYABLE", "Charge is already paid");
     }
-    var provider =
+    ProviderPayment provider =
         gateway.capture(charge.id, charge.amountMinor, charge.currency, request.idempotencyKey());
-    var payment = new PaymentRecord();
+    PaymentRecord payment = new PaymentRecord();
     payment.id = UUID.randomUUID();
     payment.idempotencyKey = request.idempotencyKey();
     payment.chargeId = charge.id;
@@ -126,7 +128,7 @@ public class BillingController {
     audit.record(actorId(), "PAYMENT_CONFIRMED", "PAYMENT", payment.id, "ALLOWED", "billing");
     events.publish(
         "InvoicePaid",
-        java.util.Map.of(
+        Map.of(
             "chargeId", charge.id,
             "paymentId", payment.id,
             "appointmentId", charge.appointmentId,

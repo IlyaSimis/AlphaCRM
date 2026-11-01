@@ -6,11 +6,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import ru.quietclinic.StaffSessions;
@@ -21,7 +24,7 @@ import ru.quietclinic.StaffSessions;
 @ActiveProfiles("local")
 class DashboardControllerTest {
   @Autowired MockMvc mvc;
-  @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
+  @Autowired JdbcTemplate jdbc;
   StaffSessions staff;
 
   @BeforeEach
@@ -53,13 +56,14 @@ class DashboardControllerTest {
 
   @Test
   void salaryUsesTheCurrentEmployeesOwnMonthlyRate() throws Exception {
-    var account = jdbc.queryForMap("select id, clinic_id from staff_user where username = 'admin'");
-    var staffId = (java.util.UUID) account.get("id");
+    Map<String, Object> account =
+        jdbc.queryForMap("select id, clinic_id from staff_user where username = 'admin'");
+    UUID staffId = (UUID) account.get("id");
     jdbc.update(
         "insert into hr_contract(id, clinic_id, staff_id, position, rate_minor, rate_unit,"
             + " currency, valid_from, valid_to, created_by, created_at) values (?, ?, ?, ?, ?,"
             + " 'MONTH', 'RUB', date '2026-10-01', null, ?, current_timestamp)",
-        java.util.UUID.randomUUID(),
+        UUID.randomUUID(),
         account.get("clinic_id"),
         staffId,
         "Administrator",

@@ -44,10 +44,10 @@ class FinanceFlowTest {
 
   @Test
   void voidAndRefund() throws Exception {
-    var paidCharge = completedVisitCharge("2027-04-13T10:00:00Z", "2027-04-13T10:30:00Z");
-    var openCharge = completedVisitCharge("2027-04-20T10:00:00Z", "2027-04-20T10:30:00Z");
+    String paidCharge = completedVisitCharge("2027-04-13T10:00:00Z", "2027-04-13T10:30:00Z");
+    String openCharge = completedVisitCharge("2027-04-20T10:00:00Z", "2027-04-20T10:30:00Z");
 
-    var paid =
+    String paid =
         mvc.perform(
                 post("/api/v1/billing/charges/" + paidCharge + "/payments")
                     .with(staff.role("CASHIER"))
@@ -67,7 +67,7 @@ class FinanceFlowTest {
     voidCharge(paidCharge, staff.admin())
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("CHARGE_PAID"));
-    var refundId =
+    String refundId =
         JsonPath.read(
                 refund(paymentId, staff.admin(), "k-" + paymentId)
                     .andExpect(status().isCreated())
@@ -105,7 +105,7 @@ class FinanceFlowTest {
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("CHARGE_VOIDED"));
 
-    var charges =
+    String charges =
         mvc.perform(get("/api/v1/billing/charges").with(staff.role("CASHIER")))
             .andReturn()
             .getResponse()
@@ -115,7 +115,7 @@ class FinanceFlowTest {
     assertThat(statuses).containsExactly("REFUNDED");
 
     // Отчёт: оплата и возврат того же дня дают ноль; менеджер видит агрегаты, кассир — нет.
-    var today = LocalDate.now();
+    LocalDate today = LocalDate.now();
     mvc.perform(
             get("/api/v1/finance/sales")
                 .with(staff.role("MANAGER"))
@@ -149,7 +149,7 @@ class FinanceFlowTest {
   }
 
   private String completedVisitCharge(String startsAt, String endsAt) throws Exception {
-    var appointment =
+    String appointment =
         JsonPath.read(
                 mvc.perform(
                         post("/api/v1/appointments")
@@ -169,7 +169,7 @@ class FinanceFlowTest {
             .toString();
     move(appointment, staff.admin(), "ARRIVED");
     move(appointment, staff.doctor(StaffSessions.PETROV), "COMPLETED");
-    var charges =
+    String charges =
         mvc.perform(get("/api/v1/billing/charges").with(staff.role("CASHIER")))
             .andReturn()
             .getResponse()

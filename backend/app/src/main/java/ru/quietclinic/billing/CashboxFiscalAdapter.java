@@ -52,7 +52,7 @@ class CashboxFiscalAdapter implements FiscalPort {
   @Override
   public FiscalResult sendReceipt(UUID paymentId, String idempotencyKey) {
     if (url.isEmpty() || secret.isBlank()) return FiscalResult.notConfigured();
-    var body = tx.execute(status -> body(paymentId, idempotencyKey));
+    String body = tx.execute(status -> body(paymentId, idempotencyKey));
     if (body == null) return new FiscalResult("REJECTED", "PAYMENT_NOT_FOUND");
     return post(
         body,
@@ -63,7 +63,7 @@ class CashboxFiscalAdapter implements FiscalPort {
   @Override
   public FiscalResult sendRefund(UUID refundId, String idempotencyKey) {
     if (url.isEmpty() || secret.isBlank()) return FiscalResult.notConfigured();
-    var body = tx.execute(status -> refundBody(refundId, idempotencyKey));
+    String body = tx.execute(status -> refundBody(refundId, idempotencyKey));
     if (body == null) return new FiscalResult("REJECTED", "REFUND_NOT_FOUND");
     return post(
         body,
@@ -72,9 +72,9 @@ class CashboxFiscalAdapter implements FiscalPort {
   }
 
   private FiscalResult post(String body, String idempotencyKey, Runnable onSent) {
-    var timestamp = Instant.now().getEpochSecond();
+    long timestamp = Instant.now().getEpochSecond();
     try {
-      var request =
+      HttpRequest request =
           HttpRequest.newBuilder(URI.create(url))
               .timeout(Duration.ofSeconds(10))
               .header("Content-Type", "application/json; charset=utf-8")
@@ -83,8 +83,8 @@ class CashboxFiscalAdapter implements FiscalPort {
               .header(Signature.SIGNATURE_HEADER, Signature.sign(secret, timestamp, body))
               .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
               .build();
-      var status = client.send(request, HttpResponse.BodyHandlers.discarding()).statusCode();
-      var result = FiscalResult.ofHttp(status);
+      int status = client.send(request, HttpResponse.BodyHandlers.discarding()).statusCode();
+      FiscalResult result = FiscalResult.ofHttp(status);
       if ("SENT".equals(result.outcome())) tx.executeWithoutResult(s -> onSent.run());
       return result;
     } catch (InterruptedException ex) {
@@ -96,9 +96,9 @@ class CashboxFiscalAdapter implements FiscalPort {
   }
 
   private String body(UUID paymentId, String idempotencyKey) {
-    var payment = payments.findById(paymentId).orElse(null);
+    PaymentRecord payment = payments.findById(paymentId).orElse(null);
     if (payment == null) return null;
-    var charge = charges.findById(payment.chargeId).orElse(null);
+    Charge charge = charges.findById(payment.chargeId).orElse(null);
     if (charge == null) return null;
     return "{\"idempotencyKey\":\""
         + idempotencyKey
@@ -117,7 +117,7 @@ class CashboxFiscalAdapter implements FiscalPort {
 
   /** Возврат прихода: сумма, валюта, id возврата, платежа и счёта — без ФИО и данных приёма. */
   private String refundBody(UUID refundId, String idempotencyKey) {
-    var refund = refunds.findById(refundId).orElse(null);
+    RefundRecord refund = refunds.findById(refundId).orElse(null);
     if (refund == null) return null;
     return "{\"idempotencyKey\":\""
         + idempotencyKey

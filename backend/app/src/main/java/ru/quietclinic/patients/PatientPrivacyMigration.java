@@ -1,5 +1,6 @@
 package ru.quietclinic.patients;
 
+import java.util.List;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
@@ -22,8 +23,8 @@ class PatientPrivacyMigration implements ApplicationRunner {
   @Override
   @Transactional
   public void run(ApplicationArguments args) {
-    var existing = patients.findAll();
-    for (var patient : existing) {
+    List<Patient> existing = patients.findAll();
+    for (Patient patient : existing) {
       privacy.decrypt(patient);
       privacy.encryptLegacy(patient);
       tokens.rebuild(patient);

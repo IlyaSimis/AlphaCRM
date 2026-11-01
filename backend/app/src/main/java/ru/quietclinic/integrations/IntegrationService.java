@@ -61,9 +61,9 @@ class IntegrationService {
   @Transactional
   IntegrationView updateSettings(String rawType, IntegrationSettingsRequest request) {
     requirePermission(Permission.INTEGRATION_MANAGE);
-    var type = type(rawType);
-    var settings = normalize(type, request);
-    var integration = getOrCreate(type);
+    String type = type(rawType);
+    Object settings = normalize(type, request);
+    IntegrationRecord integration = getOrCreate(type);
     repository.updateSettings(integration.id(), write(settings));
     audit.record(
         actorId(),
@@ -78,19 +78,20 @@ class IntegrationService {
   @Transactional
   IntegrationView updateSecret(String rawType, IntegrationSecretRequest request) {
     requirePermission(Permission.INTEGRATION_MANAGE);
-    var type = type(rawType);
-    var integration = getOrCreate(type);
-    var previous =
+    String type = type(rawType);
+    IntegrationRecord integration = getOrCreate(type);
+    MessengerSecrets previous =
         MANGO.equals(type)
             ? null
             : messengerClients
                 .forClinic(clinicId(), type)
                 .map(MessengerIntegration::secrets)
                 .orElse(null);
-    var secrets = secrets(type, request, previous);
-    var version =
+    Object secrets = secrets(type, request, previous);
+    int version =
         integration.activeSecretVersion() == null ? 1 : integration.activeSecretVersion() + 1;
-    var sealed = cipher.encrypt(clinicId(), integration.id(), version, write(secrets));
+    IntegrationSecretCipher.Sealed sealed =
+        cipher.encrypt(clinicId(), integration.id(), version, write(secrets));
     repository.saveSecret(integration.id(), version, sealed);
     audit.record(
         actorId(),
@@ -105,7 +106,7 @@ class IntegrationService {
   @Transactional
   IntegrationView activate(String rawType) {
     requirePermission(Permission.INTEGRATION_MANAGE);
-    var integration = find(rawType);
+    IntegrationRecord integration = find(rawType);
     if (MANGO.equals(integration.type())) mangoClients.requireValid(integration);
     else messengerClients.requireValid(integration);
     repository.updateStatus(integration.id(), "ACTIVE");
@@ -122,7 +123,7 @@ class IntegrationService {
   @Transactional
   IntegrationView disable(String rawType) {
     requirePermission(Permission.INTEGRATION_MANAGE);
-    var integration = find(rawType);
+    IntegrationRecord integration = find(rawType);
     repository.updateStatus(integration.id(), "DISABLED");
     audit.record(
         actorId(),
@@ -141,14 +142,14 @@ class IntegrationService {
   }
 
   private IntegrationRecord find(String rawType) {
-    var type = type(rawType);
+    String type = type(rawType);
     return repository
         .find(clinicId(), type)
         .orElseThrow(() -> notFound("INTEGRATION_NOT_FOUND", "Integration is not configured"));
   }
 
   private static String type(String rawType) {
-    var type = rawType == null ? "" : rawType.trim().toUpperCase(Locale.ROOT);
+    String type = rawType == null ? "" : rawType.trim().toUpperCase(Locale.ROOT);
     if (!List.of(MANGO, TELEGRAM, MAX).contains(type)) {
       throw badRequest(
           "INTEGRATION_TYPE_UNSUPPORTED", "Only Mango, Telegram and MAX are supported");
@@ -157,19 +158,19 @@ class IntegrationService {
   }
 
   private static Object normalize(String type, IntegrationSettingsRequest request) {
-    var apiUrl = text(request.apiUrl()).replaceAll("/$", "");
+    String apiUrl = text(request.apiUrl()).replaceAll("/$", "");
     requireUrl(apiUrl, true, "INTEGRATION_API_URL_INVALID");
     if (MANGO.equals(type)) {
-      var extension = text(request.defaultExtension());
-      var line = text(request.lineNumber());
+      String extension = text(request.defaultExtension());
+      String line = text(request.lineNumber());
       if (!extension.matches("^$|^[0-9]{1,32}$") || !line.matches("^$|^[0-9]{1,32}$")) {
         throw badRequest(
             "MANGO_SETTINGS_INVALID", "Mango extension and line number must contain digits only");
       }
       return new MangoSettings(apiUrl, extension, line);
     }
-    var publicUrl = text(request.publicUrl()).replaceAll("/$", "");
-    var relayUrl = text(request.relayUrl()).replaceAll("/$", "");
+    String publicUrl = text(request.publicUrl()).replaceAll("/$", "");
+    String relayUrl = text(request.relayUrl()).replaceAll("/$", "");
     requireUrl(publicUrl, false, "INTEGRATION_PUBLIC_URL_INVALID");
     requireUrl(relayUrl, false, "INTEGRATION_RELAY_URL_INVALID");
     return new MessengerSettings(
@@ -182,16 +183,16 @@ class IntegrationService {
   private static Object secrets(
       String type, IntegrationSecretRequest request, MessengerSecrets previous) {
     if (MANGO.equals(type)) {
-      var key = text(request.apiKey());
-      var salt = text(request.apiSalt());
+      String key = text(request.apiKey());
+      String salt = text(request.apiSalt());
       if (key.isEmpty() || salt.isEmpty()) {
         throw badRequest("INTEGRATION_SECRET_INVALID", "Mango API key and salt are required");
       }
       return new MangoSecrets(key, salt);
     }
-    var token = text(request.botToken());
-    var relaySecret = text(request.relaySecret());
-    var webhookSecret = text(request.webhookSecret());
+    String token = text(request.botToken());
+    String relaySecret = text(request.relaySecret());
+    String webhookSecret = text(request.webhookSecret());
     if (previous != null) {
       if (token.isEmpty()) token = text(previous.botToken());
       if (relaySecret.isEmpty()) relaySecret = text(previous.relaySecret());
@@ -224,7 +225,7 @@ class IntegrationService {
   private static void requireUrl(String value, boolean required, String code) {
     if (value.isEmpty() && !required) return;
     try {
-      var uri = URI.create(value);
+      URI uri = URI.create(value);
       if (!List.of("http", "https").contains(uri.getScheme())
           || uri.getHost() == null
           || uri.getUserInfo() != null) {

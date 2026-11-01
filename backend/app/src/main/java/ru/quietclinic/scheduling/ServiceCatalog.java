@@ -7,7 +7,9 @@ import static ru.quietclinic.platform.PlatformConfig.conflict;
 import static ru.quietclinic.platform.PlatformConfig.notFound;
 import static ru.quietclinic.platform.PlatformConfig.requirePermission;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -37,7 +39,7 @@ class ServiceCatalog {
   @Transactional(readOnly = true)
   List<ServiceNormView> norms(UUID id) {
     requirePermission(Permission.SERVICE_READ);
-    var service = own(id);
+    ClinicService service = own(id);
     return norms.findByServiceId(service.id).stream().map(ServiceNormView::of).toList();
   }
 
@@ -45,16 +47,16 @@ class ServiceCatalog {
   @Transactional
   List<ServiceNormView> replaceNorms(UUID id, ServiceNormsRequest request) {
     requirePermission(Permission.SERVICE_MANAGE, Permission.INVENTORY_CATALOG_WRITE);
-    var service = own(id);
-    var unique = new java.util.HashSet<UUID>();
-    for (var norm : request.norms()) {
+    ClinicService service = own(id);
+    Set<UUID> unique = new HashSet<>();
+    for (ServiceNormsRequest.Norm norm : request.norms()) {
       if (!unique.add(norm.itemId())) {
         throw conflict("DUPLICATE_NORM_ITEM", "Each item may appear in the norms only once");
       }
     }
     norms.deleteByServiceId(service.id);
     norms.flush();
-    for (var norm : request.norms()) {
+    for (ServiceNormsRequest.Norm norm : request.norms()) {
       norms.save(new ServiceNorm(service.id, norm.itemId(), norm.quantity()));
     }
     audit.record(
@@ -71,7 +73,7 @@ class ServiceCatalog {
   @Transactional(readOnly = true)
   List<ServiceView> list(boolean all) {
     requirePermission(Permission.SERVICE_READ);
-    var withInactive = all && can(Permission.SERVICE_MANAGE);
+    boolean withInactive = all && can(Permission.SERVICE_MANAGE);
     return services.findByClinicIdOrderByActiveDescDurationMinutesDescNameAsc(clinicId()).stream()
         .filter(s -> withInactive || s.active)
         .map(ServiceView::of)
@@ -81,15 +83,15 @@ class ServiceCatalog {
   @Transactional
   ServiceView create(CreateServiceRequest request) {
     requirePermission(Permission.SERVICE_MANAGE);
-    var name = request.name().trim();
+    String name = request.name().trim();
     if (services.existsByClinicIdAndNameIgnoreCase(clinicId(), name)) {
       throw conflict("SERVICE_NAME_TAKEN", "A service with this name already exists");
     }
     try {
-      var draft = new ClinicService(clinicId(), name, request.durationMinutes(), "RUB");
+      ClinicService draft = new ClinicService(clinicId(), name, request.durationMinutes(), "RUB");
       draft.setPricing(
           request.priceMode(), request.priceMinor(), request.minMinor(), request.maxMinor());
-      var service = services.saveAndFlush(draft);
+      ClinicService service = services.saveAndFlush(draft);
       audit.record(actorId(), "SERVICE_CREATED", "SERVICE", service.id, "ALLOWED", null);
       return ServiceView.of(service);
     } catch (DataIntegrityViolationException ex) {
@@ -107,7 +109,7 @@ class ServiceCatalog {
   @Transactional
   ServiceView changePricing(UUID id, ServicePricingRequest request) {
     requirePermission(Permission.SERVICE_MANAGE);
-    var service = own(id);
+    ClinicService service = own(id);
     service.setPricing(
         request.priceMode(), request.priceMinor(), request.minMinor(), request.maxMinor());
     audit.record(
@@ -118,7 +120,7 @@ class ServiceCatalog {
   @Transactional
   ServiceView setActive(UUID id, boolean active) {
     requirePermission(Permission.SERVICE_MANAGE);
-    var service = own(id);
+    ClinicService service = own(id);
     if (service.active != active) {
       service.active = active;
       audit.record(

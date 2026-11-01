@@ -8,8 +8,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -55,9 +57,9 @@ class TelephonyControllerTest {
         .andExpect(jsonPath("$.extension").value("102"));
     verify(mango)
         .callback(
-            org.mockito.ArgumentMatchers.anyString(),
-            org.mockito.ArgumentMatchers.eq("102"),
-            org.mockito.ArgumentMatchers.eq("79162451872"));
+            ArgumentMatchers.anyString(),
+            ArgumentMatchers.eq("102"),
+            ArgumentMatchers.eq("79162451872"));
     mvc.perform(get("/api/v1/telephony/patients/" + ANNA + "/calls").with(staff.admin()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[*].direction").value(hasItem("OUTBOUND")));
@@ -65,7 +67,7 @@ class TelephonyControllerTest {
 
   @Test
   void acceptsSignedMangoEventOnlyOnce() throws Exception {
-    var body =
+    String body =
         """
         {"entry_id":"entry-test-1","call_id":"call-test-1","timestamp":1793200000,"seq":2,
          "call_state":"Disconnected","from":{"number":"+7 916 245-18-72"},
@@ -81,10 +83,10 @@ class TelephonyControllerTest {
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.accepted").value(true));
     }
-    var events =
+    Integer events =
         jdbc.queryForObject(
             "select count(*) from telephony_event where entry_id = 'entry-test-1'", Integer.class);
-    org.assertj.core.api.Assertions.assertThat(events).isEqualTo(1);
+    Assertions.assertThat(events).isEqualTo(1);
     mvc.perform(get("/api/v1/telephony/patients/" + ANNA + "/calls").with(staff.admin()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[*].status").value(hasItem("Disconnected")));

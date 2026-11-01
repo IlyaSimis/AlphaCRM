@@ -57,31 +57,31 @@ class MangoGateway {
   void callback(String commandId, String extension, String phone) {
     if (!configured())
       throw conflict("TELEPHONY_NOT_CONFIGURED", "Mango integration is not configured");
-    var from = new LinkedHashMap<String, Object>();
+    Map<String, Object> from = new LinkedHashMap<>();
     from.put("extension", extension);
-    var payload = new LinkedHashMap<String, Object>();
+    Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("command_id", commandId);
     payload.put("from", from);
     payload.put("to_number", phone);
     if (!lineNumber.isEmpty()) payload.put("line_number", lineNumber);
-    var body = json.writeValueAsString(payload);
-    var form =
+    String body = json.writeValueAsString(payload);
+    Map<String, String> form =
         Map.of(
             "vpbx_api_key", key,
             "sign", MangoSignature.sign(key, body, salt),
             "json", body);
-    var encoded =
+    String encoded =
         form.entrySet().stream()
             .map(entry -> encode(entry.getKey()) + "=" + encode(entry.getValue()))
             .collect(Collectors.joining("&"));
-    var request =
+    HttpRequest request =
         HttpRequest.newBuilder(URI.create(apiUrl + "/vpbx/commands/callback"))
             .timeout(Duration.ofSeconds(10))
             .header("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
             .POST(HttpRequest.BodyPublishers.ofString(encoded, StandardCharsets.UTF_8))
             .build();
     try {
-      var response = http.send(request, HttpResponse.BodyHandlers.discarding());
+      HttpResponse<Void> response = http.send(request, HttpResponse.BodyHandlers.discarding());
       if (response.statusCode() < 200 || response.statusCode() >= 300) {
         throw conflict("MANGO_REQUEST_REJECTED", "Mango rejected the call request");
       }

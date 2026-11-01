@@ -7,10 +7,16 @@ import static ru.quietclinic.platform.PlatformConfig.conflict;
 import static ru.quietclinic.platform.PlatformConfig.notFound;
 import static ru.quietclinic.platform.PlatformConfig.requirePermission;
 
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -52,15 +58,16 @@ class PatientService {
 
   /** Карточки, у которых совпадает основной или второй телефон, — предупреждение регистратуре. */
   private PhoneIndex phoneIndex() {
-    var rows = contacts.findByTypeInAndPatientClinicId(PhoneIndex.PHONE_TYPES, clinicId());
+    List<Contact> rows =
+        contacts.findByTypeInAndPatientClinicId(PhoneIndex.PHONE_TYPES, clinicId());
     rows.forEach(privacy::decrypt);
     return new PhoneIndex(rows);
   }
 
   /** Сотрудники своей клиники по id — для подписи постоянного администратора. */
   private Map<UUID, AssignedStaffView> clinicStaff() {
-    var result = new HashMap<UUID, AssignedStaffView>();
-    for (var row :
+    Map<UUID, AssignedStaffView> result = new HashMap<>();
+    for (AssignedStaffView row :
         jdbc.query(
             "select id, full_name, active from staff_user where clinic_id = ?",
             (rs, i) ->
@@ -80,25 +87,26 @@ class PatientService {
 
   private static PatientView view(
       Patient patient, PhoneIndex index, Map<UUID, AssignedStaffView> staff) {
-    var assigned = patient.assignedStaffId == null ? null : staff.get(patient.assignedStaffId);
-    var view = PatientView.of(patient, index.sharedWith(patient), assigned);
+    AssignedStaffView assigned =
+        patient.assignedStaffId == null ? null : staff.get(patient.assignedStaffId);
+    PatientView view = PatientView.of(patient, index.sharedWith(patient), assigned);
     return can(Permission.PATIENT_CONTACTS_READ) ? view : view.nameOnly();
   }
 
   /** Пациенты с активной связью с лечением у текущего врача. */
-  private java.util.Set<UUID> carePatients() {
-    return new java.util.HashSet<>(
+  private Set<UUID> carePatients() {
+    return new HashSet<>(
         jdbc.queryForList(
             "select patient_id from care_relationship where practitioner_id = ?"
                 + " and valid_from <= ? and valid_until > ?",
             UUID.class,
             actorId(),
-            java.sql.Timestamp.from(java.time.Instant.now()),
-            java.sql.Timestamp.from(java.time.Instant.now())));
+            Timestamp.from(Instant.now()),
+            Timestamp.from(Instant.now())));
   }
 
   /** Все пациенты клиники или только пациенты врача по связи с лечением. */
-  private boolean visible(Patient patient, java.util.Set<UUID> care) {
+  private boolean visible(Patient patient, Set<UUID> care) {
     return can(Permission.PATIENT_READ) || (care != null && care.contains(patient.id));
   }
 
@@ -109,7 +117,7 @@ class PatientService {
    */
   private void checkAssignable(UUID staffId, UUID current) {
     if (staffId == null || staffId.equals(current)) return;
-    var rows =
+    List<Boolean> rows =
         jdbc.query(
             "select u.active, (select count(*) from staff_role r where r.staff_id = u.id"
                 + " and r.role in ('OWNER', 'SENIOR_ADMINISTRATOR', 'ADMINISTRATOR')) as admin"
@@ -127,10 +135,10 @@ class PatientService {
   @Transactional(readOnly = true)
   List<PatientView> search(String query) {
     requirePermission(Permission.PATIENT_READ, Permission.PATIENT_READ_CARE);
-    var index = phoneIndex();
-    var staff = clinicStaff();
-    var care = can(Permission.PATIENT_READ) ? null : carePatients();
-    var matches = new java.util.LinkedHashMap<UUID, Patient>();
+    PhoneIndex index = phoneIndex();
+    Map<UUID, AssignedStaffView> staff = clinicStaff();
+    Set<UUID> care = can(Permission.PATIENT_READ) ? null : carePatients();
+    Map<UUID, Patient> matches = new LinkedHashMap<>();
     if (query.isBlank()) {
       patients.findByClinicIdOrderByFullName(clinicId()).forEach(p -> matches.put(p.id, p));
     } else {
@@ -146,11 +154,9 @@ class PatientService {
       index.matching(query).forEach(p -> matches.putIfAbsent(p.id, p));
     }
     matches.values().forEach(privacy::decrypt);
-    var result =
+    List<PatientView> result =
         matches.values().stream()
-            .sorted(
-                java.util.Comparator.comparing(
-                    (Patient p) -> p.fullName, String.CASE_INSENSITIVE_ORDER))
+            .sorted(Comparator.comparing((Patient p) -> p.fullName, String.CASE_INSENSITIVE_ORDER))
             .filter(p -> visible(p, care))
             .map(p -> view(p, index, staff))
             .toList();
@@ -170,7 +176,7 @@ class PatientService {
   PatientView create(CreatePatientRequest request) {
     requirePermission(Permission.PATIENT_WRITE);
     checkAssignable(request.assignedStaffId(), null);
-    var patient = new Patient(request.fullName().trim(), request.birthDate());
+    Patient patient = new Patient(request.fullName().trim(), request.birthDate());
     patient.clinicId = clinicId();
     patient.update(request.details());
     patient.consents.add(new Consent(patient, request.consentVersion(), request.consentBasis()));
@@ -184,7 +190,7 @@ class PatientService {
   @Transactional(readOnly = true)
   PatientView get(UUID id) {
     requirePermission(Permission.PATIENT_READ, Permission.PATIENT_READ_CARE);
-    var patient = find(id);
+    Patient patient = find(id);
     if (!visible(patient, can(Permission.PATIENT_READ) ? null : carePatients())) {
       audit.record(actorId(), "PATIENT_ADMIN_READ", "PATIENT", patient.id, "DENIED", "no-care");
       throw notFound("PATIENT_NOT_FOUND", "Patient not found");
@@ -196,9 +202,9 @@ class PatientService {
   @Transactional
   PatientView update(UUID id, UpdatePatientRequest request) {
     requirePermission(Permission.PATIENT_WRITE);
-    var patient = find(id);
+    Patient patient = find(id);
     checkAssignable(request.assignedStaffId(), patient.assignedStaffId);
-    var changed = patient.update(request.details());
+    List<String> changed = patient.update(request.details());
     privacy.encrypt(patient);
     patients.saveAndFlush(patient);
     tokens.rebuild(patient);
@@ -217,8 +223,8 @@ class PatientService {
   @Transactional
   PatientView grantConsent(UUID id, ConsentRequest request) {
     requirePermission(Permission.PATIENT_WRITE);
-    var patient = find(id);
-    var consent = patient.grantConsent(request.version(), request.basis());
+    Patient patient = find(id);
+    Consent consent = patient.grantConsent(request.version(), request.basis());
     patients.saveAndFlush(patient);
     audit.record(actorId(), "PATIENT_CONSENT_CHANGED", "CONSENT", consent.id, "ALLOWED", "granted");
     return view(patient);
@@ -227,8 +233,8 @@ class PatientService {
   @Transactional
   PatientView revokeConsent(UUID id, UUID consentId) {
     requirePermission(Permission.PATIENT_WRITE);
-    var patient = find(id);
-    var consent = patient.revokeConsent(consentId);
+    Patient patient = find(id);
+    Consent consent = patient.revokeConsent(consentId);
     patients.saveAndFlush(patient);
     audit.record(actorId(), "PATIENT_CONSENT_CHANGED", "CONSENT", consent.id, "ALLOWED", "revoked");
     return view(patient);
@@ -238,12 +244,12 @@ class PatientService {
   @Transactional
   PatientView updateRegistry(UUID id, RegistryRequest request) {
     requirePermission(Permission.PATIENT_WRITE);
-    var source = request.referralSource();
+    String source = request.referralSource();
     if (source != null && !source.isBlank() && !ReferralSources.ALL.contains(source)) {
       throw conflict("INVALID_REFERRAL_SOURCE", "Unknown referral source");
     }
-    var patient = find(id);
-    var changed = new ArrayList<>(patient.updateRegistry(source, request.registryNote()));
+    Patient patient = find(id);
+    List<String> changed = new ArrayList<>(patient.updateRegistry(source, request.registryNote()));
     if (patient.updateTelegram(
         request.telegramChatId(), Boolean.TRUE.equals(request.removeTelegram()))) {
       changed.add("telegram");
@@ -262,7 +268,7 @@ class PatientService {
   }
 
   private Patient find(UUID id) {
-    var patient =
+    Patient patient =
         patients
             .findByIdAndClinicId(id, clinicId())
             .orElseThrow(() -> notFound("PATIENT_NOT_FOUND", "Patient not found"));

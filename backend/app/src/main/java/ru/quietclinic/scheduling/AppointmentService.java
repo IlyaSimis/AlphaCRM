@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -101,9 +102,9 @@ class AppointmentService {
       throw conflict("INVALID_RANGE", "Pass a day (date) or a period (from and to)");
     }
     // День — в часовом поясе клиники.
-    var start = time.startOf(from);
-    var end = time.startOf(to.plusDays(1));
-    var rows =
+    Instant start = time.startOf(from);
+    Instant end = time.startOf(to.plusDays(1));
+    List<Appointment> rows =
         query.patientId() == null
             ? appointments.findByStartsAtGreaterThanEqualAndStartsAtLessThanOrderByStartsAt(
                 start, end)
@@ -111,7 +112,7 @@ class AppointmentService {
                 .findByPatientIdAndStartsAtGreaterThanEqualAndStartsAtLessThanOrderByStartsAt(
                     query.patientId(), start, end);
     // Только записи к врачам своей клиники.
-    var ownPractitioners = clinic.practitionerIds();
+    Set<UUID> ownPractitioners = clinic.practitionerIds();
     return rows.stream()
         .filter(a -> ownPractitioners.contains(a.practitionerId))
         .filter(a -> query.patientId() == null || a.patientId.equals(query.patientId()))
@@ -124,7 +125,7 @@ class AppointmentService {
 
   /** Маска для ролей без доступа к пациентам: без идентификатора пациента. */
   static AppointmentView visible(Appointment appointment) {
-    var view = AppointmentView.of(appointment);
+    AppointmentView view = AppointmentView.of(appointment);
     return can(Permission.PATIENT_READ, Permission.PATIENT_READ_CARE) ? view : view.masked();
   }
 
@@ -141,8 +142,8 @@ class AppointmentService {
   AppointmentView create(CreateAppointmentRequest request) {
     requirePermission(Permission.APPOINTMENT_WRITE, Permission.APPOINTMENT_WRITE_OWN);
     requireWrite(request.practitionerId());
-    var service = activeService(request.serviceName());
-    var estimate = request.estimateMinor();
+    ClinicService service = activeService(request.serviceName());
+    Long estimate = request.estimateMinor();
     if (estimate != null && (!service.open() || !service.withinLimits(estimate))) {
       throw conflict("ESTIMATE_OUT_OF_RANGE", "The estimate must be within the open price limits");
     }
@@ -167,16 +168,16 @@ class AppointmentService {
   @Transactional
   AppointmentView createOnline(
       UUID patientId, UUID practitionerId, Instant startsAt, String serviceName) {
-    var service = activeService(serviceName);
+    ClinicService service = activeService(serviceName);
     if (!clinic.hasPatient(patientId)) throw notFound("PATIENT_NOT_FOUND", "Patient not found");
-    var endsAt = startsAt.plus(Duration.ofMinutes(service.durationMinutes));
+    Instant endsAt = startsAt.plus(Duration.ofMinutes(service.durationMinutes));
     return book(patientId, practitionerId, startsAt, endsAt, service, null, ONLINE, true);
   }
 
   /** Пациент подтвердил запись кнопкой в Telegram. Уже подтверждённая остаётся как есть. */
   @Transactional
   AppointmentView confirmByPatient(UUID id) {
-    var appointment = find(id);
+    Appointment appointment = find(id);
     if ("CONFIRMED".equals(appointment.status)) return AppointmentView.of(appointment);
     if (!"BOOKED".equals(appointment.status)) {
       throw conflict(
@@ -201,7 +202,7 @@ class AppointmentService {
    */
   @Transactional
   AppointmentView cancelByPatient(UUID id) {
-    var appointment = find(id);
+    Appointment appointment = find(id);
     if ("CANCELLED".equals(appointment.status)) {
       throw conflict("ALREADY_CANCELLED", "Appointment is already cancelled");
     }
@@ -217,12 +218,12 @@ class AppointmentService {
   }
 
   @Transactional(readOnly = true)
-  java.util.Optional<AppointmentView> findView(UUID id) {
+  Optional<AppointmentView> findView(UUID id) {
     return appointments.findById(id).filter(clinic::hasAppointment).map(AppointmentView::of);
   }
 
   private ClinicService activeService(String serviceName) {
-    var service =
+    ClinicService service =
         services
             .findByClinicIdAndName(clinicId(), serviceName)
             .orElseThrow(() -> conflict("UNKNOWN_SERVICE", "Service is not in the catalog"));
@@ -246,7 +247,7 @@ class AppointmentService {
       boolean online) {
     checkSlot(practitionerId, startsAt, endsAt, null);
     try {
-      var draft =
+      Appointment draft =
           new Appointment(
               patientId,
               practitionerId,
@@ -259,7 +260,7 @@ class AppointmentService {
       draft.serviceId = service.id;
       draft.priceMode = service.priceMode;
       draft.estimateMinor = service.open() ? estimateMinor : null;
-      var appointment = appointments.saveAndFlush(draft);
+      Appointment appointment = appointments.saveAndFlush(draft);
       careRelationships.ensureCareRelationship(appointment.practitionerId, appointment.patientId);
       audit.record(
           actorId(), "APPOINTMENT_CREATED", "APPOINTMENT", appointment.id, "ALLOWED", reason);
@@ -281,7 +282,7 @@ class AppointmentService {
   @Transactional
   AppointmentView reschedule(UUID id, RescheduleRequest request) {
     requirePermission(Permission.APPOINTMENT_WRITE, Permission.APPOINTMENT_WRITE_OWN);
-    var appointment = find(id);
+    Appointment appointment = find(id);
     requireWrite(appointment.practitionerId);
     requireWrite(request.practitionerId());
     if (!RESCHEDULABLE.contains(appointment.status)) {
@@ -289,7 +290,7 @@ class AppointmentService {
           "INVALID_STATUS_TRANSITION", "Only booked or confirmed appointments can be rescheduled");
     }
     checkSlot(request.practitionerId(), request.startsAt(), request.endsAt(), appointment.id);
-    var reason =
+    String reason =
         RescheduleReason.code(
             appointment.startsAt,
             request.startsAt(),
@@ -311,7 +312,7 @@ class AppointmentService {
   @Transactional
   AppointmentView cancel(UUID id) {
     requirePermission(Permission.APPOINTMENT_WRITE, Permission.APPOINTMENT_WRITE_OWN);
-    var appointment = find(id);
+    Appointment appointment = find(id);
     requireWrite(appointment.practitionerId);
     if ("CANCELLED".equals(appointment.status)) {
       throw conflict("ALREADY_CANCELLED", "Appointment is already cancelled");
@@ -334,8 +335,8 @@ class AppointmentService {
   @Transactional
   AppointmentView changeStatus(UUID id, String target) {
     requirePermission(Permission.APPOINTMENT_WRITE, Permission.APPOINTMENT_WRITE_OWN);
-    var appointment = find(id);
-    var permitted =
+    Appointment appointment = find(id);
+    boolean permitted =
         (can(Permission.APPOINTMENT_WRITE) && AppointmentStatusPolicy.administratorMay(target))
             || (can(Permission.APPOINTMENT_WRITE_OWN)
                 && AppointmentStatusPolicy.doctorMay(target)
@@ -350,7 +351,7 @@ class AppointmentService {
           "INVALID_STATUS_TRANSITION",
           "Cannot move appointment from " + appointment.status + " to " + target);
     }
-    var from = appointment.status;
+    String from = appointment.status;
     appointment.status = target;
     appointments.saveAndFlush(appointment);
     audit.record(
@@ -369,7 +370,7 @@ class AppointmentService {
    * услуги. Пределы свободной цены — из справочника на момент завершения.
    */
   private void publishCompleted(Appointment appointment) {
-    var payload = new LinkedHashMap<String, Object>();
+    Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("appointmentId", appointment.id.toString());
     payload.put("patientId", appointment.patientId.toString());
     payload.put("practitionerId", appointment.practitionerId.toString());
@@ -379,7 +380,7 @@ class AppointmentService {
     payload.put("amountMinor", appointment.amountMinor);
     payload.put("estimateMinor", appointment.estimateMinor);
     payload.put("currency", appointment.currency);
-    var consumption = new ArrayList<Map<String, Object>>();
+    List<Map<String, Object>> consumption = new ArrayList<>();
     if (appointment.serviceId != null) {
       services
           .findByIdAndClinicId(appointment.serviceId, clinicId())
@@ -388,7 +389,7 @@ class AppointmentService {
                 payload.put("minMinor", service.minMinor);
                 payload.put("maxMinor", service.maxMinor);
               });
-      for (var norm : norms.findByServiceId(appointment.serviceId)) {
+      for (ServiceNorm norm : norms.findByServiceId(appointment.serviceId)) {
         consumption.add(
             Map.of("itemId", norm.itemId.toString(), "quantity", norm.quantity.toPlainString()));
       }
@@ -403,14 +404,14 @@ class AppointmentService {
    */
   @Transactional
   void markInProgress(UUID id) {
-    var appointment = find(id);
+    Appointment appointment = find(id);
     if ("IN_PROGRESS".equals(appointment.status)) return;
     if (!AppointmentStatusPolicy.allowed(appointment.status, "IN_PROGRESS")) {
       throw conflict(
           "INVALID_STATUS_TRANSITION",
           "Cannot start a visit for an appointment in status " + appointment.status);
     }
-    var from = appointment.status;
+    String from = appointment.status;
     appointment.status = "IN_PROGRESS";
     appointments.saveAndFlush(appointment);
     audit.record(
@@ -441,7 +442,7 @@ class AppointmentService {
         time.zone())) {
       throw conflict("OUTSIDE_WORKING_HOURS", "Outside the practitioner's working hours");
     }
-    var overlaps =
+    long overlaps =
         excludedId == null
             ? appointments.countOverlaps(practitionerId, startsAt, endsAt)
             : appointments.countOverlapsExcluding(practitionerId, startsAt, endsAt, excludedId);

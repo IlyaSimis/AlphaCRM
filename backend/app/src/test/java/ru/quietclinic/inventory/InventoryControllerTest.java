@@ -10,6 +10,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -84,8 +86,8 @@ class InventoryControllerTest {
   }
 
   /** Сумма остатков позиции по всем складам и партиям (число из JSON — без привязки к типу). */
-  private java.math.BigDecimal stock(RequestPostProcessor who, String itemId) throws Exception {
-    var body =
+  private BigDecimal stock(RequestPostProcessor who, String itemId) throws Exception {
+    String body =
         mvc.perform(get("/api/v1/inventory/balances").with(who))
             .andExpect(status().isOk())
             .andReturn()
@@ -93,8 +95,8 @@ class InventoryControllerTest {
             .getContentAsString();
     List<Object> values = JsonPath.read(body, "$[?(@.itemId == '" + itemId + "')].quantity");
     return values.stream()
-        .map(value -> new java.math.BigDecimal(value.toString()))
-        .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+        .map(value -> new BigDecimal(value.toString()))
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
   }
 
   private ResultActions postDoc(RequestPostProcessor who, String documentId, String body)
@@ -104,11 +106,11 @@ class InventoryControllerTest {
 
   @Test
   void receiptAndConsumptionMoveStockAndNeverGoNegativeWithoutPermission() throws Exception {
-    var gloves =
+    String gloves =
         item(
             category("CONSUMABLE"),
             "{\"categoryId\":\"%s\",\"name\":\"Gloves %s\",\"unit\":\"pair\"}");
-    var receipt =
+    String receipt =
         send(
             document(
                     staff.role("NURSE"),
@@ -130,7 +132,7 @@ class InventoryControllerTest {
     mvc.perform(get("/api/v1/inventory/balances").with(staff.role("DOCTOR")))
         .andExpect(status().isForbidden());
 
-    var tooMuch =
+    String tooMuch =
         send(
             document(
                 staff.role("NURSE"),
@@ -147,7 +149,7 @@ class InventoryControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.shortages[0].itemId").value(gloves));
     assertThat(stock(staff.admin(), gloves)).isEqualByComparingTo("-2");
-    var tasks =
+    Long tasks =
         jdbc.queryForObject(
             "select count(*) from registry_task where title like ?", Long.class, "%Gloves%");
     assertThat(tasks).isGreaterThanOrEqualTo(1L);
@@ -155,16 +157,16 @@ class InventoryControllerTest {
 
   @Test
   void markedDrugIsAcceptedThenWithdrawnPackageByPackage() throws Exception {
-    var gtin = "0460" + String.valueOf(System.nanoTime()).substring(0, 10);
-    var drug =
+    String gtin = "0460" + String.valueOf(System.nanoTime()).substring(0, 10);
+    String drug =
         item(
             category("DRUG"),
             "{\"categoryId\":\"%s\",\"name\":\"Drug %s\",\"unit\":\"pack\",\"gtin\":\""
                 + gtin
                 + "\",\"marked\":true,\"markingSystem\":\"MDLP\"}");
-    var first =
+    String first =
         "01" + gtin + "21SER" + UUID.randomUUID().toString().substring(0, 8) + "\u001d91EE07";
-    var second =
+    String second =
         "(01)"
             + gtin
             + "(21)SER"
@@ -172,7 +174,7 @@ class InventoryControllerTest {
             + "(17)271231(10)LOT1";
 
     // Марок должно быть столько же, сколько упаковок.
-    var mismatch =
+    String mismatch =
         send(
             document(
                 staff.role("NURSE"),
@@ -184,7 +186,7 @@ class InventoryControllerTest {
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("MARKING_CODES_MISMATCH"));
 
-    var receipt =
+    String receipt =
         send(
             document(
                 staff.role("NURSE"),
@@ -195,7 +197,7 @@ class InventoryControllerTest {
     postDoc(staff.role("NURSE"), receipt, "{}").andExpect(status().isOk());
 
     // Mock-адаптер (профиль local) принял приёмку: марки в наличии.
-    var codes =
+    String codes =
         mvc.perform(get("/api/v1/inventory/marking/codes").param("item", drug).with(staff.admin()))
             .andExpect(status().isOk())
             .andReturn()
@@ -210,7 +212,7 @@ class InventoryControllerTest {
     mvc.perform(get("/api/v1/inventory/marking/operations").with(staff.role("SUPPORT")))
         .andExpect(status().isForbidden());
 
-    var consumption =
+    String consumption =
         send(
             document(
                 staff.role("NURSE"),
@@ -223,7 +225,7 @@ class InventoryControllerTest {
         .andExpect(jsonPath("$[?(@.sgtin == '" + sgtins.get(0) + "')].status").value("WITHDRAWN"));
 
     // Выбывшую упаковку повторно не списать.
-    var again =
+    String again =
         send(
             document(
                 staff.role("NURSE"),
@@ -238,11 +240,11 @@ class InventoryControllerTest {
 
   @Test
   void completedVisitConsumesServiceNorms() throws Exception {
-    var syringes =
+    String syringes =
         item(
             category("CONSUMABLE"),
             "{\"categoryId\":\"%s\",\"name\":\"Syringe %s\",\"unit\":\"pc\"}");
-    var receipt =
+    String receipt =
         send(
             document(
                 staff.role("NURSE"),
@@ -251,8 +253,8 @@ class InventoryControllerTest {
             "$.id");
     postDoc(staff.role("NURSE"), receipt, "{}").andExpect(status().isOk());
 
-    var name = "Injection " + UUID.randomUUID().toString().substring(0, 8);
-    var service =
+    String name = "Injection " + UUID.randomUUID().toString().substring(0, 8);
+    String service =
         send(
             postJson(
                     "/api/v1/services",
@@ -275,7 +277,7 @@ class InventoryControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[0].itemId").value(syringes));
 
-    var appointment =
+    String appointment =
         send(
             postJson(
                     "/api/v1/appointments",
@@ -312,7 +314,7 @@ class InventoryControllerTest {
 
   @Test
   void scanReadsCodeAndOtherClinicDoesNotSeeItems() throws Exception {
-    var gloves =
+    String gloves =
         item(
             category("CONSUMABLE"),
             "{\"categoryId\":\"%s\",\"name\":\"Private %s\",\"unit\":\"pc\"}");
@@ -328,7 +330,8 @@ class InventoryControllerTest {
         .andExpect(jsonPath("$.code").value("INVALID_MARKING_CODE"));
 
     SecondClinic.ensure(jdbc);
-    var other = staff.login(SecondClinic.ADMIN_USERNAME, SecondClinic.ADMIN_PASSWORD);
+    StaffSessions.Login other =
+        staff.login(SecondClinic.ADMIN_USERNAME, SecondClinic.ADMIN_PASSWORD);
     mvc.perform(get("/api/v1/inventory/items").with(other))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[*].id").value(not(hasItem(gloves))));
@@ -346,8 +349,8 @@ class InventoryControllerTest {
 
   @Test
   void quickReceiptCreatesMissingItemsPostsAndReusesThemByName() throws Exception {
-    var name = "Бинт " + UUID.randomUUID().toString().substring(0, 6);
-    var body =
+    String name = "Бинт " + UUID.randomUUID().toString().substring(0, 6);
+    String body =
         """
         {"idempotencyKey":"%s","supplier":"Аптека","lines":[
           {"name":"%s","kind":"CONSUMABLE","unit":"шт","quantity":10,"batch":"B1","expiresOn":"2030-01-01"},
@@ -355,14 +358,14 @@ class InventoryControllerTest {
         ]}\
         """
             .formatted(UUID.randomUUID(), name, name.toUpperCase());
-    var created =
+    ResultActions created =
         postJson("/api/v1/inventory/receipts", staff.role("NURSE"), body)
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.posted").value(true))
             .andExpect(jsonPath("$.itemsCreated").value(1))
             .andExpect(jsonPath("$.document.status").value("POSTED"))
             .andExpect(jsonPath("$.document.type").value("RECEIPT"));
-    var itemId = send(created, "$.document.lines[0].itemId");
+    String itemId = send(created, "$.document.lines[0].itemId");
     assertThat(send(created, "$.document.lines[1].itemId")).isEqualTo(itemId);
     assertThat(stock(staff.role("NURSE"), itemId)).isEqualByComparingTo("12");
 
@@ -394,7 +397,7 @@ class InventoryControllerTest {
 
   @Test
   void quickReceiptOfMarkedItemWithoutCodesStaysDraftAndCashierCannotReceive() throws Exception {
-    var drug =
+    String drug =
         item(
             category("DRUG"),
             "{\"categoryId\":\"%s\",\"name\":\"Марк"
@@ -418,11 +421,11 @@ class InventoryControllerTest {
 
   @Test
   void stockMetricsUsePostedMovementsAndMinimumStock() throws Exception {
-    var gloves =
+    String gloves =
         item(
             category("CONSUMABLE"),
             "{\"categoryId\":\"%s\",\"name\":\"Metric gloves %s\",\"unit\":\"pair\",\"minStock\":8}");
-    var receipt =
+    String receipt =
         send(
             document(
                 staff.role("NURSE"),
@@ -430,7 +433,7 @@ class InventoryControllerTest {
                 "[{\"itemId\":\"%s\",\"quantity\":10}]".formatted(gloves)),
             "$.id");
     postDoc(staff.role("NURSE"), receipt, "{}").andExpect(status().isOk());
-    var consumption =
+    String consumption =
         send(
             document(
                 staff.role("NURSE"),
@@ -439,7 +442,7 @@ class InventoryControllerTest {
             "$.id");
     postDoc(staff.role("NURSE"), consumption, "{}").andExpect(status().isOk());
 
-    var today = java.time.LocalDate.now();
+    LocalDate today = LocalDate.now();
     mvc.perform(
             get("/api/v1/inventory/metrics")
                 .param("from", today.minusDays(29).toString())

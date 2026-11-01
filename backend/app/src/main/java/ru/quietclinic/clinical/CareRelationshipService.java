@@ -22,14 +22,14 @@ public class CareRelationshipService {
   @Transactional
   public void ensureCareRelationship(UUID practitionerId, UUID patientId) {
     if (isActive(practitionerId, patientId)) return;
-    var now = Instant.now();
+    Instant now = Instant.now();
     relationships.save(
         new CareRelationship(
             practitionerId, patientId, now, now.plus(DEFAULT_TERM), APPOINTMENT_REASON));
   }
 
   boolean isActive(UUID practitionerId, UUID patientId) {
-    var now = Instant.now();
+    Instant now = Instant.now();
     return relationships.existsByPractitionerIdAndPatientIdAndValidFromBeforeAndValidUntilAfter(
         practitionerId, patientId, now.plusMillis(1), now);
   }

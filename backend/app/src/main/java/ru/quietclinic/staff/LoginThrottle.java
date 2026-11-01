@@ -48,7 +48,7 @@ class LoginThrottle {
   }
 
   private int count(String key, Instant now) {
-    var list = failures.get(key);
+    Deque<Instant> list = failures.get(key);
     if (list == null) return 0;
     synchronized (list) {
       while (!list.isEmpty() && list.peekFirst().isBefore(now.minus(window))) list.pollFirst();
@@ -57,7 +57,7 @@ class LoginThrottle {
   }
 
   private void add(String key, Instant now) {
-    var list = failures.computeIfAbsent(key, k -> new ArrayDeque<>());
+    Deque<Instant> list = failures.computeIfAbsent(key, k -> new ArrayDeque<>());
     synchronized (list) {
       list.addLast(now);
       while (list.size() > Math.max(maxPerLogin, maxPerAddress)) list.pollFirst();

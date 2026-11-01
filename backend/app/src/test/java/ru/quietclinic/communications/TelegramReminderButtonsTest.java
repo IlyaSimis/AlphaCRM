@@ -29,7 +29,7 @@ class TelegramReminderButtonsTest {
 
   @Test
   void reminderCarriesConfirmAndDeclineButtons() {
-    var channel =
+    TelegramChannel channel =
         new TelegramChannel(
             new HttpTransport(),
             "token",
@@ -48,7 +48,8 @@ class TelegramReminderButtonsTest {
 
   @Test
   void noButtonsWhenSwitchedOff() {
-    var channel = new TelegramChannel(new HttpTransport(), "token", "https://api.telegram.org");
+    TelegramChannel channel =
+        new TelegramChannel(new HttpTransport(), "token", "https://api.telegram.org");
     assertThat(channel.replyMarkup(message(NoticeTemplates.REMINDER))).isNull();
   }
 
@@ -57,7 +58,7 @@ class TelegramReminderButtonsTest {
     // Telegram принимает callback_data не длиннее 64 байт.
     assertThat(("cf:" + APPOINTMENT + ":yes").getBytes(StandardCharsets.UTF_8).length)
         .isLessThanOrEqualTo(64);
-    var texts = new NoticeText("UTC");
+    NoticeText texts = new NoticeText("UTC");
     assertThat(texts.label("telegram-button-confirm")).isEqualTo("Подтвердить");
     assertThat(texts.label("telegram-button-decline")).isEqualTo("Отменить запись");
   }

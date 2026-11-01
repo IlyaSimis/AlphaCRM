@@ -8,9 +8,11 @@ import static ru.quietclinic.platform.PlatformConfig.notFound;
 import static ru.quietclinic.platform.PlatformConfig.requirePermission;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.sql.Date;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -18,6 +20,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -99,9 +102,10 @@ class StockService {
 
   /** Черновик без проверки прав — для потребителя события о завершённом приёме. */
   StockDocument createDraft(DocumentRequest request) {
-    var existing = documents.findByClinicIdAndIdempotencyKey(clinicId(), request.idempotencyKey());
+    Optional<StockDocument> existing =
+        documents.findByClinicIdAndIdempotencyKey(clinicId(), request.idempotencyKey());
     if (existing.isPresent()) return existing.get();
-    var document =
+    StockDocument document =
         new StockDocument(
             clinicId(),
             request.type(),
@@ -124,7 +128,7 @@ class StockService {
   @Transactional
   DocumentView update(UUID id, DocumentRequest request) {
     requirePermission(Permission.INVENTORY_DOCUMENT_WRITE);
-    var document = document(id);
+    StockDocument document = document(id);
     requireDraft(document);
     if (!document.type.equals(request.type())) {
       throw conflict("DOCUMENT_TYPE_FIXED", "The document type cannot be changed");
@@ -142,7 +146,7 @@ class StockService {
   @Transactional
   DocumentView cancel(UUID id) {
     requirePermission(Permission.INVENTORY_DOCUMENT_WRITE);
-    var document = document(id);
+    StockDocument document = document(id);
     if (StockDocument.POSTED.equals(document.status)) {
       throw conflict(
           "DOCUMENT_POSTED", "A posted document cannot be cancelled; create a correcting one");
@@ -158,7 +162,7 @@ class StockService {
   @Transactional
   DocumentView post(UUID id, boolean allowNegative) {
     requirePermission(Permission.INVENTORY_DOCUMENT_WRITE);
-    var document = document(id);
+    StockDocument document = document(id);
     if (allowNegative) {
       requirePermission(Permission.INVENTORY_ALLOW_NEGATIVE);
       if (!StockDocument.CONSUMPTION.equals(document.type)) {
@@ -173,16 +177,16 @@ class StockService {
   DocumentView postDocument(StockDocument document, boolean allowNegative) {
     if (StockDocument.POSTED.equals(document.status)) return view(document, List.of());
     requireDraft(document);
-    var rows = lines.findByDocumentIdOrderByLineNo(document.id);
+    List<StockLine> rows = lines.findByDocumentIdOrderByLineNo(document.id);
     if (rows.isEmpty()) throw conflict("DOCUMENT_EMPTY", "The document has no lines");
     checkWarehouses(document);
-    var itemsById =
+    Map<UUID, Item> itemsById =
         items.findByClinicIdAndIdIn(clinicId(), rows.stream().map(l -> l.itemId).toList()).stream()
             .collect(Collectors.toMap(i -> i.id, Function.identity()));
-    var shortages = new ArrayList<DocumentView.Shortage>();
-    var outgoing = new LinkedHashMap<String, Set<String>>();
-    for (var line : rows) {
-      var item = itemsById.get(line.itemId);
+    List<DocumentView.Shortage> shortages = new ArrayList<>();
+    Map<String, Set<String>> outgoing = new LinkedHashMap<>();
+    for (StockLine line : rows) {
+      Item item = itemsById.get(line.itemId);
       if (item == null) throw notFound("ITEM_NOT_FOUND", "Item not found");
       if (item.marked) {
         postMarked(document, line, item, outgoing);
@@ -192,11 +196,12 @@ class StockService {
         postPlain(document, line, item, allowNegative, shortages);
       }
     }
-    var created = new ArrayList<UUID>();
+    List<UUID> created = new ArrayList<>();
     outgoing.forEach(
         (type, sgtins) -> {
           if (sgtins.isEmpty()) return;
-          var op = operations.save(new MarkingOperation(clinicId(), type, document.id, sgtins));
+          MarkingOperation op =
+              operations.save(new MarkingOperation(clinicId(), type, document.id, sgtins));
           created.add(op.id);
         });
     document.status = StockDocument.POSTED;
@@ -210,8 +215,8 @@ class StockService {
         document.id,
         "ALLOWED",
         document.type);
-    for (var shortage : shortages) {
-      var payload = new LinkedHashMap<String, Object>();
+    for (DocumentView.Shortage shortage : shortages) {
+      Map<String, Object> payload = new LinkedHashMap<>();
       payload.put("documentId", document.id.toString());
       payload.put(
           "appointmentId",
@@ -232,16 +237,16 @@ class StockService {
       throw conflict(
           "MARKING_CODES_MISMATCH", "Scan one marking code for every package of a marked item");
     }
-    var existing =
+    Map<String, MarkingCode> existing =
         codes.findByClinicIdAndSgtinIn(clinicId(), line.codes).stream()
             .collect(Collectors.toMap(c -> c.sgtin, Function.identity()));
     if (StockDocument.RECEIPT.equals(document.type)) {
-      for (var sgtin : line.codes) {
-        var found = existing.get(sgtin);
+      for (String sgtin : line.codes) {
+        MarkingCode found = existing.get(sgtin);
         if (found != null && !Set.of("RETURNED", "ERROR").contains(found.status)) {
           throw conflict("MARKING_CODE_DUPLICATE", "This package is already in stock");
         }
-        var parsed = sgtinParts(sgtin, item);
+        Gs1.Parsed parsed = sgtinParts(sgtin);
         if (found != null) {
           found.move("PENDING_ACCEPTANCE", document.id);
           found.warehouseId = document.toWarehouseId;
@@ -265,9 +270,9 @@ class StockService {
       addBalance(item.id, document.toWarehouseId, line.batch, line.expiresOn, line.quantity);
       return;
     }
-    var byBatch = new LinkedHashMap<String, BigDecimal>();
-    for (var sgtin : line.codes) {
-      var code = existing.get(sgtin);
+    Map<String, BigDecimal> byBatch = new LinkedHashMap<>();
+    for (String sgtin : line.codes) {
+      MarkingCode code = existing.get(sgtin);
       if (code == null
           || !"IN_STOCK".equals(code.status)
           || !document.fromWarehouseId.equals(code.warehouseId)
@@ -321,9 +326,9 @@ class StockService {
       addBalance(item.id, document.toWarehouseId, line.batch, line.expiresOn, line.quantity);
       return;
     }
-    var allocated =
+    Map<String, BigDecimal> allocated =
         decrease(item, document.fromWarehouseId, line.batch, line.quantity, allowNegative);
-    var missing =
+    BigDecimal missing =
         line.quantity.subtract(
             allocated.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add));
     if (missing.signum() > 0) shortages.add(new DocumentView.Shortage(item.id, item.name, missing));
@@ -339,7 +344,7 @@ class StockService {
    */
   private Map<String, BigDecimal> decrease(
       Item item, UUID warehouseId, String batch, BigDecimal quantity, boolean allowNegative) {
-    var balances =
+    List<Map.Entry<String, BigDecimal>> balances =
         jdbc.query(
             "select batch, quantity from inventory.stock_balance where item_id = ? and warehouse_id"
                 + " = ?"
@@ -349,7 +354,7 @@ class StockService {
             batch.isBlank()
                 ? new Object[] {item.id, warehouseId}
                 : new Object[] {item.id, warehouseId, batch});
-    var available =
+    BigDecimal available =
         balances.stream()
             .map(Map.Entry::getValue)
             .filter(q -> q.signum() > 0)
@@ -357,12 +362,12 @@ class StockService {
     if (available.compareTo(quantity) < 0 && !allowNegative) {
       throw conflict("INSUFFICIENT_STOCK", "Not enough stock: " + item.name);
     }
-    var allocated = new LinkedHashMap<String, BigDecimal>();
-    var left = quantity;
-    for (var row : balances) {
+    Map<String, BigDecimal> allocated = new LinkedHashMap<>();
+    BigDecimal left = quantity;
+    for (Map.Entry<String, BigDecimal> row : balances) {
       if (left.signum() <= 0) break;
       if (row.getValue().signum() <= 0) continue;
-      var take = row.getValue().min(left);
+      BigDecimal take = row.getValue().min(left);
       addBalance(item.id, warehouseId, row.getKey(), null, take.negate());
       allocated.merge(row.getKey(), take, BigDecimal::add);
       left = left.subtract(take);
@@ -373,8 +378,8 @@ class StockService {
 
   private void addBalance(
       UUID itemId, UUID warehouseId, String batch, LocalDate expiresOn, BigDecimal delta) {
-    var key = batch == null ? "" : batch;
-    var updated =
+    String key = batch == null ? "" : batch;
+    int updated =
         jdbc.update(
             "update inventory.stock_balance set quantity = quantity + ?,"
                 + " expires_on = coalesce(expires_on, ?)"
@@ -417,7 +422,7 @@ class StockService {
   @Transactional(readOnly = true)
   List<BalanceView> balances(UUID warehouseId, UUID categoryId, String query, boolean includeZero) {
     requirePermission(Permission.INVENTORY_STOCK_READ);
-    var sql =
+    StringBuilder sql =
         new StringBuilder(
             "select b.item_id, i.name as item_name, i.category_id, c.name as category_name, c.kind,"
                 + " i.unit, i.marked, b.warehouse_id, w.name as warehouse_name, b.batch,"
@@ -430,7 +435,7 @@ class StockService {
                 + " join inventory.item_category c on c.id = i.category_id"
                 + " join inventory.warehouse w on w.id = b.warehouse_id"
                 + " where b.clinic_id = ?");
-    var args = new ArrayList<Object>(List.of(clinicId()));
+    List<Object> args = new ArrayList<>(List.of(clinicId()));
     if (!includeZero) sql.append(" and b.quantity <> 0");
     if (warehouseId != null) {
       sql.append(" and b.warehouse_id = ?");
@@ -473,9 +478,9 @@ class StockService {
     if (from == null || to == null || to.isBefore(from)) {
       throw conflict("INVALID_RANGE", "Period end must not be before its start");
     }
-    long days = java.time.temporal.ChronoUnit.DAYS.between(from, to) + 1;
+    long days = ChronoUnit.DAYS.between(from, to) + 1;
     if (days > 366) throw conflict("RANGE_TOO_LONG", "Period must not exceed one year");
-    var sql =
+    String sql =
         "select i.id, i.name, i.unit, i.min_stock, coalesce(b.stock, 0) as stock,"
             + " coalesce(m.received, 0) as received, coalesce(m.consumption, 0) as consumption,"
             + " coalesce(m.write_off, 0) as write_off from inventory.item i"
@@ -488,29 +493,25 @@ class StockService {
             + " from inventory.stock_line l join inventory.stock_document d on d.id = l.document_id"
             + " where d.clinic_id = ? and d.status = 'POSTED' and d.document_date >= ? and d.document_date <= ?"
             + " group by l.item_id) m on m.item_id = i.id where i.clinic_id = ? order by i.name";
-    var rows =
+    List<StockMetricsView.Row> rows =
         jdbc.query(
             sql,
             (rs, n) -> {
-              var stock = rs.getBigDecimal("stock");
-              var received = rs.getBigDecimal("received");
-              var consumption = rs.getBigDecimal("consumption");
-              var writeOff = rs.getBigDecimal("write_off");
-              var outgoing = consumption.add(writeOff);
-              var opening = stock.subtract(received).add(outgoing);
-              var average =
-                  opening
-                      .add(stock)
-                      .divide(BigDecimal.valueOf(2), 6, java.math.RoundingMode.HALF_UP);
-              var turnover =
-                  average.signum() > 0
-                      ? outgoing.divide(average, 2, java.math.RoundingMode.HALF_UP)
-                      : null;
-              var daysStock =
+              BigDecimal stock = rs.getBigDecimal("stock");
+              BigDecimal received = rs.getBigDecimal("received");
+              BigDecimal consumption = rs.getBigDecimal("consumption");
+              BigDecimal writeOff = rs.getBigDecimal("write_off");
+              BigDecimal outgoing = consumption.add(writeOff);
+              BigDecimal opening = stock.subtract(received).add(outgoing);
+              BigDecimal average =
+                  opening.add(stock).divide(BigDecimal.valueOf(2), 6, RoundingMode.HALF_UP);
+              BigDecimal turnover =
+                  average.signum() > 0 ? outgoing.divide(average, 2, RoundingMode.HALF_UP) : null;
+              BigDecimal daysStock =
                   outgoing.signum() > 0 && stock.signum() > 0
                       ? stock
                           .multiply(BigDecimal.valueOf(days))
-                          .divide(outgoing, 1, java.math.RoundingMode.HALF_UP)
+                          .divide(outgoing, 1, RoundingMode.HALF_UP)
                       : null;
               return new StockMetricsView.Row(
                   rs.getObject("id", UUID.class),
@@ -540,7 +541,7 @@ class StockService {
     document.appointmentId = request.appointmentId();
     document.fromWarehouseId = request.fromWarehouseId();
     document.toWarehouseId = request.toWarehouseId();
-    var defaults = catalog.defaultWarehouse(clinicId());
+    Warehouse defaults = catalog.defaultWarehouse(clinicId());
     if (document.decreases() && document.fromWarehouseId == null) {
       document.fromWarehouseId = defaults.id;
     }
@@ -562,19 +563,19 @@ class StockService {
   }
 
   private void replaceLines(StockDocument document, List<DocumentRequest.Line> requested) {
-    var number = 0;
-    var seen = new LinkedHashSet<String>();
-    for (var line : requested) {
-      var item = catalog.item(line.itemId());
+    int number = 0;
+    Set<String> seen = new LinkedHashSet<>();
+    for (DocumentRequest.Line line : requested) {
+      Item item = catalog.item(line.itemId());
       if (!item.active) throw conflict("ITEM_INACTIVE", "The item is switched off");
-      var sgtins = new LinkedHashSet<String>();
-      var batch = line.batch() == null ? "" : line.batch().trim();
-      var expires = line.expiresOn();
-      for (var raw : line.codes() == null ? List.<String>of() : line.codes()) {
+      Set<String> sgtins = new LinkedHashSet<>();
+      String batch = line.batch() == null ? "" : line.batch().trim();
+      LocalDate expires = line.expiresOn();
+      for (String raw : line.codes() == null ? List.<String>of() : line.codes()) {
         if (!item.marked) {
           throw conflict("ITEM_NOT_MARKED", "Marking codes are given for an item without marking");
         }
-        var parsed = MarkingService.read(raw);
+        Gs1.Parsed parsed = MarkingService.read(raw);
         if (!parsed.gtin().equals(item.gtin)) {
           throw conflict("MARKING_CODE_ITEM_MISMATCH", "The code belongs to a different item");
         }
@@ -591,7 +592,7 @@ class StockService {
     lines.flush();
   }
 
-  private static Gs1.Parsed sgtinParts(String sgtin, Item item) {
+  private static Gs1.Parsed sgtinParts(String sgtin) {
     return new Gs1.Parsed(sgtin.substring(0, 14), sgtin.substring(14), "", null);
   }
 
@@ -608,14 +609,14 @@ class StockService {
   }
 
   DocumentView view(StockDocument d, List<DocumentView.Shortage> shortages) {
-    var rows = lines.findByDocumentIdOrderByLineNo(d.id);
-    var itemsById = new HashMap<UUID, Item>();
+    List<StockLine> rows = lines.findByDocumentIdOrderByLineNo(d.id);
+    Map<UUID, Item> itemsById = new HashMap<>();
     items
         .findByClinicIdAndIdIn(d.clinicId, rows.stream().map(l -> l.itemId).toList())
         .forEach(i -> itemsById.put(i.id, i));
     // Техподдержке и врачу накладные не отдаются вовсе (нет inventory.document.write); связь с
     // приёмом видят только те, кто проводит документы.
-    var appointment = can(Permission.INVENTORY_DOCUMENT_WRITE) ? d.appointmentId : null;
+    UUID appointment = can(Permission.INVENTORY_DOCUMENT_WRITE) ? d.appointmentId : null;
     return new DocumentView(
         d.id,
         d.type,
@@ -631,7 +632,7 @@ class StockService {
         rows.stream()
             .map(
                 l -> {
-                  var item = itemsById.get(l.itemId);
+                  Item item = itemsById.get(l.itemId);
                   return new DocumentView.LineView(
                       l.id,
                       l.itemId,

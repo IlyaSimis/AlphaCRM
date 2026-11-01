@@ -2,6 +2,7 @@ package ru.quietclinic.inventory;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,7 +45,7 @@ class MarkingRelay {
 
   /** Все операции, чей срок пришёл. */
   int runOnce(Instant now) {
-    var due =
+    List<MarkingOperation> due =
         operations.findTop50ByStatusAndNextAttemptAtLessThanEqualOrderByCreatedAt(
             MarkingOperation.PENDING, now);
     due.forEach(op -> process(op.id));
@@ -60,9 +61,9 @@ class MarkingRelay {
   }
 
   private void send(UUID operationId) {
-    var op = operations.findById(operationId).orElse(null);
+    MarkingOperation op = operations.findById(operationId).orElse(null);
     if (op == null || !MarkingOperation.PENDING.equals(op.status)) return;
-    var result =
+    MarkingPort.Result result =
         switch (op.type) {
           case MarkingOperation.ACCEPTANCE -> port.accept(op.id, op.sgtins);
           case MarkingOperation.WITHDRAW_MEDICAL_USE ->
@@ -71,7 +72,7 @@ class MarkingRelay {
           case MarkingOperation.RETURN_TO_SUPPLIER -> port.returnToSupplier(op.id, op.sgtins);
           default -> MarkingPort.Result.rejected("UNKNOWN_OPERATION");
         };
-    var now = Instant.now();
+    Instant now = Instant.now();
     op.updatedAt = now;
     if (result.accepted()) {
       op.status = MarkingOperation.DONE;
@@ -95,7 +96,7 @@ class MarkingRelay {
   }
 
   private void moveCodes(MarkingOperation op, String status) {
-    for (var code : codes.findByClinicIdAndSgtinIn(op.clinicId, op.sgtins)) {
+    for (MarkingCode code : codes.findByClinicIdAndSgtinIn(op.clinicId, op.sgtins)) {
       code.status = status;
       code.updatedAt = Instant.now();
       if (!"IN_STOCK".equals(status) && !"ERROR".equals(status)) code.warehouseId = null;

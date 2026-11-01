@@ -9,6 +9,7 @@ import static ru.quietclinic.platform.PlatformConfig.requirePermission;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -61,7 +62,7 @@ class EncounterService {
     if (!actorId().equals(request.practitionerId())) {
       throw forbidden("OWN_VISIT_ONLY", "A doctor can start only their own visit");
     }
-    var appointment =
+    AppointmentSnapshot appointment =
         appointments
             .find(request.appointmentId())
             .orElseThrow(() -> notFound("APPOINTMENT_NOT_FOUND", "Appointment not found"));
@@ -77,9 +78,10 @@ class EncounterService {
     }
     // Запись уходит в IN_PROGRESS; другие приёмы врача не закрываются и не подписываются.
     appointments.markInProgress(request.appointmentId());
-    var existing = encounters.findFirstByAppointmentIdOrderByStartedAtAsc(request.appointmentId());
+    Optional<Encounter> existing =
+        encounters.findFirstByAppointmentIdOrderByStartedAtAsc(request.appointmentId());
     if (existing.isPresent()) return new EncounterStart(view(existing.get(), null), false);
-    var encounter =
+    Encounter encounter =
         encounters.save(
             new Encounter(request.appointmentId(), request.patientId(), request.practitionerId()));
     audit.record(actorId(), "ENCOUNTER_STARTED", "ENCOUNTER", encounter.id, "ALLOWED", "treatment");
@@ -89,9 +91,9 @@ class EncounterService {
   @Transactional(readOnly = true)
   List<ClinicalView> history(UUID patientId) {
     // Владелец с действующим экстренным доступом читает историю без связи с лечением (K1).
-    var emergency = !can(Permission.CLINICAL_RECORD) && breakGlass.active(patientId);
+    boolean emergency = !can(Permission.CLINICAL_RECORD) && breakGlass.active(patientId);
     if (!emergency) requireClinicalAccess(patientId);
-    var result =
+    List<ClinicalView> result =
         encounters.findByPatientIdOrderByStartedAtDesc(patientId).stream()
             .map(e -> view(e, notes.findByEncounterId(e.id).orElse(null)))
             .toList();
@@ -108,9 +110,9 @@ class EncounterService {
   @Transactional
   ClinicalView saveNote(UUID encounterId, ClinicalNoteRequest request) {
     requirePermission(Permission.CLINICAL_RECORD);
-    var encounter = findEncounter(encounterId);
+    Encounter encounter = findEncounter(encounterId);
     requireClinicalAccess(encounter.patientId);
-    var note = notes.findByEncounterId(encounterId).orElseGet(ClinicalNote::new);
+    ClinicalNote note = notes.findByEncounterId(encounterId).orElseGet(ClinicalNote::new);
     if (note.id == null) {
       note.id = UUID.randomUUID();
       note.encounterId = encounterId;
@@ -130,10 +132,10 @@ class EncounterService {
   @Transactional
   DocumentView createDocument(UUID encounterId, DocumentRequest request) {
     requirePermission(Permission.CLINICAL_RECORD);
-    var encounter = findEncounter(encounterId);
+    Encounter encounter = findEncounter(encounterId);
     requireClinicalAccess(encounter.patientId);
-    var content = contentOf(encounterId, request);
-    var doc =
+    String content = contentOf(encounterId, request);
+    MedicalDocument doc =
         documents.save(
             new MedicalDocument(
                 encounterId, null, request.templateVersion(), encryption.encrypt(content)));
@@ -148,10 +150,10 @@ class EncounterService {
   @Transactional
   DocumentView sign(UUID documentId) {
     requirePermission(Permission.CLINICAL_RECORD);
-    var doc = findDocument(documentId);
-    var encounter = findEncounter(doc.encounterId);
+    MedicalDocument doc = findDocument(documentId);
+    Encounter encounter = findEncounter(doc.encounterId);
     requireClinicalAccess(encounter.patientId);
-    var note = notes.findByEncounterId(encounter.id);
+    Optional<ClinicalNote> note = notes.findByEncounterId(encounter.id);
     String plaintext;
     if (note.isPresent() && "DRAFT".equals(doc.state)) {
       plaintext = canonical(note.get());
@@ -168,13 +170,13 @@ class EncounterService {
   @Transactional
   DocumentView amend(UUID documentId, DocumentRequest request) {
     requirePermission(Permission.CLINICAL_RECORD);
-    var original = findDocument(documentId);
+    MedicalDocument original = findDocument(documentId);
     if (!original.state.equals("SIGNED_LOCKED")) {
       throw conflict("ORIGINAL_NOT_SIGNED", "Only a signed document can be amended");
     }
-    var encounter = findEncounter(original.encounterId);
+    Encounter encounter = findEncounter(original.encounterId);
     requireClinicalAccess(encounter.patientId);
-    var amendment =
+    MedicalDocument amendment =
         documents.save(
             new MedicalDocument(
                 original.encounterId,
@@ -190,7 +192,7 @@ class EncounterService {
     if (request.canonicalContent() != null && !request.canonicalContent().isBlank()) {
       return request.canonicalContent();
     }
-    var note =
+    ClinicalNote note =
         notes
             .findByEncounterId(encounterId)
             .orElseThrow(() -> conflict("NOTE_REQUIRED", "Save the visit note draft first"));

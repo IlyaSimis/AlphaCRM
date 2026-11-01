@@ -8,11 +8,16 @@ import static ru.quietclinic.platform.PlatformConfig.requirePermission;
 import static ru.quietclinic.platform.PlatformConfig.staffId;
 
 import java.sql.Date;
+import java.sql.Time;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -39,21 +44,21 @@ class DashboardService {
   @Transactional(readOnly = true)
   DashboardView dashboard() {
     requirePermission(Permission.DASHBOARD_READ);
-    var today = time.today();
-    var monthStart = today.withDayOfMonth(1);
-    var from = Timestamp.from(time.startOf(monthStart));
-    var to = Timestamp.from(time.startOf(monthStart.plusMonths(1)));
-    var dayFrom = Timestamp.from(time.startOf(today));
-    var dayTo = Timestamp.from(time.startOf(today.plusDays(1)));
+    LocalDate today = time.today();
+    LocalDate monthStart = today.withDayOfMonth(1);
+    Timestamp from = Timestamp.from(time.startOf(monthStart));
+    Timestamp to = Timestamp.from(time.startOf(monthStart.plusMonths(1)));
+    Timestamp dayFrom = Timestamp.from(time.startOf(today));
+    Timestamp dayTo = Timestamp.from(time.startOf(today.plusDays(1)));
     // Врач видит свои приёмы; аналитика клиники — у тех, кому она разрешена.
-    var own = !can(Permission.ANALYTICS_READ) && can(Permission.APPOINTMENT_WRITE_OWN);
-    var scope = own ? "OWN" : "CLINIC";
-    var widgets = new ArrayList<Widget>();
+    boolean own = !can(Permission.ANALYTICS_READ) && can(Permission.APPOINTMENT_WRITE_OWN);
+    String scope = own ? "OWN" : "CLINIC";
+    List<Widget> widgets = new ArrayList<>();
 
     if (can(Permission.SCHEDULE_READ)
         && (can(Permission.ANALYTICS_READ) || can(Permission.ANALYTICS_READ_OWN))) {
-      var filter = appointmentFilter(own);
-      var month =
+      Filter filter = appointmentFilter(own);
+      Map<String, Object> month =
           jdbc.queryForMap(
               "select count(*) as total, coalesce(sum(case when a.status = 'COMPLETED' then 1 else"
                   + " 0 end), 0) as done, coalesce(sum(case when a.status = 'NO_SHOW' then 1 else 0"
@@ -79,7 +84,7 @@ class DashboardService {
               number(month.get("cancelled")),
               "count",
               List.of()));
-      var upcoming =
+      List<Timestamp> upcoming =
           jdbc.queryForList(
               "select a.starts_at from appointment a join practitioner p on p.id ="
                   + " a.practitioner_id where p.clinic_id = ? and a.starts_at >= ? and a.starts_at"
@@ -88,8 +93,8 @@ class DashboardService {
                   + " order by a.starts_at",
               Timestamp.class,
               filter.args(clinicId(), dayFrom, dayTo));
-      var now = Instant.now();
-      var next =
+      Instant now = Instant.now();
+      List<String> next =
           upcoming.stream()
               .map(Timestamp::toInstant)
               .filter(t -> !t.isBefore(now.minusSeconds(30 * 60)))
@@ -97,7 +102,7 @@ class DashboardService {
               .map(t -> HH_MM.format(t.atZone(time.zone())))
               .toList();
       widgets.add(new Widget("appointments.today", scope, upcoming.size(), null, "count", next));
-      var load =
+      AnalyticsOverviewService.Occupancy load =
           analytics.occupancy(
               monthStart, monthStart.plusMonths(1).minusDays(1), own ? actorId() : null);
       long loadPercent =
@@ -110,12 +115,12 @@ class DashboardService {
     }
 
     if (can(Permission.CLINICAL_RECORD)) {
-      var drafts =
+      long drafts =
           count(
               "select count(*) from medical_document d join encounter e on e.id = d.encounter_id"
                   + " where e.practitioner_id = ? and d.state = 'DRAFT'",
               actorId());
-      var files =
+      long files =
           count(
               "select count(*) from patient_file where clinic_id = ? and uploaded_by = ?"
                   + " and state = 'DRAFT'",
@@ -127,16 +132,16 @@ class DashboardService {
 
     // Экстренные доступы за 7 дней (K1): старшему администратору — по клинике, врачу — к его
     // пациентам (по действующей связи с лечением). Только счётчик, без причин.
-    var weekAgo = Timestamp.from(time.now().minus(java.time.Duration.ofDays(7)));
+    Timestamp weekAgo = Timestamp.from(time.now().minus(Duration.ofDays(7)));
     if (can(Permission.CLINICAL_BREAK_GLASS_REVIEW)) {
-      var granted =
+      long granted =
           count(
               "select count(*) from break_glass_grant where clinic_id = ? and granted_at >= ?",
               clinicId(),
               weekAgo);
       widgets.add(new Widget("clinical.break-glass", "CLINIC", granted, null, "count", List.of()));
     } else if (can(Permission.CLINICAL_RECORD)) {
-      var granted =
+      long granted =
           count(
               "select count(*) from break_glass_grant g where g.clinic_id = ? and g.granted_at >= ?"
                   + " and exists (select 1 from care_relationship r where r.patient_id ="
@@ -149,7 +154,7 @@ class DashboardService {
     }
 
     if (can(Permission.INVOICE_READ)) {
-      var unpaid =
+      Map<String, Object> unpaid =
           jdbc.queryForMap(
               "select count(*) as cnt, coalesce(sum(c.amount_minor), 0) as total from charge c"
                   + " join appointment a on a.id = c.appointment_id"
@@ -179,7 +184,7 @@ class DashboardService {
     }
 
     if (can(Permission.REVENUE_READ)) {
-      var revenue =
+      Map<String, Object> revenue =
           jdbc.queryForMap(
               "select count(*) as cnt, coalesce(sum(c.amount_minor), 0) as total"
                   + " from payment_record r join charge c on c.id = r.charge_id"
@@ -190,7 +195,7 @@ class DashboardService {
               from,
               to);
       // Возвраты месяца вычитаются: выручка — оплаты минус возвраты (раздел D4).
-      var refunded =
+      Long refunded =
           jdbc.queryForObject(
               "select coalesce(sum(f.amount_minor), 0) from refund_record f"
                   + " join charge c on c.id = f.charge_id"
@@ -237,7 +242,7 @@ class DashboardService {
     }
 
     if (can(Permission.REGISTRY_TASK_READ)) {
-      var mine = !can(Permission.REGISTRY_TASK_MANAGE);
+      boolean mine = !can(Permission.REGISTRY_TASK_MANAGE);
       widgets.add(
           new Widget(
               "tasks.due",
@@ -338,16 +343,16 @@ class DashboardService {
     }
 
     if (can(Permission.DRIVE_ADMIN)) {
-      var quota =
+      List<Map<String, Object>> quota =
           jdbc.queryForList(
               "select bytes_used, bytes_limit from drive.drive_quota where clinic_id = ?",
               clinicId());
-      var used = quota.isEmpty() ? 0 : number(quota.get(0).get("bytes_used"));
-      var limit = quota.isEmpty() ? null : number(quota.get(0).get("bytes_limit"));
+      long used = quota.isEmpty() ? 0 : number(quota.get(0).get("bytes_used"));
+      Long limit = quota.isEmpty() ? null : number(quota.get(0).get("bytes_limit"));
       widgets.add(new Widget("drive.quota", "CLINIC", used, limit, "bytes", List.of()));
     }
 
-    var role = currentRoles().stream().findFirst().orElse(null);
+    String role = currentRoles().stream().findFirst().orElse(null);
     return new DashboardView(role, monthStart, today, Instant.now(), widgets);
   }
 
@@ -355,9 +360,8 @@ class DashboardService {
    * Расчётная зарплата сотрудника, а не платёжная ведомость: месячный оклад, часы по месячному
    * графику или оплата завершённых приёмов. Чужие ставки в общий дашборд не попадают.
    */
-  private Widget salaryWidget(
-      java.time.LocalDate monthStart, java.time.LocalDate today, Timestamp from, Timestamp to) {
-    var contracts =
+  private Widget salaryWidget(LocalDate monthStart, LocalDate today, Timestamp from, Timestamp to) {
+    List<Map<String, Object>> contracts =
         jdbc.queryForList(
             "select rate_minor, rate_unit from hr_contract where clinic_id = ? and staff_id = ?"
                 + " and valid_from <= ? and (valid_to is null or valid_to >= ?)"
@@ -369,14 +373,14 @@ class DashboardService {
     if (contracts.isEmpty()) {
       return new Widget("salary.month", "OWN", 0, null, "money", List.of());
     }
-    var contract = contracts.get(0);
-    var rate = number(contract.get("rate_minor"));
-    var unit = String.valueOf(contract.get("rate_unit"));
+    Map<String, Object> contract = contracts.get(0);
+    long rate = number(contract.get("rate_minor"));
+    String unit = String.valueOf(contract.get("rate_unit"));
     long value;
     if ("MONTH".equals(unit)) {
       value = rate;
     } else if ("VISIT".equals(unit)) {
-      var completed =
+      long completed =
           count(
               "select count(*) from appointment a join practitioner p on p.id = a.practitioner_id"
                   + " where p.clinic_id = ? and a.practitioner_id = ? and a.status = 'COMPLETED'"
@@ -387,7 +391,7 @@ class DashboardService {
               to);
       value = Math.multiplyExact(rate, completed);
     } else {
-      var shifts =
+      List<Map<String, Object>> shifts =
           jdbc.queryForList(
               "select s.day_of_week, s.starts_at, s.ends_at from practitioner_schedule s"
                   + " join staff_user u on u.practitioner_id = s.practitioner_id"
@@ -395,12 +399,14 @@ class DashboardService {
               clinicId(),
               staffId());
       long minutes = 0;
-      for (var day = monthStart; day.isBefore(monthStart.plusMonths(1)); day = day.plusDays(1)) {
-        for (var shift : shifts) {
+      for (LocalDate day = monthStart;
+          day.isBefore(monthStart.plusMonths(1));
+          day = day.plusDays(1)) {
+        for (Map<String, Object> shift : shifts) {
           if (number(shift.get("day_of_week")) == day.getDayOfWeek().getValue()) {
-            var start = ((java.sql.Time) shift.get("starts_at")).toLocalTime();
-            var end = ((java.sql.Time) shift.get("ends_at")).toLocalTime();
-            minutes += java.time.Duration.between(start, end).toMinutes();
+            LocalTime start = ((Time) shift.get("starts_at")).toLocalTime();
+            LocalTime end = ((Time) shift.get("ends_at")).toLocalTime();
+            minutes += Duration.between(start, end).toMinutes();
           }
         }
       }
@@ -417,7 +423,7 @@ class DashboardService {
   private record Filter(String sql, UUID practitionerId) {
     Object[] args(Object... head) {
       if (practitionerId == null) return head;
-      var all = new Object[head.length + 1];
+      Object[] all = new Object[head.length + 1];
       System.arraycopy(head, 0, all, 0, head.length);
       all[head.length] = practitionerId;
       return all;
@@ -425,7 +431,7 @@ class DashboardService {
   }
 
   private long count(String sql, Object... args) {
-    var value = jdbc.queryForObject(sql, Long.class, args);
+    Long value = jdbc.queryForObject(sql, Long.class, args);
     return value == null ? 0 : value;
   }
 

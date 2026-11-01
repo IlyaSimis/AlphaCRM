@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import ru.quietclinic.patients.MessengerChannel;
 import ru.quietclinic.patients.PatientMessengerLinks;
+import ru.quietclinic.patients.TelegramPatient;
 
 /** Общий приватный API Telegram и MAX. Доступен только по X-Bot-Token через внутреннюю сеть/VPN. */
 @RestController
@@ -52,7 +53,7 @@ class MessengerController {
 
   @PostMapping("/link/consume")
   BotPatientView consume(@Valid @RequestBody MessengerLinkConsumeRequest request) {
-    var patient =
+    TelegramPatient patient =
         links.consume(
             MessengerChannel.parse(request.channel()), request.externalId(), request.token());
     return new BotPatientView(

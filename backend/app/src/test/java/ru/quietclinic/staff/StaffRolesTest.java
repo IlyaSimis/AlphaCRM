@@ -18,6 +18,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import ru.quietclinic.StaffSessions;
 
@@ -39,11 +40,11 @@ class StaffRolesTest {
 
   @Test
   void rolesAddUpAndApplyToTheOpenSession() throws Exception {
-    var username = "roles." + UUID.randomUUID().toString().substring(0, 8);
+    String username = "roles." + UUID.randomUUID().toString().substring(0, 8);
     staff.create(username, "Roles Test", "CASHIER", "", "temporary-1");
-    var session = staff.login(username, "temporary-1");
+    StaffSessions.Login session = staff.login(username, "temporary-1");
     staff.changePassword(session, "temporary-1", "roles-password-1");
-    var id =
+    String id =
         JsonPath.read(
                 mvc.perform(get("/api/v1/auth/me").with(session))
                     .andReturn()
@@ -75,8 +76,7 @@ class StaffRolesTest {
         .andExpect(jsonPath("$.role").value("SENIOR_ADMINISTRATOR"));
     // Сотрудника со старшей ролью администратор больше не обслуживает.
     mvc.perform(
-            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
-                    "/api/v1/staff/" + id + "/password")
+            MockMvcRequestBuilders.post("/api/v1/staff/" + id + "/password")
                 .with(staff.exactly("ADMINISTRATOR"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"newPassword\":\"temporary-9\"}"))
@@ -85,7 +85,7 @@ class StaffRolesTest {
     setRoles(id, staff.admin(), "[\"DOCTOR\"]")
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("DOCTOR_ROLE_FIXED"));
-    var self =
+    String self =
         JsonPath.read(
                 mvc.perform(get("/api/v1/auth/me").with(staff.admin()))
                     .andReturn()

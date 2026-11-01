@@ -19,6 +19,8 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import ru.quietclinic.StaffSessions;
 
 /**
@@ -73,8 +75,8 @@ class FreePriceFlowTest {
 
   @Test
   void openPriceVisitIsPaidOnlyAfterAmountWithinLimits() throws Exception {
-    var name = "Open price " + UUID.randomUUID().toString().substring(0, 8);
-    var service =
+    String name = "Open price " + UUID.randomUUID().toString().substring(0, 8);
+    String service =
         mvc.perform(
                 post("/api/v1/services")
                     .with(staff.admin())
@@ -91,7 +93,7 @@ class FreePriceFlowTest {
             .andReturn()
             .getResponse()
             .getContentAsString();
-    var serviceId = json(service, "$.id");
+    String serviceId = json(service, "$.id");
     // Цены меняет администратор и выше; менеджер — нет (раздел C).
     mvc.perform(
             put("/api/v1/services/" + serviceId + "/pricing")
@@ -100,7 +102,7 @@ class FreePriceFlowTest {
                 .content("{\"priceMode\":\"FIXED\",\"priceMinor\":1}"))
         .andExpect(status().isForbidden());
 
-    var booking =
+    String booking =
         """
         {"patientId":"%s","practitionerId":"%s","startsAt":"2027-04-06T14:00:00Z",
          "endsAt":"2027-04-06T14:30:00Z","serviceName":"%s","estimateMinor":%d}
@@ -112,7 +114,7 @@ class FreePriceFlowTest {
                 .content(booking.formatted(ANNA, StaffSessions.PETROV, name, 900000)))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("ESTIMATE_OUT_OF_RANGE"));
-    var appointment =
+    String appointment =
         json(
             mvc.perform(
                     post("/api/v1/appointments")
@@ -132,7 +134,7 @@ class FreePriceFlowTest {
     move(appointment, staff.doctor(StaffSessions.PETROV), "COMPLETED");
 
     // Счёт создаёт касса из события AppointmentCompleted — с пределами и оценкой.
-    var charges =
+    String charges =
         mvc.perform(get("/api/v1/billing/charges").with(staff.role("CASHIER")))
             .andExpect(status().isOk())
             .andReturn()
@@ -141,7 +143,7 @@ class FreePriceFlowTest {
     List<String> ids =
         JsonPath.read(charges, "$[?(@.appointmentId == '" + appointment + "')].chargeId");
     assertThat(ids).hasSize(1);
-    var chargeId = ids.get(0);
+    String chargeId = ids.get(0);
     mvc.perform(get("/api/v1/billing/charges").with(staff.role("CASHIER")))
         .andExpect(
             jsonPath("$[?(@.chargeId == '" + chargeId + "')].status").value("AWAITING_AMOUNT"))
@@ -165,14 +167,14 @@ class FreePriceFlowTest {
         .andExpect(jsonPath("$.amountMinor").value(250000));
 
     // Событие доставлено и отмечено в inbox потребителя.
-    var published =
+    Long published =
         jdbc.queryForObject(
             "select count(*) from domain_event_outbox where type = 'AppointmentCompleted'"
                 + " and status = 'PUBLISHED' and payload like ?",
             Long.class,
             "%" + appointment + "%");
     assertThat(published).isEqualTo(1L);
-    var inbox =
+    Long inbox =
         jdbc.queryForObject(
             "select count(*) from domain_event_inbox i join domain_event_outbox e"
                 + " on e.id = i.event_id where i.consumer = 'billing.charge-on-completed'"
@@ -182,11 +184,7 @@ class FreePriceFlowTest {
     assertThat(inbox).isEqualTo(1L);
   }
 
-  private void move(
-      String appointment,
-      org.springframework.test.web.servlet.request.RequestPostProcessor who,
-      String target)
-      throws Exception {
+  private void move(String appointment, RequestPostProcessor who, String target) throws Exception {
     mvc.perform(
             post("/api/v1/appointments/" + appointment + "/status")
                 .with(who)
@@ -195,8 +193,7 @@ class FreePriceFlowTest {
         .andExpect(status().isOk());
   }
 
-  private org.springframework.test.web.servlet.ResultActions pay(String chargeId, String key)
-      throws Exception {
+  private ResultActions pay(String chargeId, String key) throws Exception {
     return mvc.perform(
         post("/api/v1/billing/charges/" + chargeId + "/payments")
             .with(staff.role("CASHIER"))
@@ -204,10 +201,7 @@ class FreePriceFlowTest {
             .content("{\"idempotencyKey\":\"" + key + "\"}"));
   }
 
-  private org.springframework.test.web.servlet.ResultActions amount(
-      String chargeId,
-      org.springframework.test.web.servlet.request.RequestPostProcessor who,
-      long value)
+  private ResultActions amount(String chargeId, RequestPostProcessor who, long value)
       throws Exception {
     return mvc.perform(
         put("/api/v1/billing/charges/" + chargeId + "/amount")

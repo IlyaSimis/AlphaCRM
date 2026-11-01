@@ -3,6 +3,7 @@ package ru.quietclinic.patients;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import java.util.UUID;
@@ -12,7 +13,7 @@ import java.util.UUID;
 class Contact {
   @Id UUID id;
 
-  @jakarta.persistence.ManyToOne(optional = false)
+  @ManyToOne(optional = false)
   Patient patient;
 
   @Column(nullable = false)

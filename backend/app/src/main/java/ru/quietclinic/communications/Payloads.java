@@ -11,7 +11,7 @@ final class Payloads {
   private Payloads() {}
 
   static String of(String template, String aggregateType, UUID aggregateId, Instant startsAt) {
-    var ref = "APPOINTMENT".equals(aggregateType) ? "appointmentId" : "paymentId";
+    String ref = "APPOINTMENT".equals(aggregateType) ? "appointmentId" : "paymentId";
     return "{\"template\":"
         + Json.quote(template)
         + ",\""

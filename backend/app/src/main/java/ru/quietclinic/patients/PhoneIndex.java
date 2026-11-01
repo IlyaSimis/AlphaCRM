@@ -19,16 +19,16 @@ final class PhoneIndex {
   private final Map<String, List<Patient>> byPhone = new HashMap<>();
 
   PhoneIndex(List<Contact> phones) {
-    for (var contact : phones) {
+    for (Contact contact : phones) {
       if (!PHONE_TYPES.contains(contact.type)) continue;
-      var key = normalize(contact.value);
+      String key = normalize(contact.value);
       if (!key.isEmpty()) byPhone.computeIfAbsent(key, k -> new ArrayList<>()).add(contact.patient);
     }
   }
 
   static String normalize(String phone) {
     if (phone == null) return "";
-    var digits = phone.replaceAll("\\D", "");
+    String digits = phone.replaceAll("\\D", "");
     // 8 916… и +7 916… — один номер.
     if (digits.length() == 11 && digits.startsWith("8")) digits = "7" + digits.substring(1);
     return digits;
@@ -36,7 +36,7 @@ final class PhoneIndex {
 
   /** Пациенты, у которых цифры основного или второго телефона содержат запрос. */
   List<Patient> matching(String query) {
-    var needle = normalize(query);
+    String needle = normalize(query);
     if (needle.isEmpty()) return List.of();
     return byPhone.entrySet().stream()
         .filter(entry -> entry.getKey().contains(needle))

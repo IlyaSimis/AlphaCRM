@@ -49,7 +49,7 @@ class ContractControllerTest {
 
   @Test
   void createsImmutableEncryptedContractFromDocx() throws Exception {
-    var templateBytes =
+    byte[] templateBytes =
         DocxTemplateTest.docx(
             Map.of(
                 "word/document.xml",
@@ -59,7 +59,7 @@ class ContractControllerTest {
                 {{clinic.name}} | {{service.name}} | {{service.price}} | {{custom.note}}
                 </w:t></w:r></w:p></w:body></w:document>
                 """));
-    var uploaded =
+    String uploaded =
         mvc.perform(
                 multipart("/api/v1/contract-templates")
                     .file(new MockMultipartFile("file", "договор.docx", DOCX_MIME, templateBytes))
@@ -79,7 +79,7 @@ class ContractControllerTest {
     String serviceName =
         jdbc.queryForObject(
             "select name from clinic_service where id = ?", String.class, serviceId);
-    var endpoint = "/api/v1/patients/" + ANNA + "/contracts";
+    String endpoint = "/api/v1/patients/" + ANNA + "/contracts";
 
     mvc.perform(
             post(endpoint)
@@ -90,7 +90,7 @@ class ContractControllerTest {
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("CONTRACT_VALUES_REQUIRED"));
 
-    var created =
+    String created =
         mvc.perform(
                 post(endpoint)
                     .with(staff.admin())
@@ -120,7 +120,7 @@ class ContractControllerTest {
     mvc.perform(get("/api/v1/contract-patients").with(staff.role("DOCTOR")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[*].name", hasItem("Анна Михайлова")));
-    var downloaded =
+    byte[] downloaded =
         mvc.perform(get("/api/v1/patient-contracts/" + id + "/docx").with(staff.admin()))
             .andExpect(status().isOk())
             .andExpect(content().contentType(DOCX_MIME))
@@ -129,7 +129,7 @@ class ContractControllerTest {
             .andReturn()
             .getResponse()
             .getContentAsByteArray();
-    var xml = DocxTemplateTest.entry(downloaded, "word/document.xml");
+    String xml = DocxTemplateTest.entry(downloaded, "word/document.xml");
     assertThat(xml)
         .contains(
             number, "Анна Михайлова", "+79162451872", serviceName, "Особые условия &amp; скидка")
@@ -138,13 +138,13 @@ class ContractControllerTest {
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.code").value("CONTRACT_PDF_NOT_FOUND"));
 
-    var stored =
+    Map<String, Object> stored =
         jdbc.queryForMap(
             "select snapshot_values, docx_ciphertext, pdf_ciphertext, docx_hash from patient_contract where id = ?",
             UUID.fromString(id));
     assertThat((String) stored.get("snapshot_values"))
         .doesNotContain("Анна", "+79162451872", "Особые условия");
-    var ciphertext = (byte[]) stored.get("docx_ciphertext");
+    byte[] ciphertext = (byte[]) stored.get("docx_ciphertext");
     assertThat(ciphertext).isNotEqualTo(downloaded);
     assertThat(new String(ciphertext, StandardCharsets.ISO_8859_1)).doesNotContain("{{", "Анна");
     assertThat(stored.get("pdf_ciphertext")).isNull();

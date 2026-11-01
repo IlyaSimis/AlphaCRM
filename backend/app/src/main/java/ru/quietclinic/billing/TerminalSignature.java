@@ -12,7 +12,7 @@ final class TerminalSignature {
   static boolean valid(String secret, byte[] body, String signature) {
     if (signature == null || !signature.matches("[0-9a-fA-F]{64}")) return false;
     try {
-      var mac = Mac.getInstance("HmacSHA256");
+      Mac mac = Mac.getInstance("HmacSHA256");
       mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
       return MessageDigest.isEqual(mac.doFinal(body), hex(signature));
     } catch (Exception error) {
@@ -21,7 +21,7 @@ final class TerminalSignature {
   }
 
   private static byte[] hex(String value) {
-    var result = new byte[value.length() / 2];
+    byte[] result = new byte[value.length() / 2];
     for (int i = 0; i < result.length; i++) {
       result[i] = (byte) Integer.parseInt(value.substring(i * 2, i * 2 + 2), 16);
     }

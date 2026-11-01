@@ -97,7 +97,7 @@ class SecurityConfig {
   @Bean
   CorsConfigurationSource corsConfigurationSource(
       @Value("${clinic.cors.allowed-origins}") String allowedOrigins) {
-    var config = new CorsConfiguration();
+    CorsConfiguration config = new CorsConfiguration();
     config.setAllowedOrigins(
         Arrays.stream(allowedOrigins.split(","))
             .map(String::trim)
@@ -106,7 +106,7 @@ class SecurityConfig {
     config.setAllowCredentials(true);
     config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
     config.setAllowedHeaders(List.of("Content-Type", "X-XSRF-TOKEN", "X-Correlation-Id"));
-    var source = new UrlBasedCorsConfigurationSource();
+    UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
     source.registerCorsConfiguration("/api/**", config);
     return source;
   }

@@ -54,7 +54,7 @@ public final class RolePermissions {
   private RolePermissions() {}
 
   private static Map<String, Set<Permission>> build() {
-    var operations =
+    EnumSet<Permission> operations =
         EnumSet.of(
             HR_READ_OWN,
             STAFF_READ,
@@ -102,16 +102,16 @@ public final class RolePermissions {
             INTEGRATION_READ,
             INTEGRATION_MANAGE);
 
-    var owner = EnumSet.copyOf(operations);
+    EnumSet<Permission> owner = EnumSet.copyOf(operations);
     owner.add(ROLE_ASSIGN_PRIVILEGED);
     owner.add(HR_MANAGE);
     owner.add(CLINICAL_BREAK_GLASS);
     owner.add(CLINICAL_BREAK_GLASS_REVIEW);
 
-    var senior = EnumSet.copyOf(operations);
+    EnumSet<Permission> senior = EnumSet.copyOf(operations);
     senior.add(CLINICAL_BREAK_GLASS_REVIEW);
 
-    var manager =
+    EnumSet<Permission> manager =
         EnumSet.of(
             HR_READ_OWN,
             STAFF_READ,
@@ -145,7 +145,7 @@ public final class RolePermissions {
             ANALYTICS_READ,
             AUDIT_READ);
 
-    var doctor =
+    EnumSet<Permission> doctor =
         EnumSet.of(
             HR_READ_OWN,
             SCHEDULE_READ,
@@ -164,7 +164,7 @@ public final class RolePermissions {
             DASHBOARD_READ,
             ANALYTICS_READ_OWN);
 
-    var nurse =
+    EnumSet<Permission> nurse =
         EnumSet.of(
             HR_READ_OWN,
             SCHEDULE_READ,
@@ -184,7 +184,7 @@ public final class RolePermissions {
             ASSISTANT_USE,
             DASHBOARD_READ);
 
-    var cashier =
+    EnumSet<Permission> cashier =
         EnumSet.of(
             HR_READ_OWN,
             SCHEDULE_READ,
@@ -201,7 +201,7 @@ public final class RolePermissions {
             ASSISTANT_USE,
             DASHBOARD_READ);
 
-    var support =
+    EnumSet<Permission> support =
         EnumSet.of(
             HR_READ_OWN,
             STAFF_READ,
@@ -219,7 +219,7 @@ public final class RolePermissions {
             DELIVERY_READ,
             DELIVERY_RETRY);
 
-    var map = new LinkedHashMap<String, Set<Permission>>();
+    Map<String, Set<Permission>> map = new LinkedHashMap<>();
     map.put(OWNER, Set.copyOf(owner));
     map.put(SENIOR_ADMINISTRATOR, Set.copyOf(senior));
     map.put(ADMINISTRATOR, Set.copyOf(operations));
@@ -239,7 +239,7 @@ public final class RolePermissions {
 
   /** Объединение разрешений нескольких ролей. */
   public static Set<Permission> of(Collection<String> roles) {
-    var result = EnumSet.noneOf(Permission.class);
+    EnumSet<Permission> result = EnumSet.noneOf(Permission.class);
     roles.forEach(role -> result.addAll(of(role)));
     return result;
   }

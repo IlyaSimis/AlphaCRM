@@ -34,7 +34,7 @@ class ClinicScope {
   }
 
   boolean hasPatient(UUID patientId) {
-    var count =
+    Long count =
         jdbc.queryForObject(
             "select count(*) from patient where id = ? and clinic_id = ?",
             Long.class,

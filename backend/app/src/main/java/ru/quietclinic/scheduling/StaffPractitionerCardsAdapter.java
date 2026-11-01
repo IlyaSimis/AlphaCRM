@@ -20,7 +20,7 @@ class StaffPractitionerCardsAdapter implements PractitionerCards {
 
   @Override
   public UUID create(String fullName, String specialty, String room, List<ShiftSpec> shifts) {
-    var request =
+    CreatePractitionerRequest request =
         new CreatePractitionerRequest(
             fullName,
             specialty,

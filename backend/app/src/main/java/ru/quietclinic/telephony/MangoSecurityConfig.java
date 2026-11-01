@@ -1,5 +1,7 @@
 package ru.quietclinic.telephony;
 
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -44,7 +46,7 @@ class MangoSecurityConfig {
 final class MangoSignatureFilterAccess {
   private MangoSignatureFilterAccess() {}
 
-  static void error(jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
+  static void error(HttpServletResponse response) throws IOException {
     response.sendError(401);
   }
 }

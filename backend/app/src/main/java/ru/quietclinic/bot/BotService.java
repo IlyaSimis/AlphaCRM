@@ -3,12 +3,17 @@ package ru.quietclinic.bot;
 import static ru.quietclinic.platform.PlatformConfig.clinicId;
 import static ru.quietclinic.platform.PlatformConfig.notFound;
 
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import ru.quietclinic.patients.MessengerChannel;
 import ru.quietclinic.patients.TelegramPatient;
 import ru.quietclinic.patients.TelegramPatientRequest;
 import ru.quietclinic.patients.TelegramPatients;
@@ -46,7 +51,7 @@ class BotService {
 
   /** Клиника отвечает и при ненастроенной услуге онлайн-записи: тогда serviceName — null. */
   BotClinicView clinic() {
-    var name =
+    String name =
         jdbc.queryForObject("select name from clinic where id = ?", String.class, clinicId());
     String service;
     try {
@@ -82,7 +87,7 @@ class BotService {
   }
 
   BotAppointmentView book(BotBookingRequest request) {
-    var patientId =
+    UUID patientId =
         patients.resolveForBooking(
             new TelegramPatientRequest(
                 request.telegramChatId(),
@@ -108,12 +113,12 @@ class BotService {
   }
 
   BotTicketView operatorRequest(BotOperatorRequest request) {
-    var patientId =
+    UUID patientId =
         patients.findByChatId(request.telegramChatId()).map(TelegramPatient::id).orElse(null);
     return new BotTicketView(operator.create(request.title(), patientId), patientId);
   }
 
-  BotPatientView patient(ru.quietclinic.patients.MessengerChannel channel, String externalId) {
+  BotPatientView patient(MessengerChannel channel, String externalId) {
     return patients
         .findByExternalId(channel, externalId)
         .map(BotService::view)
@@ -121,8 +126,8 @@ class BotService {
   }
 
   BotAppointmentView book(MessengerBookingRequest request) {
-    var channel = ru.quietclinic.patients.MessengerChannel.parse(request.channel());
-    var patientId =
+    MessengerChannel channel = MessengerChannel.parse(request.channel());
+    UUID patientId =
         patients.resolveForBooking(
             channel,
             new TelegramPatientRequest(
@@ -134,15 +139,14 @@ class BotService {
     return view(booking.book(patientId, request.practitionerId(), request.startsAt().toInstant()));
   }
 
-  List<BotAppointmentView> appointments(
-      ru.quietclinic.patients.MessengerChannel channel, String externalId) {
-    var linked = patients.findAllByExternalId(channel, externalId);
+  List<BotAppointmentView> appointments(MessengerChannel channel, String externalId) {
+    List<TelegramPatient> linked = patients.findAllByExternalId(channel, externalId);
     if (linked.isEmpty()) return List.of();
-    var placeholders = String.join(",", java.util.Collections.nCopies(linked.size(), "?"));
-    var args = new java.util.ArrayList<Object>();
+    String placeholders = String.join(",", Collections.nCopies(linked.size(), "?"));
+    List<Object> args = new ArrayList<>();
     linked.forEach(p -> args.add(p.id()));
-    args.add(java.sql.Timestamp.from(time.now()));
-    var ids =
+    args.add(Timestamp.from(time.now()));
+    List<UUID> ids =
         jdbc.queryForList(
             "select id from appointment where patient_id in ("
                 + placeholders
@@ -152,31 +156,28 @@ class BotService {
             args.toArray());
     return ids.stream()
         .map(booking::appointment)
-        .flatMap(java.util.Optional::stream)
+        .flatMap(Optional::stream)
         .map(this::view)
         .toList();
   }
 
-  BotAppointmentView appointment(
-      UUID id, ru.quietclinic.patients.MessengerChannel channel, String externalId) {
+  BotAppointmentView appointment(UUID id, MessengerChannel channel, String externalId) {
     return view(owned(id, channel, externalId));
   }
 
-  BotAppointmentView confirm(
-      UUID id, ru.quietclinic.patients.MessengerChannel channel, String externalId) {
+  BotAppointmentView confirm(UUID id, MessengerChannel channel, String externalId) {
     owned(id, channel, externalId);
     return view(booking.confirm(id));
   }
 
-  BotAppointmentView cancel(
-      UUID id, ru.quietclinic.patients.MessengerChannel channel, String externalId) {
+  BotAppointmentView cancel(UUID id, MessengerChannel channel, String externalId) {
     owned(id, channel, externalId);
     return view(booking.cancel(id));
   }
 
   BotTicketView operatorRequest(MessengerOperatorRequest request) {
-    var channel = ru.quietclinic.patients.MessengerChannel.parse(request.channel());
-    var patientId =
+    MessengerChannel channel = MessengerChannel.parse(request.channel());
+    UUID patientId =
         patients
             .findByExternalId(channel, request.externalId())
             .map(TelegramPatient::id)
@@ -184,8 +185,7 @@ class BotService {
     return new BotTicketView(operator.create(request.title(), patientId), patientId);
   }
 
-  private OnlineAppointment owned(
-      UUID id, ru.quietclinic.patients.MessengerChannel channel, String externalId) {
+  private OnlineAppointment owned(UUID id, MessengerChannel channel, String externalId) {
     return booking
         .appointment(id)
         .filter(a -> patients.isLinked(a.patientId(), channel, externalId))
@@ -193,12 +193,12 @@ class BotService {
   }
 
   private OnlineAppointment owned(UUID id, String chatId) {
-    return owned(id, ru.quietclinic.patients.MessengerChannel.TELEGRAM, chatId);
+    return owned(id, MessengerChannel.TELEGRAM, chatId);
   }
 
   private BotAppointmentView view(OnlineAppointment a) {
-    var practitioner = booking.practitioner(a.practitionerId()).orElse(null);
-    var patient = patients.find(a.patientId()).map(BotService::view).orElse(null);
+    BookablePractitioner practitioner = booking.practitioner(a.practitionerId()).orElse(null);
+    BotPatientView patient = patients.find(a.patientId()).map(BotService::view).orElse(null);
     return new BotAppointmentView(
         a.id(),
         a.practitionerId(),

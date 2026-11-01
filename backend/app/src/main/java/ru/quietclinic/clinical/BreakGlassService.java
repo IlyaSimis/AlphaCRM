@@ -67,10 +67,10 @@ class BreakGlassService {
   BreakGlassView grant(UUID patientId, BreakGlassRequest request) {
     requirePermission(Permission.CLINICAL_BREAK_GLASS);
     requirePatient(patientId);
-    var owner = staffId();
-    var recent = failures.computeIfAbsent(owner, key -> new ArrayDeque<>());
+    UUID owner = staffId();
+    Deque<Instant> recent = failures.computeIfAbsent(owner, key -> new ArrayDeque<>());
     synchronized (recent) {
-      var since = Instant.now().minus(LOCK);
+      Instant since = Instant.now().minus(LOCK);
       while (!recent.isEmpty() && recent.peekFirst().isBefore(since)) recent.pollFirst();
       if (recent.size() >= MAX_FAILURES) {
         throw tooManyRequests(
@@ -85,7 +85,7 @@ class BreakGlassService {
       }
       recent.clear();
     }
-    var grant =
+    BreakGlassGrant grant =
         grants.saveAndFlush(
             new BreakGlassGrant(
                 clinicId(),
@@ -119,7 +119,7 @@ class BreakGlassService {
   /** Есть ли у вошедшего сотрудника действующий экстренный доступ к пациенту. */
   boolean active(UUID patientId) {
     if (!can(Permission.CLINICAL_BREAK_GLASS)) return false;
-    var now = Instant.now();
+    Instant now = Instant.now();
     return grants
         .findFirstByOwnerIdAndPatientIdAndExpiresAtAfterOrderByExpiresAtDesc(
             staffId(), patientId, now)
@@ -134,7 +134,7 @@ class BreakGlassService {
     if (from == null || to == null || to.isBefore(from)) {
       throw badRequest("INVALID_PERIOD", "The period must have a start before its end");
     }
-    var rows =
+    List<BreakGlassGrant> rows =
         grants.findByClinicIdAndGrantedAtBetweenOrderByGrantedAtDesc(
             clinicId(), time.startOf(from), time.startOf(to.plusDays(1)));
     audit.record(
@@ -143,7 +143,7 @@ class BreakGlassService {
   }
 
   private void requirePatient(UUID patientId) {
-    var count =
+    Long count =
         jdbc.queryForObject(
             "select count(*) from patient where id = ? and clinic_id = ?",
             Long.class,
@@ -153,7 +153,7 @@ class BreakGlassService {
   }
 
   private BreakGlassView view(BreakGlassGrant grant, boolean withReason) {
-    var now = Instant.now();
+    Instant now = Instant.now();
     return new BreakGlassView(
         grant.id,
         grant.patientId,

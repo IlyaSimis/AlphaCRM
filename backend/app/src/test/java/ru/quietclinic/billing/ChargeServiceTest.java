@@ -44,11 +44,11 @@ class ChargeServiceTest {
 
   @Test
   void completedVisitGetsExactlyOnePendingCharge() {
-    var first = charges.chargeForCompletedVisit(COMPLETED_APPOINTMENT, 300000, "RUB");
-    var second = charges.chargeForCompletedVisit(COMPLETED_APPOINTMENT, 300000, "RUB");
+    UUID first = charges.chargeForCompletedVisit(COMPLETED_APPOINTMENT, 300000, "RUB");
+    UUID second = charges.chargeForCompletedVisit(COMPLETED_APPOINTMENT, 300000, "RUB");
 
     assertThat(second).isEqualTo(first);
-    var charge = repository.findByAppointmentId(COMPLETED_APPOINTMENT).orElseThrow();
+    Charge charge = repository.findByAppointmentId(COMPLETED_APPOINTMENT).orElseThrow();
     assertThat(charge.status).isEqualTo("PENDING");
     assertThat(charge.amountMinor).isEqualTo(300000L);
     assertThat(charge.currency).isEqualTo("RUB");

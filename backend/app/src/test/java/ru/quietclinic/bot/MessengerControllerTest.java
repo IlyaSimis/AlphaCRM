@@ -52,7 +52,7 @@ class MessengerControllerTest {
 
   @Test
   void maxLinkIsSingleUseAndPreferredChannelCanBeAutomatic() throws Exception {
-    var created =
+    String created =
         mvc.perform(
                 post("/api/v1/patients")
                     .with(staff.admin())
@@ -67,7 +67,7 @@ class MessengerControllerTest {
             .getResponse()
             .getContentAsString();
     String patient = JsonPath.read(created, "$.id");
-    var link =
+    String link =
         mvc.perform(
                 post("/api/v1/patients/" + patient + "/messenger/link")
                     .with(staff.admin())
@@ -80,7 +80,7 @@ class MessengerControllerTest {
             .getContentAsString();
     String token = JsonPath.read(link, "$.token");
     String user = externalId();
-    var consume =
+    String consume =
         "{\"channel\":\"MAX\",\"externalId\":\"" + user + "\",\"token\":\"" + token + "\"}";
     mvc.perform(
             post("/api/v1/messenger/link/consume")
@@ -125,7 +125,7 @@ class MessengerControllerTest {
 
   @Test
   void maxBookingAndActionsRequireTheLinkedExternalId() throws Exception {
-    var body =
+    String body =
         mvc.perform(get("/api/v1/messenger/practitioners/" + PETROV + "/slots").with(bot()))
             .andExpect(status().isOk())
             .andReturn()
@@ -133,14 +133,14 @@ class MessengerControllerTest {
             .getContentAsString();
     List<String> slots = JsonPath.read(body, "$[*].startsAt");
     String user = externalId();
-    var booking =
+    String booking =
         """
         {"channel":"MAX","externalId":"%s","lastName":"Максова","firstName":"Анна",
          "patronymic":"Сергеевна","birthDate":"1990-05-17","phone":"+7 999 123-45-67",
          "practitionerId":"%s","startsAt":"%s","consentVersion":"max-bot-v1"}
         """
             .formatted(user, PETROV, slots.get(1));
-    var created =
+    String created =
         mvc.perform(
                 post("/api/v1/messenger/appointments")
                     .with(bot())
@@ -176,7 +176,7 @@ class MessengerControllerTest {
 
   @Test
   void maxBookingLinksExistingPatientWithoutCreatingDuplicate() throws Exception {
-    var createdPatient =
+    String createdPatient =
         mvc.perform(
                 post("/api/v1/patients")
                     .with(staff.admin())
@@ -191,7 +191,7 @@ class MessengerControllerTest {
             .getResponse()
             .getContentAsString();
     String patient = JsonPath.read(createdPatient, "$.id");
-    var body =
+    String body =
         mvc.perform(get("/api/v1/messenger/practitioners/" + PETROV + "/slots").with(bot()))
             .andExpect(status().isOk())
             .andReturn()
@@ -199,7 +199,7 @@ class MessengerControllerTest {
             .getContentAsString();
     List<String> slots = JsonPath.read(body, "$[*].startsAt");
     String user = externalId();
-    var booking =
+    String booking =
         """
         {"channel":"MAX","externalId":"%s","lastName":"Существующая","firstName":"Вера",
          "patronymic":"Ивановна","birthDate":"1988-04-12","phone":"+7 999 555-44-33",

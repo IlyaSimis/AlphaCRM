@@ -8,6 +8,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.quietclinic.platform.Permission;
@@ -30,12 +32,12 @@ class ReceiptService {
   @Transactional
   ReceiptView receive(ReceiptRequest request) {
     requirePermission(Permission.INVENTORY_DOCUMENT_WRITE);
-    var created = new HashMap<String, Item>();
-    var lines = new ArrayList<DocumentRequest.Line>();
-    var waiting = new ArrayList<String>();
-    for (var line : request.lines()) {
-      var item = resolve(line, created);
-      var codes = line.codes() == null ? List.<String>of() : line.codes();
+    Map<String, Item> created = new HashMap<>();
+    List<DocumentRequest.Line> lines = new ArrayList<>();
+    List<String> waiting = new ArrayList<>();
+    for (ReceiptRequest.Line line : request.lines()) {
+      Item item = resolve(line, created);
+      List<String> codes = line.codes() == null ? List.<String>of() : line.codes();
       if (item.marked && codes.size() != line.quantity().stripTrailingZeros().intValue()) {
         waiting.add(item.name);
       }
@@ -43,11 +45,11 @@ class ReceiptService {
           new DocumentRequest.Line(
               item.id, line.quantity(), line.batch(), line.expiresOn(), codes));
     }
-    var warehouse =
+    Warehouse warehouse =
         request.warehouseId() == null
             ? catalog.defaultWarehouse(clinicId())
             : catalog.warehouse(request.warehouseId());
-    var draft =
+    StockDocument draft =
         stock.createDraft(
             new DocumentRequest(
                 StockDocument.RECEIPT,
@@ -62,23 +64,23 @@ class ReceiptService {
     if (!waiting.isEmpty() && !StockDocument.POSTED.equals(draft.status)) {
       return new ReceiptView(stock.view(draft, List.of()), false, created.size(), waiting);
     }
-    var posted = stock.postDocument(draft, false);
+    DocumentView posted = stock.postDocument(draft, false);
     return new ReceiptView(posted, true, created.size(), List.of());
   }
 
   /** Позиция строки: по id, по GTIN или названию; новую — только с правом вести номенклатуру. */
-  private Item resolve(ReceiptRequest.Line line, HashMap<String, Item> created) {
+  private Item resolve(ReceiptRequest.Line line, Map<String, Item> created) {
     if (line.itemId() != null) return catalog.item(line.itemId());
     if (line.name() == null || line.name().isBlank()) {
       throw conflict("RECEIPT_LINE_ITEM_REQUIRED", "Each line needs an item or a name");
     }
-    var key = line.name().trim().toLowerCase(Locale.ROOT);
-    var known = created.get(key);
+    String key = line.name().trim().toLowerCase(Locale.ROOT);
+    Item known = created.get(key);
     if (known != null) return known;
-    var found = catalog.findItem(line.gtin(), line.name());
+    Optional<Item> found = catalog.findItem(line.gtin(), line.name());
     if (found.isPresent()) return found.get();
     requirePermission(Permission.INVENTORY_CATALOG_WRITE);
-    var item = catalog.createPlainItem(line.name(), line.kind(), line.unit(), line.gtin());
+    Item item = catalog.createPlainItem(line.name(), line.kind(), line.unit(), line.gtin());
     created.put(key, item);
     return item;
   }

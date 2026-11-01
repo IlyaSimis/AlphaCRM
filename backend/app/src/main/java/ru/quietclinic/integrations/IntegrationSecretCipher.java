@@ -26,12 +26,12 @@ class IntegrationSecretCipher {
   }
 
   Sealed encrypt(UUID clinicId, UUID integrationId, int version, String plaintext) {
-    var dataKey = new byte[32];
-    var masterKey = new byte[0];
-    var plaintextBytes = plaintext.getBytes(StandardCharsets.UTF_8);
+    byte[] dataKey = new byte[32];
+    byte[] masterKey = new byte[0];
+    byte[] plaintextBytes = plaintext.getBytes(StandardCharsets.UTF_8);
     try {
       random.nextBytes(dataKey);
-      var aad = aad(clinicId, integrationId, version);
+      String aad = aad(clinicId, integrationId, version);
       masterKey = kms.dataKey();
       return new Sealed(
           crypt(Cipher.ENCRYPT_MODE, dataKey, plaintextBytes, aad),
@@ -47,13 +47,13 @@ class IntegrationSecretCipher {
   }
 
   String decrypt(UUID clinicId, UUID integrationId, int version, IntegrationSecretRecord secret) {
-    var dataKey = new byte[0];
-    var masterKey = new byte[0];
+    byte[] dataKey = new byte[0];
+    byte[] masterKey = new byte[0];
     try {
-      var aad = aad(clinicId, integrationId, version);
+      String aad = aad(clinicId, integrationId, version);
       masterKey = kms.dataKey(secret.keyVersion());
       dataKey = crypt(Cipher.DECRYPT_MODE, masterKey, secret.wrappedDataKey(), "wrap:" + aad);
-      var plaintext = crypt(Cipher.DECRYPT_MODE, dataKey, secret.ciphertext(), aad);
+      byte[] plaintext = crypt(Cipher.DECRYPT_MODE, dataKey, secret.ciphertext(), aad);
       try {
         return new String(plaintext, StandardCharsets.UTF_8);
       } finally {
@@ -69,8 +69,8 @@ class IntegrationSecretCipher {
 
   private byte[] crypt(int mode, byte[] key, byte[] input, String aad)
       throws GeneralSecurityException {
-    var nonce = new byte[NONCE_BYTES];
-    var outputOffset = 0;
+    byte[] nonce = new byte[NONCE_BYTES];
+    int outputOffset = 0;
     if (mode == Cipher.ENCRYPT_MODE) {
       random.nextBytes(nonce);
     } else {
@@ -80,10 +80,10 @@ class IntegrationSecretCipher {
       System.arraycopy(input, 0, nonce, 0, NONCE_BYTES);
       outputOffset = NONCE_BYTES;
     }
-    var cipher = Cipher.getInstance("AES/GCM/NoPadding");
+    Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
     cipher.init(mode, new SecretKeySpec(key, "AES"), new GCMParameterSpec(GCM_TAG_BITS, nonce));
     cipher.updateAAD(aad.getBytes(StandardCharsets.UTF_8));
-    var result = cipher.doFinal(input, outputOffset, input.length - outputOffset);
+    byte[] result = cipher.doFinal(input, outputOffset, input.length - outputOffset);
     if (mode == Cipher.DECRYPT_MODE) return result;
     return ByteBuffer.allocate(NONCE_BYTES + result.length).put(nonce).put(result).array();
   }

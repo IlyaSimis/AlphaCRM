@@ -7,10 +7,14 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
+import ru.quietclinic.integrations.MangoIntegrationClientFactory;
+import ru.quietclinic.integrations.MangoWebhook;
 
 /** Отдельная stateless-аутентификация webhook Mango по его ключу и подписи тела JSON. */
 final class MangoSignatureFilter extends OncePerRequestFilter {
@@ -19,13 +23,13 @@ final class MangoSignatureFilter extends OncePerRequestFilter {
   private final String legacyKey;
   private final String legacySalt;
   private final MangoClinicResolver clinics;
-  private final ru.quietclinic.integrations.MangoIntegrationClientFactory integrations;
+  private final MangoIntegrationClientFactory integrations;
 
   MangoSignatureFilter(
       String key,
       String salt,
       MangoClinicResolver clinics,
-      ru.quietclinic.integrations.MangoIntegrationClientFactory integrations) {
+      MangoIntegrationClientFactory integrations) {
     this.legacyKey = key == null ? "" : key.trim();
     this.legacySalt = salt == null ? "" : salt.trim();
     this.clinics = clinics;
@@ -36,18 +40,18 @@ final class MangoSignatureFilter extends OncePerRequestFilter {
   protected void doFilterInternal(
       HttpServletRequest request, HttpServletResponse response, FilterChain chain)
       throws ServletException, IOException {
-    var json = request.getParameter("json");
-    var scoped = scoped(request);
-    var publicKey = scoped ? publicKey(request) : null;
+    String json = request.getParameter("json");
+    boolean scoped = scoped(request);
+    UUID publicKey = scoped ? publicKey(request) : null;
     if (scoped && publicKey == null) {
       error(response, 401, "MANGO_SIGNATURE_INVALID", "Mango signature is missing or wrong");
       return;
     }
     String key;
     String salt;
-    java.util.UUID clinicId;
+    UUID clinicId;
     if (scoped) {
-      var webhook = integrations.webhook(publicKey).orElse(null);
+      MangoWebhook webhook = integrations.webhook(publicKey).orElse(null);
       if (webhook == null) {
         error(response, 401, "MANGO_SIGNATURE_INVALID", "Mango signature is missing or wrong");
         return;
@@ -78,7 +82,7 @@ final class MangoSignatureFilter extends OncePerRequestFilter {
         return;
       }
     }
-    var context = SecurityContextHolder.createEmptyContext();
+    SecurityContext context = SecurityContextHolder.createEmptyContext();
     context.setAuthentication(
         UsernamePasswordAuthenticationToken.authenticated(
             new MangoPrincipal(clinicId), null, List.of(new SimpleGrantedAuthority("ROLE_MANGO"))));
@@ -91,19 +95,19 @@ final class MangoSignatureFilter extends OncePerRequestFilter {
   }
 
   private static boolean scoped(HttpServletRequest request) {
-    var path = request.getRequestURI().substring(request.getContextPath().length());
+    String path = request.getRequestURI().substring(request.getContextPath().length());
     return path.startsWith(EVENTS_PREFIX)
         && path.substring(EVENTS_PREFIX.length()).indexOf('/') >= 0;
   }
 
-  private static java.util.UUID publicKey(HttpServletRequest request) {
-    var path = request.getRequestURI().substring(request.getContextPath().length());
+  private static UUID publicKey(HttpServletRequest request) {
+    String path = request.getRequestURI().substring(request.getContextPath().length());
     if (!path.startsWith(EVENTS_PREFIX)) return null;
-    var remainder = path.substring(EVENTS_PREFIX.length());
-    var slash = remainder.indexOf('/');
+    String remainder = path.substring(EVENTS_PREFIX.length());
+    int slash = remainder.indexOf('/');
     if (slash < 0) return null;
     try {
-      return java.util.UUID.fromString(remainder.substring(0, slash));
+      return UUID.fromString(remainder.substring(0, slash));
     } catch (IllegalArgumentException error) {
       return null;
     }

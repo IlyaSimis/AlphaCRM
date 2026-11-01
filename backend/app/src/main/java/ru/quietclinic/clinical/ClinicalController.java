@@ -27,7 +27,7 @@ public class ClinicalController {
   /** 201 — новый приём, 200 — уже начатый приём по той же записи. */
   @PostMapping("/encounters")
   ResponseEntity<ClinicalView> start(@Valid @RequestBody StartEncounterRequest request) {
-    var started = encounters.start(request);
+    EncounterStart started = encounters.start(request);
     return ResponseEntity.status(started.created() ? HttpStatus.CREATED : HttpStatus.OK)
         .body(started.view());
   }

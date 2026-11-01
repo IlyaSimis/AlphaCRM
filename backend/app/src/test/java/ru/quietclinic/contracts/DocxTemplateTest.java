@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 class DocxTemplateTest {
   @Test
   void replacesVariablesSplitAcrossRunsAndPreservesOtherMarkup() throws Exception {
-    var docx =
+    byte[] docx =
         docx(
             Map.of(
                 "word/document.xml",
@@ -31,11 +31,11 @@ class DocxTemplateTest {
 
     assertThat(DocxTemplate.placeholders(docx))
         .containsExactlyInAnyOrder("patient.fullName", "contract.number");
-    var rendered =
+    byte[] rendered =
         DocxTemplate.render(
             docx,
             Map.of("patient.fullName", "Анна <Михайлова>", "contract.number", "Д-2026-00001"));
-    var document = entry(rendered, "word/document.xml");
+    String document = entry(rendered, "word/document.xml");
     assertThat(document)
         .contains("Пациент: Анна &lt;Михайлова&gt;", ". Условия сохранены.")
         .contains("<w:rPr><w:b/></w:rPr>")
@@ -44,9 +44,9 @@ class DocxTemplateTest {
   }
 
   static byte[] docx(Map<String, String> xmlParts) throws Exception {
-    var output = new ByteArrayOutputStream();
-    try (var zip = new ZipOutputStream(output)) {
-      for (var part : xmlParts.entrySet()) {
+    ByteArrayOutputStream output = new ByteArrayOutputStream();
+    try (ZipOutputStream zip = new ZipOutputStream(output)) {
+      for (Map.Entry<String, String> part : xmlParts.entrySet()) {
         zip.putNextEntry(new ZipEntry(part.getKey()));
         zip.write(part.getValue().getBytes(StandardCharsets.UTF_8));
         zip.closeEntry();
@@ -56,7 +56,7 @@ class DocxTemplateTest {
   }
 
   static String entry(byte[] docx, String name) throws Exception {
-    try (var zip = new ZipInputStream(new ByteArrayInputStream(docx))) {
+    try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(docx))) {
       ZipEntry entry;
       while ((entry = zip.getNextEntry()) != null) {
         if (name.equals(entry.getName()))

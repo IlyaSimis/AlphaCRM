@@ -1,6 +1,7 @@
 package ru.quietclinic.bot;
 
 import java.util.UUID;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 import ru.quietclinic.patients.MessengerChannel;
@@ -23,15 +24,15 @@ class MessengerWebhookService {
   }
 
   void telegram(JsonNode update) {
-    var callback = update.path("callback_query");
+    JsonNode callback = update.path("callback_query");
     if (!callback.isMissingNode() && !callback.isNull()) {
-      var chatId = text(callback.path("message").path("chat"), "id");
+      String chatId = text(callback.path("message").path("chat"), "id");
       if (chatId.isEmpty()) chatId = text(callback.path("from"), "id");
       action(MessengerChannel.TELEGRAM, chatId, text(callback, "data"));
       return;
     }
-    var message = update.path("message");
-    var matcher = START.matcher(text(message, "text").trim());
+    JsonNode message = update.path("message");
+    Matcher matcher = START.matcher(text(message, "text").trim());
     if (matcher.matches()) {
       links.consume(MessengerChannel.TELEGRAM, text(message.path("chat"), "id"), matcher.group(1));
     }
@@ -41,12 +42,12 @@ class MessengerWebhookService {
     switch (text(update, "update_type")) {
       case "bot_started" -> consume(text(update.path("user"), "user_id"), text(update, "payload"));
       case "message_created" -> {
-        var message = update.path("message");
-        var matcher = START.matcher(text(message.path("body"), "text").trim());
+        JsonNode message = update.path("message");
+        Matcher matcher = START.matcher(text(message.path("body"), "text").trim());
         if (matcher.matches()) consume(text(message.path("sender"), "user_id"), matcher.group(1));
       }
       case "message_callback" -> {
-        var callback = update.path("callback");
+        JsonNode callback = update.path("callback");
         action(
             MessengerChannel.MAX,
             text(callback.path("user"), "user_id"),
@@ -65,9 +66,9 @@ class MessengerWebhookService {
   }
 
   private void action(MessengerChannel channel, String externalId, String payload) {
-    var matcher = CALLBACK.matcher(payload);
+    Matcher matcher = CALLBACK.matcher(payload);
     if (externalId.isEmpty() || !matcher.matches()) return;
-    var appointmentId = UUID.fromString(matcher.group(1));
+    UUID appointmentId = UUID.fromString(matcher.group(1));
     if ("yes".equals(matcher.group(2))) {
       bot.confirm(appointmentId, channel, externalId);
     } else if (!"CANCELLED".equals(bot.appointment(appointmentId, channel, externalId).status())) {

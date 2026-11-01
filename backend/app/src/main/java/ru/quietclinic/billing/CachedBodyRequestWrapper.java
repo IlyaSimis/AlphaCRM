@@ -20,7 +20,7 @@ final class CachedBodyRequestWrapper extends HttpServletRequestWrapper {
 
   @Override
   public ServletInputStream getInputStream() {
-    var input = new ByteArrayInputStream(body);
+    ByteArrayInputStream input = new ByteArrayInputStream(body);
     return new ServletInputStream() {
       @Override
       public boolean isFinished() {

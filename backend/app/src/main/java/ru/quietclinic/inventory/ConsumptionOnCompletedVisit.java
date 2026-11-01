@@ -3,6 +3,8 @@ package ru.quietclinic.inventory;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -37,22 +39,23 @@ class ConsumptionOnCompletedVisit implements DomainEventHandler {
 
   @Override
   public void handle(DomainEvent event) {
-    var norms = event.list("consumption");
+    List<Map<String, Object>> norms = event.list("consumption");
     if (norms.isEmpty()) return;
-    var appointmentId = event.uuid("appointmentId");
-    var plain = new ArrayList<DocumentRequest.Line>();
-    var marked = new ArrayList<DocumentRequest.Line>();
-    for (var norm : norms) {
-      var itemId = UUID.fromString(norm.get("itemId").toString());
-      var item = items.findByIdAndClinicId(itemId, event.clinicId()).filter(i -> i.active);
+    UUID appointmentId = event.uuid("appointmentId");
+    List<DocumentRequest.Line> plain = new ArrayList<>();
+    List<DocumentRequest.Line> marked = new ArrayList<>();
+    for (Map<String, Object> norm : norms) {
+      UUID itemId = UUID.fromString(norm.get("itemId").toString());
+      Optional<Item> item =
+          items.findByIdAndClinicId(itemId, event.clinicId()).filter(i -> i.active);
       if (item.isEmpty()) continue; // позицию удалили из номенклатуры — норму пропускаем
-      var line =
+      DocumentRequest.Line line =
           new DocumentRequest.Line(
               itemId, new BigDecimal(norm.get("quantity").toString()), null, null, List.of());
       (item.get().marked ? marked : plain).add(line);
     }
     if (!plain.isEmpty()) {
-      var document = stock.createDraft(request(appointmentId, "auto", plain));
+      StockDocument document = stock.createDraft(request(appointmentId, "auto", plain));
       stock.postDocument(document, true);
     }
     if (!marked.isEmpty()) {

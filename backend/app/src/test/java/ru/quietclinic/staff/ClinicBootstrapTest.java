@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 class ClinicBootstrapTest {
@@ -31,10 +32,10 @@ class ClinicBootstrapTest {
 
     bootstrap("Sadovaya Street Clinic", "strong-admin-pass", true).run(null);
 
-    var clinic = ArgumentCaptor.forClass(Clinic.class);
+    ArgumentCaptor<Clinic> clinic = ArgumentCaptor.forClass(Clinic.class);
     verify(clinics).save(clinic.capture());
     assertThat(clinic.getValue().name).isEqualTo("Sadovaya Street Clinic");
-    var admin = ArgumentCaptor.forClass(StaffUser.class);
+    ArgumentCaptor<StaffUser> admin = ArgumentCaptor.forClass(StaffUser.class);
     verify(staff).save(admin.capture());
     assertThat(admin.getValue().username).isEqualTo("admin");
     // Начальная учётная запись — владелец клиники (раздел C целевой архитектуры).
@@ -51,8 +52,8 @@ class ClinicBootstrapTest {
     when(clinics.findAllByOrderByCreatedAt()).thenReturn(List.of(new Clinic("Seed Clinic")));
     bootstrap("AlphaCRM", "admin", false).run(null);
     bootstrap("AlphaCRM", "admin", false).run(null);
-    var admins = ArgumentCaptor.forClass(StaffUser.class);
-    verify(staff, org.mockito.Mockito.times(2)).save(admins.capture());
+    ArgumentCaptor<StaffUser> admins = ArgumentCaptor.forClass(StaffUser.class);
+    verify(staff, Mockito.times(2)).save(admins.capture());
     assertThat(admins.getAllValues().get(0).passwordHash)
         .isNotEqualTo(admins.getAllValues().get(1).passwordHash);
     assertThat(admins.getAllValues().get(0).mustChangePassword).isFalse();
@@ -76,7 +77,7 @@ class ClinicBootstrapTest {
 
   @Test
   void clinicFromMigrationsGetsTheConfiguredName() {
-    var legacy = new Clinic("Seed Clinic");
+    Clinic legacy = new Clinic("Seed Clinic");
     when(clinics.findAllByOrderByCreatedAt()).thenReturn(List.of(legacy));
     bootstrap("Renamed Clinic", "admin", false).run(null);
     assertThat(legacy.name).isEqualTo("Renamed Clinic");
@@ -85,11 +86,11 @@ class ClinicBootstrapTest {
 
   @Test
   void blankNamesFallBackToAlphaCrmAndDefaultAdministratorName() {
-    var legacy = new Clinic("Seed Clinic");
+    Clinic legacy = new Clinic("Seed Clinic");
     when(clinics.findAllByOrderByCreatedAt()).thenReturn(List.of(legacy));
     new ClinicBootstrap(staff, clinics, encoder, " ", "", "admin", false).run(null);
     assertThat(legacy.name).isEqualTo("AlphaCRM");
-    var admin = ArgumentCaptor.forClass(StaffUser.class);
+    ArgumentCaptor<StaffUser> admin = ArgumentCaptor.forClass(StaffUser.class);
     verify(staff).save(admin.capture());
     assertThat(admin.getValue().fullName).isEqualTo("Administrator");
   }

@@ -36,8 +36,8 @@ class WorkspaceControllerTest {
 
   @Test
   void freeFormItemIsVisibleOnlyToItsOwner() throws Exception {
-    var title = "Разобраться " + UUID.randomUUID();
-    var created =
+    String title = "Разобраться " + UUID.randomUUID();
+    String created =
         mvc.perform(
                 post("/api/v1/workspace/items")
                     .with(staff.role("SUPPORT"))
@@ -57,7 +57,7 @@ class WorkspaceControllerTest {
             .andReturn()
             .getResponse()
             .getContentAsString();
-    var id = JsonPath.<String>read(created, "$.id");
+    String id = JsonPath.<String>read(created, "$.id");
 
     mvc.perform(get("/api/v1/workspace/items").with(staff.role("SUPPORT")))
         .andExpect(status().isOk())
@@ -75,10 +75,10 @@ class WorkspaceControllerTest {
 
   @Test
   void assignedTaskIsSharedByCreatorAndAssigneeOnly() throws Exception {
-    var title = "Общая задача " + UUID.randomUUID();
-    var assigneeId = staff.userId("t.petrov");
-    var creatorId = staff.userId("t.manager");
-    var created =
+    String title = "Общая задача " + UUID.randomUUID();
+    String assigneeId = staff.userId("t.petrov");
+    String creatorId = staff.userId("t.manager");
+    String created =
         mvc.perform(
                 post("/api/v1/workspace/items")
                     .with(staff.role("MANAGER"))
@@ -95,7 +95,7 @@ class WorkspaceControllerTest {
             .andReturn()
             .getResponse()
             .getContentAsString();
-    var id = JsonPath.<String>read(created, "$.id");
+    String id = JsonPath.<String>read(created, "$.id");
 
     mvc.perform(get("/api/v1/workspace/items").with(staff.role("MANAGER")))
         .andExpect(jsonPath("$[*].title").value(hasItem(title)));
@@ -130,8 +130,8 @@ class WorkspaceControllerTest {
 
   @Test
   void savedViewsAndArchiveBelongToOwner() throws Exception {
-    var name = "Мой фильтр " + UUID.randomUUID();
-    var created =
+    String name = "Мой фильтр " + UUID.randomUUID();
+    String created =
         mvc.perform(
                 post("/api/v1/workspace/views")
                     .with(staff.role("CASHIER"))
@@ -147,13 +147,13 @@ class WorkspaceControllerTest {
             .andReturn()
             .getResponse()
             .getContentAsString();
-    var viewId = JsonPath.<String>read(created, "$.id");
+    String viewId = JsonPath.<String>read(created, "$.id");
     mvc.perform(get("/api/v1/workspace/views").with(staff.role("CASHIER")))
         .andExpect(jsonPath("$[*].name").value(hasItem(name)));
     mvc.perform(get("/api/v1/workspace/views").with(staff.role("SUPPORT")))
         .andExpect(jsonPath("$[*].name").value(not(hasItem(name))));
 
-    var item =
+    String item =
         mvc.perform(
                 post("/api/v1/workspace/items")
                     .with(staff.role("CASHIER"))
@@ -163,7 +163,7 @@ class WorkspaceControllerTest {
             .andReturn()
             .getResponse()
             .getContentAsString();
-    var itemId = JsonPath.<String>read(item, "$.id");
+    String itemId = JsonPath.<String>read(item, "$.id");
     mvc.perform(post("/api/v1/workspace/items/{id}/archive", itemId).with(staff.role("CASHIER")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.archivedAt").isNotEmpty());

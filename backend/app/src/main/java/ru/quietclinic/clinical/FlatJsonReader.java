@@ -25,16 +25,16 @@ final class FlatJsonReader {
 
   String string() {
     if (!consume('"')) return null;
-    var out = new StringBuilder();
+    StringBuilder out = new StringBuilder();
     while (pos < text.length()) {
-      var ch = text.charAt(pos++);
+      char ch = text.charAt(pos++);
       if (ch == '"') return out.toString();
       if (ch != '\\') {
         out.append(ch);
         continue;
       }
       if (pos >= text.length()) return null;
-      var escaped = text.charAt(pos++);
+      char escaped = text.charAt(pos++);
       switch (escaped) {
         case '"', '\\', '/' -> out.append(escaped);
         case 'n' -> out.append('\n');

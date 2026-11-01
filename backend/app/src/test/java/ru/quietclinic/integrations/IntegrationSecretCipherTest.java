@@ -35,11 +35,12 @@ class IntegrationSecretCipherTest {
 
   @Test
   void roundTripsSecretWithoutStoringPlaintext() {
-    var clinic = UUID.randomUUID();
-    var integration = UUID.randomUUID();
-    var sealed = cipher.encrypt(clinic, integration, 1, "{\"apiKey\":\"secret\"}");
+    UUID clinic = UUID.randomUUID();
+    UUID integration = UUID.randomUUID();
+    IntegrationSecretCipher.Sealed sealed =
+        cipher.encrypt(clinic, integration, 1, "{\"apiKey\":\"secret\"}");
     assertThat(new String(sealed.ciphertext())).doesNotContain("secret");
-    var decrypted =
+    String decrypted =
         cipher.decrypt(
             clinic,
             integration,
@@ -51,9 +52,9 @@ class IntegrationSecretCipherTest {
 
   @Test
   void rejectsCiphertextMovedToAnotherIntegration() {
-    var clinic = UUID.randomUUID();
-    var sealed = cipher.encrypt(clinic, UUID.randomUUID(), 1, "secret");
-    var record =
+    UUID clinic = UUID.randomUUID();
+    IntegrationSecretCipher.Sealed sealed = cipher.encrypt(clinic, UUID.randomUUID(), 1, "secret");
+    IntegrationSecretRecord record =
         new IntegrationSecretRecord(
             sealed.ciphertext(), sealed.wrappedDataKey(), sealed.keyVersion());
     assertThatThrownBy(() -> cipher.decrypt(clinic, UUID.randomUUID(), 1, record))

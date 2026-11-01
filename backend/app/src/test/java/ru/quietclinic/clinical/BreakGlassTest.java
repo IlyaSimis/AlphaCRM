@@ -43,7 +43,7 @@ class BreakGlassTest {
 
   @Test
   void ownerReadsOnePatientAfterReasonAndPassword() throws Exception {
-    var reason = "Проверка жалобы " + UUID.randomUUID();
+    String reason = "Проверка жалобы " + UUID.randomUUID();
     mvc.perform(get("/api/v1/clinical/patients/" + OTHER + "/encounters").with(staff.admin()))
         .andExpect(status().isForbidden());
 
@@ -63,7 +63,7 @@ class BreakGlassTest {
     // Только этот пациент.
     mvc.perform(get("/api/v1/clinical/patients/" + OTHER + "/encounters").with(staff.admin()))
         .andExpect(status().isForbidden());
-    var reads =
+    Long reads =
         jdbc.queryForObject(
             "select count(*) from audit_event where action = 'CLINICAL_HISTORY_READ'"
                 + " and object_id = ? and reason = 'break-glass'",
@@ -71,7 +71,7 @@ class BreakGlassTest {
             UUID.fromString(ANNA));
     assertThat(reads).isPositive();
     // Текст причины в журнал аудита не попадает.
-    var leaked =
+    Long leaked =
         jdbc.queryForObject(
             "select count(*) from audit_event where reason like ?", Long.class, "%" + reason + "%");
     assertThat(leaked).isZero();
@@ -79,7 +79,7 @@ class BreakGlassTest {
     // Других ролей у экстренного доступа нет; журнал видят владелец и старший администратор.
     grant(ANNA, reason, StaffSessions.ADMIN_PASSWORD).andReturn();
     grantAs("ADMINISTRATOR", reason).andExpect(status().isForbidden());
-    var today = LocalDate.now().toString();
+    String today = LocalDate.now().toString();
     mvc.perform(
             get("/api/v1/clinical/break-glass")
                 .with(staff.exactly("SENIOR_ADMINISTRATOR"))

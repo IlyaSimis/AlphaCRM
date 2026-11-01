@@ -30,6 +30,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 import ru.quietclinic.SecondClinic;
 import ru.quietclinic.StaffSessions;
 import ru.quietclinic.contracts.LibreOfficePdfConverter;
@@ -49,8 +50,7 @@ class DriveControllerTest {
     staff = new StaffSessions(mvc);
   }
 
-  private String read(org.springframework.test.web.servlet.ResultActions actions, String path)
-      throws Exception {
+  private String read(ResultActions actions, String path) throws Exception {
     return JsonPath.read(actions.andReturn().getResponse().getContentAsString(), path).toString();
   }
 
@@ -71,8 +71,8 @@ class DriveControllerTest {
 
   @Test
   void sharedFolderIsReadableByRoleAndOnlyOwnerManagesIt() throws Exception {
-    var folder = folder("Regulations " + UUID.randomUUID());
-    var fileId =
+    String folder = folder("Regulations " + UUID.randomUUID());
+    String fileId =
         read(
             mvc.perform(
                     multipart("/api/v1/drive/files")
@@ -134,7 +134,7 @@ class DriveControllerTest {
         .andExpect(status().isNotFound());
 
     // Чтение — в журнале, без имени файла.
-    var reads =
+    Long reads =
         jdbc.queryForObject(
             "select count(*) from audit_event where action = 'DRIVE_FILE_READ' and object_id = ?"
                 + " and (reason is null or reason not like '%rules%')",
@@ -144,8 +144,8 @@ class DriveControllerTest {
 
   @Test
   void linkWorksOnlyAfterSignInAndTrashHidesContent() throws Exception {
-    var folder = folder("Links " + UUID.randomUUID());
-    var fileId =
+    String folder = folder("Links " + UUID.randomUUID());
+    String fileId =
         read(
             mvc.perform(
                     multipart("/api/v1/drive/files")
@@ -161,7 +161,7 @@ class DriveControllerTest {
                 .content("{\"principalType\":\"LINK\",\"permission\":\"EDIT\"}"))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("DRIVE_LINK_VIEW_ONLY"));
-    var token =
+    String token =
         read(
             mvc.perform(
                     post("/api/v1/drive/nodes/" + fileId + "/shares")
@@ -172,7 +172,7 @@ class DriveControllerTest {
                 .andExpect(jsonPath("$.expiresAt").isNotEmpty()),
             "$.token");
     // Токен хранится только хешем.
-    var raw =
+    Long raw =
         jdbc.queryForObject(
             "select count(*) from drive.drive_share where link_token_hash = ?", Long.class, token);
     assertThat(raw).isZero();
@@ -183,7 +183,8 @@ class DriveControllerTest {
         .andExpect(status().isOk())
         .andExpect(content().string("by link"));
     SecondClinic.ensure(jdbc);
-    var other = staff.login(SecondClinic.ADMIN_USERNAME, SecondClinic.ADMIN_PASSWORD);
+    StaffSessions.Login other =
+        staff.login(SecondClinic.ADMIN_USERNAME, SecondClinic.ADMIN_PASSWORD);
     mvc.perform(get("/api/v1/drive/links/" + token).with(other)).andExpect(status().isNotFound());
 
     mvc.perform(delete("/api/v1/drive/nodes/" + folder).with(staff.admin()))
@@ -200,9 +201,9 @@ class DriveControllerTest {
 
   @Test
   void previewUsesTheSameRightsAndConvertsOfficeDocumentsOnlyForViewing() throws Exception {
-    var suffix = UUID.randomUUID();
-    var pdfBytes = "%PDF-1.4\npreview\n%%EOF".getBytes(StandardCharsets.UTF_8);
-    var pdfId =
+    UUID suffix = UUID.randomUUID();
+    byte[] pdfBytes = "%PDF-1.4\npreview\n%%EOF".getBytes(StandardCharsets.UTF_8);
+    String pdfId =
         read(
             mvc.perform(
                     multipart("/api/v1/drive/files")
@@ -222,8 +223,8 @@ class DriveControllerTest {
     mvc.perform(get("/api/v1/drive/files/" + pdfId + "/preview").with(staff.anonymous()))
         .andExpect(status().isUnauthorized());
 
-    var imageBytes = new byte[] {(byte) 0x89, 0x50, 0x4e, 0x47};
-    var imageId =
+    byte[] imageBytes = new byte[] {(byte) 0x89, 0x50, 0x4e, 0x47};
+    String imageId =
         read(
             mvc.perform(
                     multipart("/api/v1/drive/files")
@@ -243,8 +244,8 @@ class DriveControllerTest {
             invocation ->
                 Optional.of(
                     ("%PDF-" + invocation.getArgument(1)).getBytes(StandardCharsets.UTF_8)));
-    for (var extension : new String[] {"docx", "xlsx"}) {
-      var officeId =
+    for (String extension : new String[] {"docx", "xlsx"}) {
+      String officeId =
           read(
               mvc.perform(
                       multipart("/api/v1/drive/files")
@@ -263,7 +264,7 @@ class DriveControllerTest {
           .andExpect(content().bytes(("%PDF-" + extension).getBytes(StandardCharsets.UTF_8)));
     }
 
-    var textId =
+    String textId =
         read(
             mvc.perform(
                     multipart("/api/v1/drive/files")
@@ -275,7 +276,7 @@ class DriveControllerTest {
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("PREVIEW_UNSUPPORTED"));
 
-    var token =
+    String token =
         read(
             mvc.perform(
                     post("/api/v1/drive/nodes/" + pdfId + "/shares")
@@ -294,7 +295,7 @@ class DriveControllerTest {
 
   @Test
   void namesAreUniqueInFolderAndQuotaIsAdministered() throws Exception {
-    var name = "Unique " + UUID.randomUUID();
+    String name = "Unique " + UUID.randomUUID();
     folder(name);
     mvc.perform(
             post("/api/v1/drive/folders")

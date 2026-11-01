@@ -59,8 +59,8 @@ class PostgresPatientFileIntegrationTest {
 
   @Test
   void signedFileIsImmutableInTheDatabase() throws Exception {
-    var bytes = "%PDF-1.4\nсодержимое на PostgreSQL\n%%EOF".getBytes(StandardCharsets.UTF_8);
-    var body =
+    byte[] bytes = "%PDF-1.4\nсодержимое на PostgreSQL\n%%EOF".getBytes(StandardCharsets.UTF_8);
+    String body =
         mvc.perform(
                 multipart("/api/v1/patients/00000000-0000-0000-0000-000000000101/files")
                     .file(new MockMultipartFile("file", "scan.pdf", "application/pdf", bytes))
@@ -69,8 +69,8 @@ class PostgresPatientFileIntegrationTest {
             .andReturn()
             .getResponse()
             .getContentAsString();
-    var id = UUID.fromString(JsonPath.read(body, "$.id"));
-    var stored =
+    UUID id = UUID.fromString(JsonPath.read(body, "$.id"));
+    byte[] stored =
         jdbc.queryForObject("select ciphertext from patient_file where id = ?", byte[].class, id);
     assertThat(new String(stored, StandardCharsets.ISO_8859_1)).doesNotContain("%PDF-");
 

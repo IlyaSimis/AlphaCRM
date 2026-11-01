@@ -27,8 +27,9 @@ class AssistantService {
     if (!gateway.enabled()) {
       throw conflict("ASSISTANT_NOT_CONFIGURED", "AI navigation provider is not configured");
     }
-    var result = gateway.navigate(request.query(), request.currentPage(), request.destinations());
-    var allowed =
+    AssistantGateway.GatewayResult result =
+        gateway.navigate(request.query(), request.currentPage(), request.destinations());
+    boolean allowed =
         request.destinations().stream().anyMatch(item -> item.id().equals(result.destinationId()));
     if (!allowed) {
       throw conflict(

@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.List;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -62,10 +63,10 @@ class PatientImportControllerTest {
         .andExpect(jsonPath("$.errors").value(1))
         .andExpect(jsonPath("$.rows[0].status").value("NEW"))
         .andExpect(jsonPath("$.rows[1].reason").value("DUPLICATE_IN_CRM"));
-    var count =
+    Integer count =
         jdbc.queryForObject(
             "select count(*) from patient where full_name = 'Preview One'", Integer.class);
-    org.assertj.core.api.Assertions.assertThat(count).isZero();
+    Assertions.assertThat(count).isZero();
   }
 
   @Test
@@ -77,13 +78,13 @@ class PatientImportControllerTest {
                 .content(request()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.created").value(1));
-    var count =
+    Integer count =
         jdbc.queryForObject(
             "select count(*) from patient p"
                 + " left join patient_consent c on c.patient_id = p.id where p.full_name = 'Imported One'"
                 + " and c.id is null",
             Integer.class);
-    org.assertj.core.api.Assertions.assertThat(count).isEqualTo(1);
+    Assertions.assertThat(count).isEqualTo(1);
     mvc.perform(
             post("/api/v1/patients/import/postgresql/commit")
                 .with(staff.admin())

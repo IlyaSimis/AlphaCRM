@@ -2,6 +2,7 @@ package ru.quietclinic.communications;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
@@ -47,7 +48,7 @@ public class OutboxService {
    */
   @Transactional
   public void appointmentBookedOnline(UUID appointmentId, Instant startsAt) {
-    var now = Instant.now();
+    Instant now = Instant.now();
     scheduleFor(appointmentId, startsAt, clinicOfAppointment(appointmentId), now);
     repository
         .findByIdempotencyKey(key(NoticeTemplates.CONFIRMED, appointmentId, startsAt))
@@ -117,9 +118,9 @@ public class OutboxService {
         key(NoticeTemplates.CONFIRMED, appointmentId, startsAt),
         startsAt,
         now);
-    var today = now.atZone(zone).toLocalDate();
+    LocalDate today = now.atZone(zone).toLocalDate();
     if (startsAt.atZone(zone).toLocalDate().isAfter(today)) {
-      var due = startsAt.minus(REMINDER_LEAD);
+      Instant due = startsAt.minus(REMINDER_LEAD);
       enqueue(
           NoticeTemplates.NOTIFICATION,
           "APPOINTMENT",

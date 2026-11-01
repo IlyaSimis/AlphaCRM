@@ -8,9 +8,12 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -29,7 +32,7 @@ final class BotTokenFilter extends OncePerRequestFilter {
     this.tokens =
         token == null
             ? List.of()
-            : java.util.Arrays.stream(token.split(","))
+            : Arrays.stream(token.split(","))
                 .map(String::trim)
                 .filter(value -> !value.isEmpty())
                 .map(value -> value.getBytes(StandardCharsets.UTF_8))
@@ -46,20 +49,20 @@ final class BotTokenFilter extends OncePerRequestFilter {
           response, 401, "BOT_API_DISABLED", "Bot API is disabled: CLINIC_BOT_API_TOKEN is empty");
       return;
     }
-    var presented = request.getHeader(HEADER);
-    var presentedBytes =
+    String presented = request.getHeader(HEADER);
+    byte[] presentedBytes =
         presented == null ? null : presented.trim().getBytes(StandardCharsets.UTF_8);
     if (presentedBytes == null
         || tokens.stream().noneMatch(token -> MessageDigest.isEqual(token, presentedBytes))) {
       error(response, 401, "BOT_TOKEN_INVALID", "Bot token is missing or wrong");
       return;
     }
-    var clinicId = clinics.clinicId();
+    UUID clinicId = clinics.clinicId();
     if (clinicId == null) {
       error(response, 409, "BOT_CLINIC_UNKNOWN", "Set CLINIC_BOT_CLINIC_ID: clinic is ambiguous");
       return;
     }
-    var context = SecurityContextHolder.createEmptyContext();
+    SecurityContext context = SecurityContextHolder.createEmptyContext();
     context.setAuthentication(
         UsernamePasswordAuthenticationToken.authenticated(
             new BotPrincipal(clinicId), null, List.of(new SimpleGrantedAuthority("ROLE_BOT"))));

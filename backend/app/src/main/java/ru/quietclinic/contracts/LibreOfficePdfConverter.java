@@ -2,11 +2,13 @@ package ru.quietclinic.contracts;
 
 import static ru.quietclinic.platform.PlatformConfig.conflict;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -36,10 +38,10 @@ public class LibreOfficePdfConverter {
     Path directory = null;
     try {
       directory = Files.createTempDirectory("alphacrm-document-");
-      var input = directory.resolve("document." + extension);
+      Path input = directory.resolve("document." + extension);
       Files.write(input, document);
-      var profile = directory.resolve("lo-profile");
-      var process =
+      Path profile = directory.resolve("lo-profile");
+      Process process =
           new ProcessBuilder(
                   binary,
                   "--headless",
@@ -61,30 +63,30 @@ public class LibreOfficePdfConverter {
       if (process.exitValue() != 0) {
         throw conflict("PDF_CONVERSION_FAILED", "Cannot convert the document to PDF");
       }
-      var pdf = directory.resolve("document.pdf");
+      Path pdf = directory.resolve("document.pdf");
       if (!Files.isRegularFile(pdf)) {
         throw conflict("PDF_CONVERSION_FAILED", "Cannot convert the document to PDF");
       }
       return Optional.of(Files.readAllBytes(pdf));
-    } catch (java.io.IOException ex) {
+    } catch (IOException ex) {
       throw conflict("PDF_CONVERSION_FAILED", "Cannot convert the contract to PDF");
     } catch (InterruptedException ex) {
       Thread.currentThread().interrupt();
       throw conflict("PDF_CONVERSION_FAILED", "PDF conversion was interrupted");
     } finally {
       if (directory != null) {
-        try (var paths = Files.walk(directory)) {
+        try (Stream<Path> paths = Files.walk(directory)) {
           paths
               .sorted(Comparator.reverseOrder())
               .forEach(
                   path -> {
                     try {
                       Files.deleteIfExists(path);
-                    } catch (java.io.IOException ignored) {
+                    } catch (IOException ignored) {
                       // Временный каталог будет очищен ОС; пути и содержимое не попадают в ответ.
                     }
                   });
-        } catch (java.io.IOException ignored) {
+        } catch (IOException ignored) {
           // Ничего не делаем: результат договора уже сформирован.
         }
       }

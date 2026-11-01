@@ -6,10 +6,14 @@ import static ru.quietclinic.platform.PlatformConfig.unauthorized;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
+import java.time.Instant;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
@@ -54,26 +58,26 @@ class AuthService {
   /** Один и тот же ответ на неизвестный логин, неверный пароль и выключенную учётную запись. */
   @Transactional
   StaffView login(LoginRequest request, HttpServletRequest http, HttpServletResponse response) {
-    var address = http.getRemoteAddr();
-    var username = request.username().trim().toLowerCase(Locale.ROOT);
-    var now = time.now();
+    String address = http.getRemoteAddr();
+    String username = request.username().trim().toLowerCase(Locale.ROOT);
+    Instant now = time.now();
     // Подбор пароля: после серии неудач вход с этого адреса закрыт на время окна.
     if (throttle.blocked(address, username, now)) {
       throw tooManyRequests("TOO_MANY_LOGIN_ATTEMPTS", "Too many failed sign-in attempts");
     }
     // Блокировка строки не даёт двум одновременным входам оставить две активные сессии.
-    var user = staff.findForLogin(username);
-    var hash = user.map(u -> u.passwordHash).orElse(unknownUserHash);
-    var matches = encoder.matches(request.password(), hash);
+    Optional<StaffUser> user = staff.findForLogin(username);
+    String hash = user.map(u -> u.passwordHash).orElse(unknownUserHash);
+    boolean matches = encoder.matches(request.password(), hash);
     if (user.isEmpty() || !matches || !user.get().active) {
       throttle.failed(address, username, now);
       throw unauthorized("INVALID_CREDENTIALS", INVALID_CREDENTIALS);
     }
     throttle.succeeded(address, username);
-    var principal = StaffPrincipal.of(user.get());
-    var authentication =
+    StaffPrincipal principal = StaffPrincipal.of(user.get());
+    UsernamePasswordAuthenticationToken authentication =
         UsernamePasswordAuthenticationToken.authenticated(principal, null, principal.authorities());
-    var context = SecurityContextHolder.createEmptyContext();
+    SecurityContext context = SecurityContextHolder.createEmptyContext();
     context.setAuthentication(authentication);
     SecurityContextHolder.setContext(context);
     // Новая сессия на вход: защита от фиксации сессии.
@@ -92,7 +96,7 @@ class AuthService {
         || !(authentication.getPrincipal() instanceof StaffPrincipal principal)) {
       return;
     }
-    var session = http.getSession(false);
+    HttpSession session = http.getSession(false);
     if (session == null) return;
     staff
         .findById(principal.userId())
@@ -112,7 +116,7 @@ class AuthService {
   /** Своя смена пароля снимает требование «сменить временный пароль». */
   @Transactional
   void changeOwnPassword(PasswordChangeRequest request) {
-    var user = current();
+    StaffUser user = current();
     if (!encoder.matches(request.currentPassword(), user.passwordHash)) {
       throw conflict("WRONG_PASSWORD", "Current password is wrong");
     }
@@ -125,7 +129,7 @@ class AuthService {
   }
 
   StaffUser current() {
-    var auth = SecurityContextHolder.getContext().getAuthentication();
+    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
     if (auth == null || !(auth.getPrincipal() instanceof StaffPrincipal principal)) {
       throw unauthorized("Sign-in required");
     }

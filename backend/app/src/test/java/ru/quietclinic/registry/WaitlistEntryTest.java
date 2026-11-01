@@ -11,7 +11,7 @@ class WaitlistEntryTest {
 
   @Test
   void matchesFreedSlotOfSameDoctorInsideWishedPeriod() {
-    var entry =
+    WaitlistEntry entry =
         new WaitlistEntry(
             UUID.randomUUID(),
             DOCTOR,

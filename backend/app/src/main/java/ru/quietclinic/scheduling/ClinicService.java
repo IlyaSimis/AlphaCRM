@@ -69,7 +69,7 @@ class ClinicService {
 
   /** Инвариант режима цены; при нарушении — 409 INVALID_PRICING. */
   void setPricing(String mode, Long price, Long min, Long max) {
-    var next = mode == null || mode.isBlank() ? FIXED : mode;
+    String next = mode == null || mode.isBlank() ? FIXED : mode;
     if (FIXED.equals(next)) {
       if (price == null || price < 0) {
         throw conflict("INVALID_PRICING", "A fixed price must be set and not negative");

@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 import com.jayway.jsonpath.JsonPath;
 import java.io.BufferedReader;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -20,8 +21,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 /**
  * Матрица RBAC из docs/target-architecture.md (раздел C) против кода: каждая строка {@code
@@ -45,13 +48,14 @@ class RbacMatrixTest {
   }
 
   static Stream<Arguments> matrix() throws Exception {
-    var rows = new ArrayList<Arguments>();
-    try (var input = RbacMatrixTest.class.getResourceAsStream("/rbac-matrix.csv");
-        var reader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8))) {
+    List<Arguments> rows = new ArrayList<>();
+    try (InputStream input = RbacMatrixTest.class.getResourceAsStream("/rbac-matrix.csv");
+        BufferedReader reader =
+            new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8))) {
       String line;
       while ((line = reader.readLine()) != null) {
         if (line.isBlank() || line.startsWith("#") || line.startsWith("role;")) continue;
-        var cells = line.split(";", 5);
+        String[] cells = line.split(";", 5);
         rows.add(Arguments.of(cells[0], cells[1], cells[2], cells[3], cells[4]));
       }
     }
@@ -62,13 +66,13 @@ class RbacMatrixTest {
   @MethodSource("matrix")
   void roleMatchesMatrix(String role, String method, String path, String expected, String body)
       throws Exception {
-    var call =
+    MockHttpServletRequestBuilder call =
         request(HttpMethod.valueOf(method), substitute(path))
             .with(staff.exactly(role))
             .contentType(MediaType.APPLICATION_JSON);
     if (!body.isBlank()) call.content(substitute(body));
-    var response = mvc.perform(call).andReturn().getResponse();
-    var status = response.getStatus();
+    MockHttpServletResponse response = mvc.perform(call).andReturn().getResponse();
+    int status = response.getStatus();
     if ("403".equals(expected)) {
       assertThat(status).as("%s %s %s", role, method, path).isEqualTo(403);
       String code = JsonPath.read(response.getContentAsString(), "$.code");

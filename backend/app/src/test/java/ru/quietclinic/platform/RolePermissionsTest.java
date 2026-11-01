@@ -2,6 +2,7 @@ package ru.quietclinic.platform;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.HashSet;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
@@ -10,8 +11,8 @@ class RolePermissionsTest {
 
   @Test
   void clinicalTextBelongsToDoctorOnly() {
-    for (var role : RolePermissions.STAFF_ROLES) {
-      var expected = RolePermissions.DOCTOR.equals(role);
+    for (String role : RolePermissions.STAFF_ROLES) {
+      boolean expected = RolePermissions.DOCTOR.equals(role);
       assertThat(RolePermissions.of(role).contains(Permission.CLINICAL_RECORD))
           .as(role)
           .isEqualTo(expected);
@@ -20,7 +21,7 @@ class RolePermissionsTest {
 
   @Test
   void ownerHasEverythingOperationalOfAdministratorPlusPrivilegedRoles() {
-    var owner = RolePermissions.of(RolePermissions.OWNER);
+    Set<Permission> owner = RolePermissions.of(RolePermissions.OWNER);
     assertThat(owner).containsAll(RolePermissions.of(RolePermissions.ADMINISTRATOR));
     assertThat(owner).contains(Permission.ROLE_ASSIGN_PRIVILEGED);
     assertThat(RolePermissions.of(RolePermissions.SENIOR_ADMINISTRATOR))
@@ -29,7 +30,7 @@ class RolePermissionsTest {
 
   @Test
   void supportSeesNoPatientsAndCashierNoContacts() {
-    var support = RolePermissions.of(RolePermissions.SUPPORT);
+    Set<Permission> support = RolePermissions.of(RolePermissions.SUPPORT);
     assertThat(support)
         .doesNotContain(
             Permission.PATIENT_READ,
@@ -44,15 +45,15 @@ class RolePermissionsTest {
 
   @Test
   void managerCannotEscalateToAdministrator() {
-    var manager = RolePermissions.of(RolePermissions.MANAGER);
+    Set<Permission> manager = RolePermissions.of(RolePermissions.MANAGER);
     assertThat(RolePermissions.mayAssign(manager, RolePermissions.DOCTOR)).isTrue();
     assertThat(RolePermissions.mayAssign(manager, RolePermissions.ADMINISTRATOR)).isFalse();
     assertThat(RolePermissions.mayAssign(manager, RolePermissions.OWNER)).isFalse();
-    var administrator = RolePermissions.of(RolePermissions.ADMINISTRATOR);
+    Set<Permission> administrator = RolePermissions.of(RolePermissions.ADMINISTRATOR);
     assertThat(RolePermissions.mayAssign(administrator, RolePermissions.SUPPORT)).isTrue();
     assertThat(RolePermissions.mayAssign(administrator, RolePermissions.SENIOR_ADMINISTRATOR))
         .isFalse();
-    var owner = RolePermissions.of(RolePermissions.OWNER);
+    Set<Permission> owner = RolePermissions.of(RolePermissions.OWNER);
     assertThat(RolePermissions.mayAssign(owner, RolePermissions.OWNER)).isTrue();
   }
 
@@ -66,17 +67,17 @@ class RolePermissionsTest {
 
   @Test
   void everyStaffRoleHasAPersonalWorkspace() {
-    for (var role : RolePermissions.STAFF_ROLES) {
+    for (String role : RolePermissions.STAFF_ROLES) {
       assertThat(RolePermissions.of(role)).as(role).contains(Permission.WORKSPACE_USE);
     }
   }
 
   @Test
   void contractsAreAvailableToEveryoneAndInventoryOnlyToItsOperators() {
-    var inventoryRoles =
+    Set<String> inventoryRoles =
         Set.of(
             "OWNER", "SENIOR_ADMINISTRATOR", "ADMINISTRATOR", "MANAGER", "NURSE", "SENIOR_NURSE");
-    for (var role : RolePermissions.STAFF_ROLES) {
+    for (String role : RolePermissions.STAFF_ROLES) {
       assertThat(RolePermissions.of(role)).as(role).contains(Permission.CONTRACT_USE);
       assertThat(RolePermissions.of(role).contains(Permission.INVENTORY_CATALOG_READ))
           .as(role)
@@ -88,8 +89,8 @@ class RolePermissionsTest {
 
   @Test
   void permissionCodesAreUniqueAndDotted() {
-    var codes = new java.util.HashSet<String>();
-    for (var permission : Permission.values()) {
+    Set<String> codes = new HashSet<>();
+    for (Permission permission : Permission.values()) {
       assertThat(permission.code()).matches("[a-z]+\\.[a-z-]+\\.[a-z-]+");
       assertThat(codes.add(permission.code())).as(permission.code()).isTrue();
     }

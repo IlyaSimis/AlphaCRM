@@ -39,7 +39,7 @@ class OutboxDispatcherRulesTest {
 
   @Test
   void reminderGoesOnlyForActiveAppointmentAtTheSameTime() {
-    var reminder = message(NoticeTemplates.REMINDER, STARTS);
+    OutboxMessage reminder = message(NoticeTemplates.REMINDER, STARTS);
     assertThat(OutboxDispatcher.skipReason(reminder, notice("BOOKED", STARTS, true), NOW)).isNull();
     assertThat(OutboxDispatcher.skipReason(reminder, notice("CANCELLED", STARTS, true), NOW))
         .isEqualTo("APPOINTMENT_CANCELLED");
@@ -55,17 +55,17 @@ class OutboxDispatcherRulesTest {
 
   @Test
   void consentIsCheckedFirst() {
-    var confirmed = message(NoticeTemplates.CONFIRMED, STARTS);
+    OutboxMessage confirmed = message(NoticeTemplates.CONFIRMED, STARTS);
     assertThat(OutboxDispatcher.skipReason(confirmed, notice("BOOKED", STARTS, false), NOW))
         .isEqualTo("NO_CONSENT");
-    var cancelled = message(NoticeTemplates.CANCELLED, STARTS);
+    OutboxMessage cancelled = message(NoticeTemplates.CANCELLED, STARTS);
     assertThat(OutboxDispatcher.skipReason(cancelled, notice("CANCELLED", STARTS, false), NOW))
         .isEqualTo("NO_CONSENT");
   }
 
   @Test
   void cancellationGoesOnlyForCancelledAppointment() {
-    var cancelled = message(NoticeTemplates.CANCELLED, STARTS);
+    OutboxMessage cancelled = message(NoticeTemplates.CANCELLED, STARTS);
     assertThat(OutboxDispatcher.skipReason(cancelled, notice("CANCELLED", STARTS, true), NOW))
         .isNull();
     assertThat(OutboxDispatcher.skipReason(cancelled, notice("BOOKED", STARTS, true), NOW))
@@ -74,7 +74,7 @@ class OutboxDispatcherRulesTest {
 
   @Test
   void payloadHasOnlyTemplateReferenceAndTime() {
-    var payload =
+    String payload =
         Payloads.of(
             NoticeTemplates.REMINDER,
             "APPOINTMENT",

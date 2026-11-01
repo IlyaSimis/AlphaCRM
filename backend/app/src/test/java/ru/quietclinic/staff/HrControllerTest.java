@@ -13,6 +13,8 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import ru.quietclinic.StaffSessions;
 
 /**
@@ -32,8 +34,8 @@ class HrControllerTest {
 
   @Test
   void ownerSetsTermsAndEveryoneSeesOnlyTheirOwn() throws Exception {
-    var cashier = staff.exactly("CASHIER");
-    var id = staff.userId("t.cashier");
+    RequestPostProcessor cashier = staff.exactly("CASHIER");
+    String id = staff.userId("t.cashier");
     terms(id, "2026-01-01", 5000000).andExpect(status().isOk());
     terms(id, "2026-01-01", 5500000)
         .andExpect(status().isConflict())
@@ -50,8 +52,7 @@ class HrControllerTest {
     mvc.perform(get("/api/v1/hr/contracts").with(staff.admin())).andExpect(status().isOk());
   }
 
-  private org.springframework.test.web.servlet.ResultActions terms(
-      String id, String from, long rate) throws Exception {
+  private ResultActions terms(String id, String from, long rate) throws Exception {
     return mvc.perform(
         put("/api/v1/hr/contracts/" + id)
             .with(staff.admin())

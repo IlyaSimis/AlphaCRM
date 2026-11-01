@@ -77,7 +77,7 @@ class PatientFileService {
     requirePermission(READ, READ_SIGNED, WRITE_CARE);
     requirePatient(patientId);
     if (careOnly()) requireCare(patientId);
-    var sql = SELECT + " and f.patient_id = ?";
+    String sql = SELECT + " and f.patient_id = ?";
     if (signedOnly()) sql += " and f.state = '" + PatientFile.SIGNED + "'";
     return jdbc.query(sql + " order by f.uploaded_at desc", this::row, clinicId(), patientId);
   }
@@ -86,8 +86,8 @@ class PatientFileService {
   @Transactional(readOnly = true)
   List<PatientFileView> signedArchive() {
     requirePermission(READ, READ_SIGNED, WRITE_CARE);
-    var sql = SELECT + " and f.state = '" + PatientFile.SIGNED + "'";
-    var args = new ArrayList<Object>(List.of(clinicId()));
+    String sql = SELECT + " and f.state = '" + PatientFile.SIGNED + "'";
+    List<Object> args = new ArrayList<>(List.of(clinicId()));
     if (careOnly()) {
       sql += " and f.signed_by = ?";
       args.add(actorId());
@@ -105,7 +105,7 @@ class PatientFileService {
       throw payloadTooLarge("FILE_TOO_LARGE", "The file is larger than 10 MB");
     }
     if (!isPdf(content)) throw conflict("NOT_A_PDF", "Only PDF files can be uploaded");
-    var file =
+    PatientFile file =
         files.saveAndFlush(
             new PatientFile(
                 clinicId(),
@@ -124,7 +124,7 @@ class PatientFileService {
   @Transactional
   PatientFileView sign(UUID fileId) {
     requirePermission(Permission.PATIENT_FILE_WRITE, WRITE_CARE);
-    var file = find(fileId);
+    PatientFile file = find(fileId);
     if (!can(Permission.PATIENT_FILE_WRITE)) requireCare(file.patientId);
     if (file.signed()) throw conflict("ALREADY_SIGNED", "The file is already signed");
     file.sign(actorId(), sha256(encryption.decryptBytes(file.ciphertext)), Instant.now());
@@ -136,7 +136,7 @@ class PatientFileService {
   @Transactional(readOnly = true)
   FileDownload download(UUID fileId) {
     requirePermission(READ, READ_SIGNED, WRITE_CARE);
-    var file = find(fileId);
+    PatientFile file = find(fileId);
     if (!file.signed() && signedOnly()) {
       throw forbidden("FILE_NOT_SIGNED", "Only signed files are available to this role");
     }
@@ -144,7 +144,7 @@ class PatientFileService {
     if (careOnly() && !(file.signed() && actorId().equals(file.signedBy))) {
       requireCare(file.patientId);
     }
-    var content = encryption.decryptBytes(file.ciphertext);
+    byte[] content = encryption.decryptBytes(file.ciphertext);
     audit.record(actorId(), "PDF_READ", "PATIENT_FILE", file.id, "ALLOWED", null);
     return new FileDownload(file.originalName, content);
   }
@@ -165,7 +165,7 @@ class PatientFileService {
 
   static boolean isPdf(byte[] content) {
     if (content.length < PDF_MAGIC.length) return false;
-    for (var i = 0; i < PDF_MAGIC.length; i++) {
+    for (int i = 0; i < PDF_MAGIC.length; i++) {
       if (content[i] != PDF_MAGIC[i]) return false;
     }
     return true;
@@ -173,7 +173,7 @@ class PatientFileService {
 
   /** Имя без пути и управляющих символов, не длиннее 255. */
   static String cleanName(String filename) {
-    var name = filename == null ? "" : filename;
+    String name = filename == null ? "" : filename;
     name = name.substring(Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\')) + 1);
     name = name.replaceAll("\\p{Cntrl}", "").trim();
     if (name.isEmpty()) name = "document.pdf";
@@ -202,7 +202,7 @@ class PatientFileService {
 
   /** Пациент другой клиники выглядит как несуществующий. */
   private void requirePatient(UUID patientId) {
-    var count =
+    Long count =
         jdbc.queryForObject(
             "select count(*) from patient where id = ? and clinic_id = ?",
             Long.class,
@@ -212,7 +212,7 @@ class PatientFileService {
   }
 
   private void requireAppointment(UUID appointmentId, UUID patientId) {
-    var count =
+    Long count =
         jdbc.queryForObject(
             "select count(*) from appointment a join practitioner p on p.id = a.practitioner_id"
                 + " where a.id = ? and a.patient_id = ? and p.clinic_id = ?",
@@ -253,7 +253,7 @@ class PatientFileService {
   }
 
   private static Instant instant(ResultSet rs, String column) throws SQLException {
-    var value = rs.getObject(column, OffsetDateTime.class);
+    OffsetDateTime value = rs.getObject(column, OffsetDateTime.class);
     return value == null ? null : value.toInstant();
   }
 }

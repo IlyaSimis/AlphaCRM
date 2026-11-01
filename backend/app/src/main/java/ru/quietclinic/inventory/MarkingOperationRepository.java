@@ -1,5 +1,6 @@
 package ru.quietclinic.inventory;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -12,7 +13,7 @@ interface MarkingOperationRepository extends JpaRepository<MarkingOperation, UUI
       UUID clinicId, String status);
 
   List<MarkingOperation> findTop50ByStatusAndNextAttemptAtLessThanEqualOrderByCreatedAt(
-      String status, java.time.Instant now);
+      String status, Instant now);
 
   Optional<MarkingOperation> findByIdAndClinicId(UUID id, UUID clinicId);
 

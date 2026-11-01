@@ -3,8 +3,11 @@ package ru.quietclinic.platform;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
+import java.util.Arrays;
 import java.util.Base64;
+import java.util.HexFormat;
 import javax.crypto.Cipher;
+import javax.crypto.Mac;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.stereotype.Service;
@@ -25,15 +28,15 @@ class AesGcmEncryptionService implements EncryptionService {
   public String encrypt(String plaintext, String aad) {
     if (plaintext == null) return null;
     try {
-      var nonce = new byte[12];
+      byte[] nonce = new byte[12];
       random.nextBytes(nonce);
-      var cipher = Cipher.getInstance("AES/GCM/NoPadding");
+      Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
       cipher.init(
           Cipher.ENCRYPT_MODE,
           new SecretKeySpec(kms.dataKey(), "AES"),
           new GCMParameterSpec(128, nonce));
       updateAad(cipher, aad);
-      var encrypted = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
+      byte[] encrypted = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
       return kms.keyVersion()
           + "."
           + Base64.getUrlEncoder()
@@ -55,13 +58,13 @@ class AesGcmEncryptionService implements EncryptionService {
   public String decrypt(String ciphertext, String aad) {
     if (ciphertext == null) return null;
     try {
-      var separator = ciphertext.indexOf('.');
+      int separator = ciphertext.indexOf('.');
       if (separator < 1) throw new IllegalArgumentException("Missing key version");
-      var version = ciphertext.substring(0, separator);
-      var packed = Base64.getUrlDecoder().decode(ciphertext.substring(separator + 1));
-      var nonce = java.util.Arrays.copyOfRange(packed, 0, 12);
-      var encrypted = java.util.Arrays.copyOfRange(packed, 12, packed.length);
-      var cipher = Cipher.getInstance("AES/GCM/NoPadding");
+      String version = ciphertext.substring(0, separator);
+      byte[] packed = Base64.getUrlDecoder().decode(ciphertext.substring(separator + 1));
+      byte[] nonce = Arrays.copyOfRange(packed, 0, 12);
+      byte[] encrypted = Arrays.copyOfRange(packed, 12, packed.length);
+      Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
       cipher.init(
           Cipher.DECRYPT_MODE,
           new SecretKeySpec(kms.dataKey(version), "AES"),
@@ -76,16 +79,16 @@ class AesGcmEncryptionService implements EncryptionService {
   public byte[] encryptBytes(byte[] plaintext) {
     if (plaintext == null) return null;
     try {
-      var version = kms.keyVersion().getBytes(StandardCharsets.UTF_8);
+      byte[] version = kms.keyVersion().getBytes(StandardCharsets.UTF_8);
       if (version.length > 255) throw new IllegalStateException("Key version is too long");
-      var nonce = new byte[12];
+      byte[] nonce = new byte[12];
       random.nextBytes(nonce);
-      var cipher = Cipher.getInstance("AES/GCM/NoPadding");
+      Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
       cipher.init(
           Cipher.ENCRYPT_MODE,
           new SecretKeySpec(kms.dataKey(), "AES"),
           new GCMParameterSpec(128, nonce));
-      var encrypted = cipher.doFinal(plaintext);
+      byte[] encrypted = cipher.doFinal(plaintext);
       return ByteBuffer.allocate(1 + version.length + nonce.length + encrypted.length)
           .put((byte) version.length)
           .put(version)
@@ -102,11 +105,11 @@ class AesGcmEncryptionService implements EncryptionService {
   public byte[] decryptBytes(byte[] ciphertext) {
     if (ciphertext == null) return null;
     try {
-      var versionLength = ciphertext[0] & 0xff;
-      var version = new String(ciphertext, 1, versionLength, StandardCharsets.UTF_8);
-      var offset = 1 + versionLength;
-      var nonce = java.util.Arrays.copyOfRange(ciphertext, offset, offset + 12);
-      var cipher = Cipher.getInstance("AES/GCM/NoPadding");
+      int versionLength = ciphertext[0] & 0xff;
+      String version = new String(ciphertext, 1, versionLength, StandardCharsets.UTF_8);
+      int offset = 1 + versionLength;
+      byte[] nonce = Arrays.copyOfRange(ciphertext, offset, offset + 12);
+      Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
       cipher.init(
           Cipher.DECRYPT_MODE,
           new SecretKeySpec(kms.dataKey(version), "AES"),
@@ -119,11 +122,11 @@ class AesGcmEncryptionService implements EncryptionService {
 
   public String blindIndex(String purpose, String normalizedValue) {
     try {
-      var mac = javax.crypto.Mac.getInstance("HmacSHA256");
+      Mac mac = Mac.getInstance("HmacSHA256");
       mac.init(new SecretKeySpec(kms.indexKey(), "HmacSHA256"));
       mac.update(purpose.getBytes(StandardCharsets.UTF_8));
       mac.update((byte) 0);
-      return java.util.HexFormat.of()
+      return HexFormat.of()
           .formatHex(mac.doFinal(normalizedValue.getBytes(StandardCharsets.UTF_8)));
     } catch (Exception ex) {
       throw new IllegalStateException("Blind index failed", ex);

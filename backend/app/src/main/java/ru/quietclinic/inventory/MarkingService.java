@@ -9,6 +9,8 @@ import static ru.quietclinic.platform.PlatformConfig.requirePermission;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,8 +43,8 @@ class MarkingService {
 
   /** Код со сканера (GS1) или уже готовый SGTIN (14 цифр GTIN + серийный номер). */
   static Gs1.Parsed read(String raw) {
-    var text = raw.strip();
-    var gs1 =
+    String text = raw.strip();
+    boolean gs1 =
         text.startsWith("(")
             || text.startsWith("]")
             || text.indexOf(Gs1.GS) >= 0
@@ -55,9 +57,10 @@ class MarkingService {
   @Transactional(readOnly = true)
   ScanView scan(ScanRequest request) {
     requirePermission(Permission.INVENTORY_DOCUMENT_WRITE, Permission.INVENTORY_CATALOG_READ);
-    var parsed = read(request.code());
-    var item = items.findByClinicIdAndGtin(clinicId(), parsed.gtin()).stream().findFirst();
-    var known = codes.findByClinicIdAndSgtin(clinicId(), parsed.sgtin());
+    Gs1.Parsed parsed = read(request.code());
+    Optional<Item> item =
+        items.findByClinicIdAndGtin(clinicId(), parsed.gtin()).stream().findFirst();
+    Optional<MarkingCode> known = codes.findByClinicIdAndSgtin(clinicId(), parsed.sgtin());
     return new ScanView(
         parsed.sgtin(),
         parsed.gtin(),
@@ -73,11 +76,11 @@ class MarkingService {
   @Transactional(readOnly = true)
   List<MarkingCodeView> codes(String status, UUID itemId) {
     requirePermission(Permission.INVENTORY_STOCK_READ);
-    var rows =
+    List<MarkingCode> rows =
         status == null || status.isBlank()
             ? codes.findTop500ByClinicIdOrderByUpdatedAtDesc(clinicId())
             : codes.findTop500ByClinicIdAndStatusOrderByUpdatedAtDesc(clinicId(), status);
-    var names = new HashMap<UUID, String>();
+    Map<UUID, String> names = new HashMap<>();
     items.findByClinicIdOrderByName(clinicId()).forEach(i -> names.put(i.id, i.name));
     return rows.stream()
         .filter(c -> itemId == null || itemId.equals(c.itemId))
@@ -98,7 +101,7 @@ class MarkingService {
   @Transactional(readOnly = true)
   List<MarkingOperationView> operations(String status) {
     requirePermission(Permission.MARKING_STATUS_READ);
-    var rows =
+    List<MarkingOperation> rows =
         status == null || status.isBlank()
             ? operations.findTop200ByClinicIdOrderByCreatedAtDesc(clinicId())
             : operations.findTop200ByClinicIdAndStatusOrderByCreatedAtDesc(clinicId(), status);
@@ -118,7 +121,7 @@ class MarkingService {
   @Transactional
   MarkingOperationView retry(UUID id) {
     requirePermission(Permission.MARKING_MANAGE);
-    var op =
+    MarkingOperation op =
         operations
             .findByIdAndClinicId(id, clinicId())
             .orElseThrow(
@@ -132,7 +135,7 @@ class MarkingService {
     operations.saveAndFlush(op);
     audit.record(
         actorId(), "MARKING_RETRY_REQUESTED", "MARKING_OPERATION", op.id, "ALLOWED", op.type);
-    var opId = op.id;
+    UUID opId = op.id;
     TransactionSynchronizationManager.registerSynchronization(
         new TransactionSynchronization() {
           @Override

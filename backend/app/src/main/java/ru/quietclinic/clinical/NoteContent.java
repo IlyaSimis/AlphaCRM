@@ -12,7 +12,7 @@ final class NoteContent {
    * формате (например, произвольный текст из API) даёт пустые поля, а не ошибку.
    */
   static SnapshotFields parse(String snapshot) {
-    var values = parseFlatObject(snapshot);
+    Map<String, String> values = parseFlatObject(snapshot);
     if (values == null) return SnapshotFields.EMPTY;
     return new SnapshotFields(
         values.get("complaints"),
@@ -23,14 +23,14 @@ final class NoteContent {
 
   private static Map<String, String> parseFlatObject(String text) {
     if (text == null) return null;
-    var reader = new FlatJsonReader(text.trim());
-    var result = new HashMap<String, String>();
+    FlatJsonReader reader = new FlatJsonReader(text.trim());
+    Map<String, String> result = new HashMap<>();
     if (!reader.consume('{')) return null;
     if (reader.consume('}')) return reader.atEnd() ? result : null;
     do {
-      var key = reader.string();
+      String key = reader.string();
       if (key == null || !reader.consume(':')) return null;
-      var value = reader.string();
+      String value = reader.string();
       if (value == null) return null;
       result.put(key, value);
     } while (reader.consume(','));
@@ -51,8 +51,8 @@ final class NoteContent {
   }
 
   static String quote(String value) {
-    var out = new StringBuilder("\"");
-    for (var ch : value.toCharArray()) {
+    StringBuilder out = new StringBuilder("\"");
+    for (char ch : value.toCharArray()) {
       switch (ch) {
         case '"' -> out.append("\\\"");
         case '\\' -> out.append("\\\\");

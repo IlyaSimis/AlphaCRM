@@ -45,9 +45,10 @@ class MangoWebhookRoutingTest {
 
   @Test
   void routesCallsAndRecordingsToTheClinicSelectedByPublicKey() throws Exception {
-    var mainKey = configure(staff.admin(), "clinic-a-key", "clinic-a-salt");
-    var secondAdmin = staff.login(SecondClinic.ADMIN_USERNAME, SecondClinic.ADMIN_PASSWORD);
-    var secondKey = configure(secondAdmin, "clinic-b-key", "clinic-b-salt");
+    String mainKey = configure(staff.admin(), "clinic-a-key", "clinic-a-salt");
+    StaffSessions.Login secondAdmin =
+        staff.login(SecondClinic.ADMIN_USERNAME, SecondClinic.ADMIN_PASSWORD);
+    String secondKey = configure(secondAdmin, "clinic-b-key", "clinic-b-salt");
 
     scopedEvent(
             mainKey, "call", callBody("webhook-main", "call-main"), "clinic-a-key", "clinic-a-salt")
@@ -91,12 +92,12 @@ class MangoWebhookRoutingTest {
 
   @Test
   void neverFallsBackToLegacyForUnknownInvalidOrDisabledScopedWebhook() throws Exception {
-    var publicKey = configure(staff.admin(), "clinic-a-key", "clinic-a-salt");
+    String publicKey = configure(staff.admin(), "clinic-a-key", "clinic-a-salt");
     mvc.perform(post("/api/v1/integrations/mango/disable").with(staff.admin()))
         .andExpect(status().isOk());
 
-    for (var pathKey : new String[] {publicKey, UUID.randomUUID().toString(), "not-a-uuid"}) {
-      var entryId = "webhook-no-fallback-" + pathKey;
+    for (String pathKey : new String[] {publicKey, UUID.randomUUID().toString(), "not-a-uuid"}) {
+      String entryId = "webhook-no-fallback-" + pathKey;
       scopedEvent(
               pathKey,
               "call",
@@ -110,7 +111,7 @@ class MangoWebhookRoutingTest {
 
   @Test
   void verifiesScopedWebhookWithTheLatestSecretVersion() throws Exception {
-    var publicKey = configure(staff.admin(), "before-rotation-key", "before-rotation-salt");
+    String publicKey = configure(staff.admin(), "before-rotation-key", "before-rotation-salt");
     mvc.perform(
             put("/api/v1/integrations/mango/secret")
                 .with(staff.admin())
@@ -145,7 +146,7 @@ class MangoWebhookRoutingTest {
                 .content(
                     "{\"apiUrl\":\"https://app.mango-office.ru\",\"defaultExtension\":\"101\",\"lineNumber\":\"\"}"))
         .andExpect(status().isOk());
-    var response =
+    String response =
         mvc.perform(
                 put("/api/v1/integrations/mango/secret")
                     .with(session)
@@ -184,7 +185,7 @@ class MangoWebhookRoutingTest {
   }
 
   private int eventCount(String entryId) {
-    var count =
+    Integer count =
         jdbc.queryForObject(
             "select count(*) from telephony_event where entry_id = ?", Integer.class, entryId);
     return count == null ? 0 : count;

@@ -7,6 +7,8 @@ import static ru.quietclinic.platform.PlatformConfig.conflict;
 import static ru.quietclinic.platform.PlatformConfig.notFound;
 import static ru.quietclinic.platform.PlatformConfig.requirePermission;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
@@ -16,6 +18,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.quietclinic.audit.AuditService;
+import ru.quietclinic.integrations.MangoClient;
+import ru.quietclinic.patients.PatientContactGateway;
 import ru.quietclinic.platform.Permission;
 import ru.quietclinic.telephony.TelephonyController.CallView;
 import tools.jackson.databind.JsonNode;
@@ -28,14 +32,14 @@ class TelephonyService {
   private final JsonMapper json;
   private final MangoRoutingGateway mango;
   private final AuditService audit;
-  private final ru.quietclinic.patients.PatientContactGateway patientContacts;
+  private final PatientContactGateway patientContacts;
 
   TelephonyService(
       JdbcTemplate jdbc,
       JsonMapper json,
       MangoRoutingGateway mango,
       AuditService audit,
-      ru.quietclinic.patients.PatientContactGateway patientContacts) {
+      PatientContactGateway patientContacts) {
     this.jdbc = jdbc;
     this.json = json;
     this.mango = mango;
@@ -45,26 +49,26 @@ class TelephonyService {
 
   CallView start(UUID patientId, String requestedExtension) {
     requirePermission(Permission.PATIENT_CONTACTS_READ);
-    var clinic = clinicId();
-    var client = mango.forClinic(clinic);
+    UUID clinic = clinicId();
+    MangoClient client = mango.forClinic(clinic);
     if (!client.configured())
       throw conflict("TELEPHONY_NOT_CONFIGURED", "Mango integration is not configured");
-    var phone =
+    String phone =
         normalize(
             patientContacts
                 .value(patientId, clinic, "PHONE")
                 .orElseThrow(() -> notFound("PATIENT_NOT_FOUND", "Patient not found")));
     if (phone.isEmpty()) throw conflict("PATIENT_PHONE_MISSING", "Patient has no callable phone");
-    var extension =
+    String extension =
         requestedExtension == null || requestedExtension.isBlank()
             ? client.defaultExtension()
             : requestedExtension.trim();
     if (!extension.matches("[0-9]{1,32}")) {
       throw conflict("MANGO_EXTENSION_REQUIRED", "Enter the employee extension");
     }
-    var id = UUID.randomUUID();
-    var commandId = "alphacrm-" + id;
-    var now = Instant.now();
+    UUID id = UUID.randomUUID();
+    String commandId = "alphacrm-" + id;
+    Instant now = Instant.now();
     jdbc.update(
         "insert into telephony_call(id, clinic_id, patient_id, call_id, command_id, direction,"
             + " phone, extension, status, occurred_at, updated_at, created_by)"
@@ -99,7 +103,7 @@ class TelephonyService {
   @Transactional(readOnly = true)
   List<CallView> history(UUID patientId) {
     requirePermission(Permission.PATIENT_CONTACTS_READ);
-    var exists =
+    Integer exists =
         jdbc.queryForObject(
             "select count(*) from patient where id = ? and clinic_id = ?",
             Integer.class,
@@ -126,26 +130,26 @@ class TelephonyService {
   @Transactional
   void callEvent(String body) {
     try {
-      var root = json.readValue(body, JsonNode.class);
-      var entryId = required(root, "entry_id");
-      var callId = text(root, "call_id").isEmpty() ? entryId : text(root, "call_id");
-      var sequence = root.path("seq").asInt(0);
+      JsonNode root = json.readValue(body, JsonNode.class);
+      String entryId = required(root, "entry_id");
+      String callId = text(root, "call_id").isEmpty() ? entryId : text(root, "call_id");
+      int sequence = root.path("seq").asInt(0);
       if (!registerEvent(entryId, callId, sequence, "CALL")) return;
-      var occurred = eventTime(root);
-      var commandId = text(root, "command_id");
-      var from = root.path("from");
-      var to = root.path("to");
-      var fromExtension = text(from, "extension");
-      var toExtension = text(to, "extension");
-      var direction = fromExtension.isEmpty() ? "INBOUND" : "OUTBOUND";
-      var phone = "INBOUND".equals(direction) ? text(from, "number") : text(to, "number");
-      var extension = "INBOUND".equals(direction) ? toExtension : fromExtension;
-      var existing = findExisting(callId, commandId);
-      var patientId = existing == null ? uniquePatient(phone) : existing.patientId;
-      var status = text(root, "call_state");
+      Instant occurred = eventTime(root);
+      String commandId = text(root, "command_id");
+      JsonNode from = root.path("from");
+      JsonNode to = root.path("to");
+      String fromExtension = text(from, "extension");
+      String toExtension = text(to, "extension");
+      String direction = fromExtension.isEmpty() ? "INBOUND" : "OUTBOUND";
+      String phone = "INBOUND".equals(direction) ? text(from, "number") : text(to, "number");
+      String extension = "INBOUND".equals(direction) ? toExtension : fromExtension;
+      CallRow existing = findExisting(callId, commandId);
+      UUID patientId = existing == null ? uniquePatient(phone) : existing.patientId;
+      String status = text(root, "call_state");
       if (status.isEmpty()) status = "UNKNOWN";
       if (existing == null) {
-        var id = UUID.randomUUID();
+        UUID id = UUID.randomUUID();
         jdbc.update(
             "insert into telephony_call(id, clinic_id, patient_id, entry_id, call_id, command_id,"
                 + " direction, phone, extension, status, sequence_number, occurred_at, updated_at)"
@@ -188,12 +192,12 @@ class TelephonyService {
   @Transactional
   void recordingEvent(String body) {
     try {
-      var root = json.readValue(body, JsonNode.class);
-      var entryId = required(root, "entry_id");
-      var callId = required(root, "call_id");
-      var sequence = root.path("seq").asInt(0);
+      JsonNode root = json.readValue(body, JsonNode.class);
+      String entryId = required(root, "entry_id");
+      String callId = required(root, "call_id");
+      int sequence = root.path("seq").asInt(0);
       if (!registerEvent(entryId, callId, sequence, "RECORDING")) return;
-      var recordingId = required(root, "recording_id");
+      String recordingId = required(root, "recording_id");
       jdbc.update(
           "update telephony_call set recording_id = ?, updated_at = ?"
               + " where clinic_id = ? and call_id = ?",
@@ -246,7 +250,7 @@ class TelephonyService {
     return rows.isEmpty() ? null : rows.get(0);
   }
 
-  private CallRow callRow(java.sql.ResultSet rs, int row) throws java.sql.SQLException {
+  private CallRow callRow(ResultSet rs, int row) throws SQLException {
     return new CallRow(
         rs.getObject("id", UUID.class),
         rs.getObject("patient_id", UUID.class),
@@ -255,31 +259,31 @@ class TelephonyService {
 
   /** При одинаковом телефоне у нескольких карточек не выбираем пациента за пользователя. */
   private UUID uniquePatient(String phone) {
-    var normalized = normalize(phone);
+    String normalized = normalize(phone);
     if (normalized.isEmpty()) return null;
-    var matches = patientContacts.exactPhoneOwners(clinicId(), normalized);
+    List<UUID> matches = patientContacts.exactPhoneOwners(clinicId(), normalized);
     return matches.size() == 1 ? matches.get(0) : null;
   }
 
   private Instant eventTime(JsonNode root) {
-    var seconds = root.path("timestamp").asLong(0);
+    long seconds = root.path("timestamp").asLong(0);
     return seconds > 0 ? Instant.ofEpochSecond(seconds) : Instant.now();
   }
 
   private static String required(JsonNode root, String field) {
-    var value = text(root, field);
+    String value = text(root, field);
     if (value.isEmpty()) throw new IllegalArgumentException("Missing " + field);
     return value;
   }
 
   private static String text(JsonNode root, String field) {
-    var value = root.path(field);
+    JsonNode value = root.path(field);
     return value.isMissingNode() || value.isNull() ? "" : value.asText("").trim();
   }
 
   private static String normalize(String phone) {
     if (phone == null) return "";
-    var digits = phone.replaceAll("\\D", "");
+    String digits = phone.replaceAll("\\D", "");
     if (digits.length() == 11 && digits.startsWith("8")) digits = "7" + digits.substring(1);
     return digits;
   }

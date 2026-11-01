@@ -20,12 +20,12 @@ class ContactTokenService {
 
   void rebuild(Patient patient) {
     jdbc.update("delete from patient_contact_token where patient_id = ?", patient.id);
-    var rows = new ArrayList<Object[]>();
-    for (var contact : patient.contacts) {
+    List<Object[]> rows = new ArrayList<>();
+    for (Contact contact : patient.contacts) {
       if (contact.value == null) continue;
       if (PhoneIndex.PHONE_TYPES.contains(contact.type)) {
-        var phone = PhoneIndex.normalize(contact.value);
-        for (var length = 1; length <= phone.length(); length++) {
+        String phone = PhoneIndex.normalize(contact.value);
+        for (int length = 1; length <= phone.length(); length++) {
           rows.add(
               new Object[] {
                 contact.id,
@@ -65,7 +65,7 @@ class ContactTokenService {
   }
 
   List<UUID> phoneMatches(UUID clinicId, String query) {
-    var phone = PhoneIndex.normalize(query);
+    String phone = PhoneIndex.normalize(query);
     if (phone.isEmpty()) return List.of();
     return jdbc.queryForList(
         "select distinct patient_id from patient_contact_token"
@@ -76,7 +76,7 @@ class ContactTokenService {
   }
 
   List<UUID> exactPhoneMatches(UUID clinicId, String query) {
-    var phone = PhoneIndex.normalize(query);
+    String phone = PhoneIndex.normalize(query);
     if (phone.isEmpty()) return List.of();
     return jdbc.queryForList(
         "select distinct patient_id from patient_contact_token"

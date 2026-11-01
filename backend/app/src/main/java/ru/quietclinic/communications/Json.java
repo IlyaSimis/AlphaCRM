@@ -8,8 +8,8 @@ final class Json {
 
   static String quote(String value) {
     if (value == null) return "null";
-    var out = new StringBuilder("\"");
-    for (var ch : value.toCharArray()) {
+    StringBuilder out = new StringBuilder("\"");
+    for (char ch : value.toCharArray()) {
       switch (ch) {
         case '"' -> out.append("\\\"");
         case '\\' -> out.append("\\\\");
@@ -27,13 +27,13 @@ final class Json {
 
   /** Объект из пар «ключ → значение»; значение — строка (в кавычки) или готовый JSON. */
   static String object(Map<String, ?> fields) {
-    var out = new StringBuilder("{");
-    var first = true;
-    for (var entry : fields.entrySet()) {
+    StringBuilder out = new StringBuilder("{");
+    boolean first = true;
+    for (Map.Entry<String, ?> entry : fields.entrySet()) {
       if (!first) out.append(',');
       first = false;
       out.append(quote(entry.getKey())).append(':');
-      var value = entry.getValue();
+      Object value = entry.getValue();
       if (value instanceof RawJson raw) out.append(raw.json());
       else out.append(quote(value == null ? null : value.toString()));
     }

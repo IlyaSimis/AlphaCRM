@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.jayway.jsonpath.JsonPath;
 import jakarta.servlet.http.Cookie;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -51,7 +52,7 @@ class StaffControllerTest {
   }
 
   private int loginStatus(String username, String password) throws Exception {
-    var token = staff.csrfToken();
+    String token = staff.csrfToken();
     return mvc.perform(
             post("/api/v1/auth/login")
                 .cookie(new Cookie("XSRF-TOKEN", token))
@@ -65,7 +66,7 @@ class StaffControllerTest {
 
   @Test
   void deactivatedStaffCannotLogInAndLosesOpenSession() throws Exception {
-    var created =
+    String created =
         create(
                 """
                 {"fullName":"Temporary Cashier","username":"temp.cashier","password":"temp-pass-1",
@@ -80,20 +81,17 @@ class StaffControllerTest {
             .getResponse()
             .getContentAsString();
     String id = JsonPath.read(created, "$.id");
-    var session = staff.login("temp.cashier", "temp-pass-1");
+    StaffSessions.Login session = staff.login("temp.cashier", "temp-pass-1");
     String hash =
         jdbc.queryForObject(
-            "select password_hash from staff_user where id = ?",
-            String.class,
-            java.util.UUID.fromString(id));
+            "select password_hash from staff_user where id = ?", String.class, UUID.fromString(id));
     assertThat(hash).startsWith("$2").doesNotContain("temp-pass-1");
 
     mvc.perform(post("/api/v1/staff/" + id + "/deactivate").with(staff.admin()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.active").value(false));
 
-    org.assertj.core.api.Assertions.assertThat(loginStatus("temp.cashier", "temp-pass-1"))
-        .isEqualTo(401);
+    assertThat(loginStatus("temp.cashier", "temp-pass-1")).isEqualTo(401);
     mvc.perform(get("/api/v1/auth/me").with(session)).andExpect(status().isUnauthorized());
 
     mvc.perform(post("/api/v1/staff/" + id + "/activate").with(staff.admin()))
@@ -104,10 +102,9 @@ class StaffControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"newPassword\":\"reset-pass-9\"}"))
         .andExpect(status().isNoContent());
-    org.assertj.core.api.Assertions.assertThat(loginStatus("temp.cashier", "reset-pass-9"))
-        .isEqualTo(200);
+    assertThat(loginStatus("temp.cashier", "reset-pass-9")).isEqualTo(200);
     // Новый пароль от администратора — снова временный: до смены остальные страницы закрыты.
-    var again = staff.login("temp.cashier", "reset-pass-9");
+    StaffSessions.Login again = staff.login("temp.cashier", "reset-pass-9");
     mvc.perform(get("/api/v1/auth/me").with(again))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.mustChangePassword").value(true));
@@ -165,7 +162,7 @@ class StaffControllerTest {
 
   @Test
   void administratorCannotDeactivateSelf() throws Exception {
-    var adminId = staff.userId(StaffSessions.ADMIN);
+    String adminId = staff.userId(StaffSessions.ADMIN);
     mvc.perform(post("/api/v1/staff/" + adminId + "/deactivate").with(staff.admin()))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("CANNOT_DEACTIVATE_SELF"));
@@ -173,7 +170,7 @@ class StaffControllerTest {
 
   @Test
   void otherRolesCannotManageStaffOrReadHashes() throws Exception {
-    var adminId = staff.userId(StaffSessions.ADMIN);
+    String adminId = staff.userId(StaffSessions.ADMIN);
     // Менеджер видит сотрудников (identity.staff.read), кассир — нет.
     mvc.perform(get("/api/v1/staff").with(staff.role("MANAGER"))).andExpect(status().isOk());
     mvc.perform(get("/api/v1/staff").with(staff.role("CASHIER"))).andExpect(status().isForbidden());
@@ -197,7 +194,7 @@ class StaffControllerTest {
 
   @Test
   void demoLoginsFromOldMigrationsAreGone() throws Exception {
-    for (var username : new String[] {"smirnova", "kuznetsov", "orlova", "petrov", "lebedeva"}) {
+    for (String username : new String[] {"smirnova", "kuznetsov", "orlova", "petrov", "lebedeva"}) {
       assertThat(loginStatus(username, "clinic-dev")).isEqualTo(401);
     }
   }
@@ -205,13 +202,14 @@ class StaffControllerTest {
   @Test
   void staffListAndChangesStayInsideTheClinic() throws Exception {
     SecondClinic.ensure(jdbc);
-    var other = staff.login(SecondClinic.ADMIN_USERNAME, SecondClinic.ADMIN_PASSWORD);
+    StaffSessions.Login other =
+        staff.login(SecondClinic.ADMIN_USERNAME, SecondClinic.ADMIN_PASSWORD);
     mvc.perform(get("/api/v1/staff").with(other))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[*].username").value(contains(SecondClinic.ADMIN_USERNAME)));
     mvc.perform(get("/api/v1/auth/me").with(other))
         .andExpect(jsonPath("$.clinicName").value(SecondClinic.NAME));
-    var firstAdmin = staff.userId(StaffSessions.ADMIN);
+    String firstAdmin = staff.userId(StaffSessions.ADMIN);
     mvc.perform(post("/api/v1/staff/" + firstAdmin + "/deactivate").with(other))
         .andExpect(status().isNotFound());
     mvc.perform(get("/api/v1/staff").with(staff.admin()))
@@ -219,7 +217,7 @@ class StaffControllerTest {
   }
 
   private long practitionersNamed(String fullName) {
-    var count =
+    Long count =
         jdbc.queryForObject(
             "select count(*) from practitioner where full_name = ?", Long.class, fullName);
     return count == null ? 0 : count;
@@ -227,7 +225,7 @@ class StaffControllerTest {
 
   @Test
   void doctorAccountAndNewCardWithRoomAndShiftComeFromOneRequest() throws Exception {
-    var created =
+    String created =
         create(
                 """
                 {"fullName":"Новый Врач","username":"new.doctor","password":"doctor-pass-1",
@@ -242,7 +240,7 @@ class StaffControllerTest {
     String practitionerId = JsonPath.read(created, "$.practitionerId");
     // Как у существующих врачей: id учётной записи совпадает с id карточки.
     assertThat(id).isEqualTo(practitionerId);
-    var card = "$[?(@.id == '" + practitionerId + "')]";
+    String card = "$[?(@.id == '" + practitionerId + "')]";
     mvc.perform(get("/api/v1/practitioners").with(staff.admin()))
         .andExpect(jsonPath(card + ".fullName").value(contains("Новый Врач")))
         .andExpect(jsonPath(card + ".room").value(contains("204")))
@@ -252,7 +250,7 @@ class StaffControllerTest {
             "select reason from audit_event where action = 'PRACTITIONER_CREATED'"
                 + " and object_id = ?",
             String.class,
-            java.util.UUID.fromString(practitionerId));
+            UUID.fromString(practitionerId));
     assertThat(reason).isEqualTo("fields:fullName,specialty,room,shifts");
 
     // Пустой кабинет хранится как NULL; специальность и кабинет меняются отдельно от графика.
@@ -269,19 +267,20 @@ class StaffControllerTest {
             jdbc.queryForObject(
                 "select room from practitioner where id = ?",
                 String.class,
-                java.util.UUID.fromString(practitionerId)))
+                UUID.fromString(practitionerId)))
         .isNull();
     assertThat(
             jdbc.queryForObject(
                 "select reason from audit_event where action = 'PRACTITIONER_UPDATED'"
                     + " and object_id = ?",
                 String.class,
-                java.util.UUID.fromString(practitionerId)))
+                UUID.fromString(practitionerId)))
         .isEqualTo("fields:specialty,room");
 
     // Чужая клиника не видит и не меняет карточку.
     SecondClinic.ensure(jdbc);
-    var other = staff.login(SecondClinic.ADMIN_USERNAME, SecondClinic.ADMIN_PASSWORD);
+    StaffSessions.Login other =
+        staff.login(SecondClinic.ADMIN_USERNAME, SecondClinic.ADMIN_PASSWORD);
     mvc.perform(
             put("/api/v1/practitioners/" + practitionerId)
                 .with(other)
@@ -293,7 +292,7 @@ class StaffControllerTest {
 
   @Test
   void managerCreatesDoctorAndScheduleCardInOneRequest() throws Exception {
-    var created =
+    String created =
         mvc.perform(
                 post("/api/v1/staff")
                     .with(staff.role("MANAGER"))
@@ -309,7 +308,7 @@ class StaffControllerTest {
             .getResponse()
             .getContentAsString();
     String practitionerId = JsonPath.read(created, "$.practitionerId");
-    var card = "$[?(@.id == '" + practitionerId + "')]";
+    String card = "$[?(@.id == '" + practitionerId + "')]";
     mvc.perform(get("/api/v1/practitioners").with(staff.role("MANAGER")))
         .andExpect(status().isOk())
         .andExpect(jsonPath(card + ".fullName").value(contains("Врач Менеджера")))
@@ -384,7 +383,7 @@ class StaffControllerTest {
                     {"fullName":"Карточка Менеджера","specialty":"Психиатр","shifts":[]}
                     """))
         .andExpect(status().isForbidden());
-    var card =
+    String card =
         mvc.perform(
                 post("/api/v1/practitioners")
                     .with(staff.admin())
@@ -403,7 +402,8 @@ class StaffControllerTest {
     String practitionerId = JsonPath.read(card, "$.id");
     // Чужая клиника не может привязать к этой карточке своего врача.
     SecondClinic.ensure(jdbc);
-    var other = staff.login(SecondClinic.ADMIN_USERNAME, SecondClinic.ADMIN_PASSWORD);
+    StaffSessions.Login other =
+        staff.login(SecondClinic.ADMIN_USERNAME, SecondClinic.ADMIN_PASSWORD);
     mvc.perform(
             post("/api/v1/staff")
                 .with(other)

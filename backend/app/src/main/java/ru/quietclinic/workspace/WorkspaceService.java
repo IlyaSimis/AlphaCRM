@@ -14,6 +14,8 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -72,10 +74,10 @@ class WorkspaceService {
   @Transactional
   WorkspaceItemView create(WorkspaceItemRequest input) {
     requirePermission(Permission.WORKSPACE_USE);
-    var request = normalize(input);
+    WorkspaceItemRequest request = normalize(input);
     validateReferences(request);
-    var id = UUID.randomUUID();
-    var now = Instant.now();
+    UUID id = UUID.randomUUID();
+    Instant now = Instant.now();
     jdbc.update(
         "insert into workspace.item(id, clinic_id, owner_id, type, title, body, status, color,"
             + " completed, due_at, remind_at, patient_id, appointment_id, tags, fields, checklist,"
@@ -102,18 +104,18 @@ class WorkspaceService {
         request.completed() ? Timestamp.from(now) : null,
         request.assigneeId());
     audit.record(actorId(), "WORKSPACE_ITEM_CREATED", "WORKSPACE_ITEM", id, "ALLOWED", null);
-    events.publish("WorkspaceItemCreated", java.util.Map.of("itemId", id));
+    events.publish("WorkspaceItemCreated", Map.of("itemId", id));
     return get(id);
   }
 
   @Transactional
   WorkspaceItemView update(UUID id, WorkspaceItemRequest input) {
     requirePermission(Permission.WORKSPACE_USE);
-    var previous = get(id);
-    var request = normalize(input);
+    WorkspaceItemView previous = get(id);
+    WorkspaceItemRequest request = normalize(input);
     validateReferences(request);
-    var now = Instant.now();
-    var completedAt =
+    Instant now = Instant.now();
+    Instant completedAt =
         request.completed() ? previous.completedAt() != null ? previous.completedAt() : now : null;
     jdbc.update(
         "update workspace.item set type = ?, title = ?, body = ?, status = ?, color = ?, completed ="
@@ -141,8 +143,7 @@ class WorkspaceService {
         staffId(),
         staffId());
     audit.record(actorId(), "WORKSPACE_ITEM_UPDATED", "WORKSPACE_ITEM", id, "ALLOWED", null);
-    events.publish(
-        "WorkspaceItemUpdated", java.util.Map.of("itemId", id, "completed", request.completed()));
+    events.publish("WorkspaceItemUpdated", Map.of("itemId", id, "completed", request.completed()));
     return get(id);
   }
 
@@ -187,7 +188,7 @@ class WorkspaceService {
   @Transactional
   SavedView createView(SavedViewRequest request) {
     requirePermission(Permission.WORKSPACE_USE);
-    var id = UUID.randomUUID();
+    UUID id = UUID.randomUUID();
     try {
       jdbc.update(
           "insert into workspace.saved_view(id, clinic_id, owner_id, name, filter_json, created_at)"
@@ -207,7 +208,7 @@ class WorkspaceService {
   @Transactional
   void deleteView(UUID id) {
     requirePermission(Permission.WORKSPACE_USE);
-    var changed =
+    int changed =
         jdbc.update(
             "delete from workspace.saved_view where id = ? and clinic_id = ? and owner_id = ?",
             id,
@@ -217,7 +218,7 @@ class WorkspaceService {
   }
 
   private WorkspaceItemView get(UUID id) {
-    var rows =
+    List<WorkspaceItemView> rows =
         jdbc.query(
             "select * from workspace.item where id = ? and clinic_id = ?"
                 + " and (owner_id = ? or assignee_id = ?)",
@@ -255,17 +256,17 @@ class WorkspaceService {
   }
 
   private WorkspaceItemRequest normalize(WorkspaceItemRequest input) {
-    var tags =
+    List<String> tags =
         input.tags() == null
             ? List.<String>of()
             : input.tags().stream()
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .map(String::trim)
                 .filter(value -> !value.isEmpty())
                 .collect(LinkedHashSet<String>::new, LinkedHashSet::add, LinkedHashSet::addAll)
                 .stream()
                 .toList();
-    var fields =
+    List<WorkspaceField> fields =
         input.fields() == null
             ? List.<WorkspaceField>of()
             : input.fields().stream()
@@ -274,13 +275,13 @@ class WorkspaceService {
                         new WorkspaceField(
                             field.name().trim(), field.value() == null ? "" : field.value()))
                 .toList();
-    var checklist =
+    List<ChecklistItem> checklist =
         input.checklist() == null
             ? List.<ChecklistItem>of()
             : input.checklist().stream()
                 .map(item -> new ChecklistItem(item.text().trim(), item.done()))
                 .toList();
-    var color = input.color() == null ? "green" : input.color().trim().toLowerCase();
+    String color = input.color() == null ? "green" : input.color().trim().toLowerCase();
     return new WorkspaceItemRequest(
         input.title().trim(),
         text(input.type(), "Задача"),
@@ -339,12 +340,12 @@ class WorkspaceService {
 
   /** Запрос с id и клиникой; второй вариант — с id и дополнительным атрибутом владельца. */
   private boolean exists(String sql, UUID first) {
-    var count = jdbc.queryForObject(sql, Long.class, first, clinicId());
+    Long count = jdbc.queryForObject(sql, Long.class, first, clinicId());
     return count != null && count > 0;
   }
 
   private boolean exists(String sql, UUID first, UUID second) {
-    var count = jdbc.queryForObject(sql, Long.class, first, second);
+    Long count = jdbc.queryForObject(sql, Long.class, first, second);
     return count != null && count > 0;
   }
 

@@ -1,5 +1,6 @@
 package ru.quietclinic.telephony;
 
+import java.util.List;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -19,10 +20,10 @@ class MangoClinicResolver {
   }
 
   UUID clinicId() {
-    var cached = resolved;
+    UUID cached = resolved;
     if (cached != null) return cached;
     try {
-      var ids =
+      List<UUID> ids =
           configured.isEmpty()
               ? jdbc.queryForList("select id from clinic", UUID.class)
               : jdbc.queryForList(

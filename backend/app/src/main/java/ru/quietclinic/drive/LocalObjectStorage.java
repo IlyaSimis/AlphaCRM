@@ -27,9 +27,9 @@ class LocalObjectStorage implements ObjectStorage {
   @Override
   public void put(String key, byte[] content) {
     try {
-      var target = path(key);
+      Path target = path(key);
       Files.createDirectories(target.getParent());
-      var temp = Files.createTempFile(target.getParent(), ".upload-", ".tmp");
+      Path temp = Files.createTempFile(target.getParent(), ".upload-", ".tmp");
       Files.write(temp, content);
       Files.move(temp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
     } catch (IOException ex) {

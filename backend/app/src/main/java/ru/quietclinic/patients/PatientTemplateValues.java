@@ -4,6 +4,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Stream;
 import org.springframework.stereotype.Service;
 
 /** Белый список данных пациента, доступных DOCX-шаблонам договоров. */
@@ -19,16 +20,16 @@ public class PatientTemplateValues {
   }
 
   public Map<String, String> forPatient(UUID patientId, UUID clinicId) {
-    var patient = patients.findByIdAndClinicId(patientId, clinicId).orElse(null);
+    Patient patient = patients.findByIdAndClinicId(patientId, clinicId).orElse(null);
     if (patient == null) return null;
     privacy.decrypt(patient);
-    var values = new HashMap<String, String>();
+    Map<String, String> values = new HashMap<>();
     values.put("patient.fullName", patient.fullName);
     values.put("patient.birthDate", DATE.format(patient.birthDate));
     values.put("patient.phone", text(patient.phone()));
     values.put("patient.secondPhone", text(patient.secondPhone()));
     values.put("patient.email", text(patient.email()));
-    var profile = patient.profile;
+    PatientProfile profile = patient.profile;
     if (profile == null) return values;
     values.put("patient.snils", text(profile.snils()));
     values.put("patient.inn", text(profile.inn()));
@@ -56,7 +57,7 @@ public class PatientTemplateValues {
   }
 
   private static String address(PatientProfile profile) {
-    return java.util.stream.Stream.of(
+    return Stream.of(
             profile.region(),
             profile.locality(),
             profile.street(),

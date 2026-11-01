@@ -7,7 +7,10 @@ import static ru.quietclinic.platform.PlatformConfig.notFound;
 import static ru.quietclinic.platform.PlatformConfig.requirePermission;
 
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,7 +40,7 @@ class HrService {
   @Transactional(readOnly = true)
   List<HrContractView> mine() {
     requirePermission(Permission.HR_READ_OWN, Permission.HR_MANAGE);
-    var me = auth.current();
+    StaffUser me = auth.current();
     return history(me);
   }
 
@@ -45,7 +48,7 @@ class HrService {
   @Transactional(readOnly = true)
   List<HrContractView> current() {
     requirePermission(Permission.HR_MANAGE);
-    var names = new java.util.HashMap<UUID, String>();
+    Map<UUID, String> names = new HashMap<>();
     staff
         .findByClinicIdOrderByFullName(clinicId())
         .forEach(user -> names.put(user.id, user.fullName));
@@ -61,7 +64,7 @@ class HrService {
   @Transactional(readOnly = true)
   List<HrContractView> of(UUID staffId) {
     requirePermission(Permission.HR_MANAGE);
-    var user = find(staffId);
+    StaffUser user = find(staffId);
     audit.record(actorId(), "HR_CONTRACT_READ", "STAFF", user.id, "ALLOWED", null);
     return history(user);
   }
@@ -70,8 +73,8 @@ class HrService {
   @Transactional
   HrContractView change(UUID staffId, HrContractRequest request) {
     requirePermission(Permission.HR_MANAGE);
-    var user = find(staffId);
-    var open =
+    StaffUser user = find(staffId);
+    Optional<HrContract> open =
         contracts.findByStaffIdOrderByValidFromDesc(user.id).stream()
             .filter(contract -> contract.validTo == null)
             .findFirst();
@@ -82,7 +85,7 @@ class HrService {
       }
       open.get().validTo = request.validFrom().minusDays(1);
     }
-    var contract =
+    HrContract contract =
         contracts.saveAndFlush(
             new HrContract(
                 clinicId(),

@@ -58,13 +58,14 @@ class ClinicBootstrap implements ApplicationRunner {
       throw new IllegalStateException(
           "No staff in the database: set CLINIC_ADMIN_PASSWORD for the initial administrator");
     }
-    var name = clinicName == null || clinicName.isBlank() ? DEFAULT_CLINIC_NAME : clinicName.trim();
-    var fullName =
+    String name =
+        clinicName == null || clinicName.isBlank() ? DEFAULT_CLINIC_NAME : clinicName.trim();
+    String fullName =
         adminFullName == null || adminFullName.isBlank()
             ? DEFAULT_ADMIN_FULL_NAME
             : adminFullName.trim();
     // Демо-врачи и пациенты из миграций уже лежат в первой клинике — администратор достаётся ей.
-    var clinic =
+    Clinic clinic =
         clinics.findAllByOrderByCreatedAt().stream()
             .findFirst()
             .orElseGet(() -> clinics.save(new Clinic(name)));

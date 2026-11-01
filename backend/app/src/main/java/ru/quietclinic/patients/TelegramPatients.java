@@ -12,6 +12,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.quietclinic.audit.AuditService;
+import ru.quietclinic.platform.PlatformConfig;
 
 /**
  * Пациенты, которые пишут боту клиники в Telegram или MAX. Один внешний id может стоять у
@@ -94,18 +95,15 @@ public class TelegramPatients {
   @Transactional
   public TelegramPatient link(UUID patientId, MessengerChannel channel, String externalId) {
     requireRole(ROLE);
-    var patient =
+    Patient patient =
         patients
             .findByIdAndClinicId(patientId, clinicId())
-            .orElseThrow(
-                () ->
-                    ru.quietclinic.platform.PlatformConfig.notFound(
-                        "PATIENT_NOT_FOUND", "Patient not found"));
+            .orElseThrow(() -> PlatformConfig.notFound("PATIENT_NOT_FOUND", "Patient not found"));
     privacy.decrypt(patient);
     patient.updateMessenger(channel, externalId, false);
     if (patient.preferredMessenger == null) patient.preferMessenger(channel);
     privacy.encrypt(patient);
-    var saved = patients.saveAndFlush(patient);
+    Patient saved = patients.saveAndFlush(patient);
     // После merge Hibernate может вернуть другой экземпляр: transient-значения нужно восстановить.
     privacy.decrypt(saved);
     tokens.rebuild(saved);
@@ -128,10 +126,10 @@ public class TelegramPatients {
   @Transactional
   public UUID resolveForBooking(MessengerChannel channel, TelegramPatientRequest request) {
     requireRole(ROLE);
-    var name = request.fullName().trim().replaceAll("\\s+", " ");
-    var phoneKey = PhoneIndex.normalize(request.phone());
-    var alreadyLinked = linked(channel, request.chatId());
-    var existing =
+    String name = request.fullName().trim().replaceAll("\\s+", " ");
+    String phoneKey = PhoneIndex.normalize(request.phone());
+    List<Patient> alreadyLinked = linked(channel, request.chatId());
+    Optional<Patient> existing =
         contacts.findByTypeInAndPatientClinicId(PhoneIndex.PHONE_TYPES, clinicId()).stream()
             .peek(privacy::decrypt)
             .filter(c -> PhoneIndex.normalize(c.value).equals(phoneKey))
@@ -144,7 +142,7 @@ public class TelegramPatients {
                     .thenComparing(p -> p.createdAt, Comparator.reverseOrder()))
             .findFirst();
     if (existing.isPresent()) {
-      var patient = existing.get();
+      Patient patient = existing.get();
       if (patient.updateMessenger(channel, request.chatId(), false)) {
         audit.record(
             actorId(),
@@ -156,18 +154,18 @@ public class TelegramPatients {
       }
       if (patient.preferredMessenger == null) patient.preferMessenger(channel);
       if (!patient.hasActiveConsent()) {
-        var consent = patient.grantConsent(request.consentVersion(), channel.consentBasis());
+        Consent consent = patient.grantConsent(request.consentVersion(), channel.consentBasis());
         patients.saveAndFlush(patient);
         audit.record(
             actorId(), "PATIENT_CONSENT_CHANGED", "CONSENT", consent.id, "ALLOWED", "granted");
       }
       privacy.encrypt(patient);
-      var saved = patients.saveAndFlush(patient);
+      Patient saved = patients.saveAndFlush(patient);
       privacy.decrypt(saved);
       tokens.rebuild(saved);
       return saved.id;
     }
-    var patient = new Patient(name, request.birthDate());
+    Patient patient = new Patient(name, request.birthDate());
     patient.clinicId = clinicId();
     patient.update(
         new PatientDetails(name, request.birthDate(), request.phone(), null, null, null));
@@ -176,7 +174,7 @@ public class TelegramPatients {
     patient.consents.add(
         new Consent(patient, request.consentVersion().trim(), channel.consentBasis()));
     privacy.encrypt(patient);
-    var saved = patients.saveAndFlush(patient);
+    Patient saved = patients.saveAndFlush(patient);
     privacy.decrypt(saved);
     tokens.rebuild(saved);
     audit.record(
@@ -186,7 +184,8 @@ public class TelegramPatients {
 
   /** Карточки клиники с этим внешним id, новые сверху. */
   private List<Patient> linked(MessengerChannel channel, String externalId) {
-    var result = patients.findAllById(tokens.channelMatches(clinicId(), channel, externalId));
+    List<Patient> result =
+        patients.findAllById(tokens.channelMatches(clinicId(), channel, externalId));
     result.removeIf(patient -> !clinicId().equals(patient.clinicId));
     result.forEach(privacy::decrypt);
     return result.stream()

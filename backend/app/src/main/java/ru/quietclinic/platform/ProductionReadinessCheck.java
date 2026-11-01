@@ -34,7 +34,7 @@ class ProductionReadinessCheck {
               + MIN_KEY_LENGTH
               + " characters (see scripts/init-env.sh)");
     }
-    var problem = adminPasswordProblem(adminPassword);
+    String problem = adminPasswordProblem(adminPassword);
     if (problem != null) throw new IllegalStateException(problem);
     problem = signingSecretProblem("CLINIC_OUTBOUND_WEBHOOK", webhookUrl, webhookSecret);
     if (problem != null) throw new IllegalStateException(problem);

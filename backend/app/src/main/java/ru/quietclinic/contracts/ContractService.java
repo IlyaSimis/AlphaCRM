@@ -7,6 +7,7 @@ import static ru.quietclinic.platform.PlatformConfig.notFound;
 import static ru.quietclinic.platform.PlatformConfig.payloadTooLarge;
 import static ru.quietclinic.platform.PlatformConfig.requirePermission;
 
+import java.math.BigDecimal;
 import java.security.MessageDigest;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -19,6 +20,8 @@ import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Value;
@@ -98,7 +101,7 @@ class ContractService {
   @Transactional
   TemplateView uploadTemplate(String name, String originalName, byte[] content) {
     requirePermission(Permission.PATIENT_FILE_WRITE);
-    var cleanName = name == null ? "" : name.trim();
+    String cleanName = name == null ? "" : name.trim();
     if (cleanName.isEmpty() || cleanName.length() > 200) {
       throw conflict(
           "INVALID_CONTRACT_TEMPLATE_NAME", "Enter a template name up to 200 characters");
@@ -106,13 +109,13 @@ class ContractService {
     if (content == null || content.length == 0 || content.length > MAX_TEMPLATE_BYTES) {
       throw payloadTooLarge("CONTRACT_TEMPLATE_TOO_LARGE", "DOCX template must be 1 byte to 5 MB");
     }
-    var placeholders = DocxTemplate.placeholders(content);
+    Set<String> placeholders = DocxTemplate.placeholders(content);
     if (placeholders.isEmpty()) {
       throw conflict("CONTRACT_TEMPLATE_VARIABLES_MISSING", "DOCX template has no {{variables}}");
     }
-    var id = UUID.randomUUID();
-    var now = Instant.now();
-    var version =
+    UUID id = UUID.randomUUID();
+    Instant now = Instant.now();
+    Integer version =
         jdbc.queryForObject(
             "select coalesce(max(version), 0) + 1 from contract_template where clinic_id = ? and name = ?",
             Integer.class,
@@ -153,16 +156,16 @@ class ContractService {
   @Transactional
   ContractView create(UUID patientId, CreateContractRequest request) {
     requirePermission(Permission.CONTRACT_USE);
-    var automatic = patientValues.forPatient(patientId, clinicId());
+    Map<String, String> automatic = patientValues.forPatient(patientId, clinicId());
     if (automatic == null) throw notFound("PATIENT_NOT_FOUND", "Patient not found");
-    var template = template(request.templateId());
-    var now = Instant.now();
-    var today = LocalDate.now(clinicZone);
+    TemplateRow template = template(request.templateId());
+    Instant now = Instant.now();
+    LocalDate today = LocalDate.now(clinicZone);
     automatic.put("contract.date", DATE.format(today));
     automatic.put("contract.number", "");
     automatic.put("clinic.name", clinicName());
     if (request.serviceId() != null) automatic.putAll(serviceValues(request.serviceId()));
-    var values = new HashMap<>(automatic);
+    Map<String, String> values = new HashMap<>(automatic);
     if (request.values() != null) {
       request
           .values()
@@ -178,18 +181,19 @@ class ContractService {
                 if (values.get(key).isEmpty()) values.put(key, value);
               });
     }
-    var missing = template.placeholders().stream().filter(key -> !values.containsKey(key)).toList();
+    List<String> missing =
+        template.placeholders().stream().filter(key -> !values.containsKey(key)).toList();
     if (!missing.isEmpty()) {
       throw conflict("CONTRACT_VALUES_REQUIRED", "Missing values: " + String.join(",", missing));
     }
-    var id = UUID.randomUUID();
-    var number = nextNumber(today);
+    UUID id = UUID.randomUUID();
+    String number = nextNumber(today);
     values.put("contract.number", number);
-    var used = new HashMap<String, String>();
+    Map<String, String> used = new HashMap<>();
     template.placeholders().forEach(key -> used.put(key, values.get(key)));
-    var docx = DocxTemplate.render(encryption.decryptBytes(template.docx()), used);
-    var pdfContent = pdf.convert(docx);
-    var snapshot = json.writeValueAsString(used);
+    byte[] docx = DocxTemplate.render(encryption.decryptBytes(template.docx()), used);
+    Optional<byte[]> pdfContent = pdf.convert(docx);
+    String snapshot = json.writeValueAsString(used);
     jdbc.update(
         "insert into patient_contract(id, clinic_id, patient_id, template_id, service_id,"
             + " contract_number, service_name, snapshot_values, docx_ciphertext, pdf_ciphertext,"
@@ -223,7 +227,7 @@ class ContractService {
   @Transactional(readOnly = true)
   ContractFile download(UUID id, boolean pdfRequested) {
     requirePermission(Permission.CONTRACT_USE);
-    var rows =
+    List<StoredFile> rows =
         jdbc.query(
             "select contract_number, docx_ciphertext, pdf_ciphertext from patient_contract"
                 + " where id = ? and clinic_id = ?",
@@ -235,7 +239,7 @@ class ContractService {
             id,
             clinicId());
     if (rows.isEmpty()) throw notFound("CONTRACT_NOT_FOUND", "Contract not found");
-    var file = rows.get(0);
+    StoredFile file = rows.get(0);
     if (pdfRequested && file.pdf() == null) {
       throw notFound("CONTRACT_PDF_NOT_FOUND", "PDF was not generated for this contract");
     }
@@ -248,7 +252,7 @@ class ContractService {
   }
 
   private TemplateRow template(UUID id) {
-    var rows =
+    List<TemplateRow> rows =
         jdbc.query(
             "select id, name, placeholders, docx_ciphertext from contract_template"
                 + " where id = ? and clinic_id = ?",
@@ -266,16 +270,16 @@ class ContractService {
   }
 
   private Map<String, String> serviceValues(UUID serviceId) {
-    var rows =
+    List<Map<String, String>> rows =
         jdbc.query(
             "select name, duration_minutes, price_minor, currency from clinic_service"
                 + " where id = ? and clinic_id = ? and active = true",
             (rs, row) -> {
-              var result = new HashMap<String, String>();
+              Map<String, String> result = new HashMap<>();
               result.put("service.name", rs.getString("name"));
               result.put(
                   "service.durationMinutes", Integer.toString(rs.getInt("duration_minutes")));
-              var price = rs.getBigDecimal("price_minor");
+              BigDecimal price = rs.getBigDecimal("price_minor");
               result.put(
                   "service.price", price == null ? "" : money(price.longValueExact()) + " ₽");
               result.put("service.currency", rs.getString("currency"));
@@ -292,7 +296,7 @@ class ContractService {
   }
 
   private void requirePatient(UUID patientId) {
-    var count =
+    Long count =
         jdbc.queryForObject(
             "select count(*) from patient where id = ? and clinic_id = ?",
             Long.class,
@@ -302,8 +306,8 @@ class ContractService {
   }
 
   private String nextNumber(LocalDate today) {
-    var year = today.getYear();
-    var current = lockedCounter();
+    int year = today.getYear();
+    List<Long> current = lockedCounter();
     if (current.isEmpty()) {
       try {
         jdbc.update(
@@ -313,7 +317,7 @@ class ContractService {
       }
       current = lockedCounter();
     }
-    var updated = current.get(0) + 1;
+    long updated = current.get(0) + 1;
     jdbc.update(
         "update contract_counter set last_number = ? where clinic_id = ?", updated, clinicId());
     return "Д-" + year + "-" + String.format("%05d", updated);
@@ -339,12 +343,12 @@ class ContractService {
   }
 
   private static String cleanFilename(String value) {
-    var name = value == null ? "template.docx" : value.replaceAll("[\\r\\n\\\\/]", "_").trim();
+    String name = value == null ? "template.docx" : value.replaceAll("[\\r\\n\\\\/]", "_").trim();
     return name.isEmpty() ? "template.docx" : name.length() > 255 ? name.substring(0, 255) : name;
   }
 
   private static String money(long minor) {
-    return java.math.BigDecimal.valueOf(minor, 2).stripTrailingZeros().toPlainString();
+    return BigDecimal.valueOf(minor, 2).stripTrailingZeros().toPlainString();
   }
 
   private static String sha256(byte[] content) {

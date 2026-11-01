@@ -1,5 +1,6 @@
 package ru.quietclinic.registry;
 
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
@@ -49,7 +50,7 @@ class StockShortageTasks implements DomainEventHandler {
 
   @Override
   public void handle(DomainEvent event) {
-    var assignee =
+    Optional<UUID> assignee =
         jdbc
             .queryForList(
                 "select u.id from staff_user u where u.clinic_id = ? and u.active = true"
@@ -61,8 +62,8 @@ class StockShortageTasks implements DomainEventHandler {
             .stream()
             .findFirst();
     if (assignee.isEmpty()) return;
-    var title = titleTemplate.formatted(event.text("itemName"), event.text("missing"));
-    var task =
+    String title = titleTemplate.formatted(event.text("itemName"), event.text("missing"));
+    RegistryTask task =
         tasks.save(
             new RegistryTask(
                 event.clinicId(),

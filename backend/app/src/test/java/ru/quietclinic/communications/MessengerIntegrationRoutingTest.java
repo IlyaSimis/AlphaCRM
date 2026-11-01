@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import java.net.URI;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,7 +30,8 @@ class MessengerIntegrationRoutingTest {
   void setUp() {
     http = Mockito.mock(HttpTransport.class);
     integrations = Mockito.mock(MessengerIntegrationClientFactory.class);
-    var scoped = new MessengerChannelFactory(integrations, http, new NoticeText("UTC"));
+    MessengerChannelFactory scoped =
+        new MessengerChannelFactory(integrations, http, new NoticeText("UTC"));
     port =
         new ConfiguredNotificationPort(
             new WebhookChannel(http, "", ""),
@@ -47,7 +49,7 @@ class MessengerIntegrationRoutingTest {
 
     assertThat(port.channelFor(message("TELEGRAM"))).isEqualTo("TELEGRAM");
     assertThat(port.deliver(message("TELEGRAM")).outcome()).isEqualTo(DeliveryOutcome.SENT);
-    var uri = ArgumentCaptor.forClass(URI.class);
+    ArgumentCaptor<URI> uri = ArgumentCaptor.forClass(URI.class);
     verify(http).postJson(uri.capture(), any(), any());
     assertThat(uri.getValue().toString()).contains("/botclinic-telegram/").doesNotContain("legacy");
   }
@@ -59,7 +61,7 @@ class MessengerIntegrationRoutingTest {
     when(http.postJson(any(), any(), any())).thenReturn(200);
 
     assertThat(port.deliver(message("MAX")).outcome()).isEqualTo(DeliveryOutcome.SENT);
-    var headers = ArgumentCaptor.forClass(java.util.Map.class);
+    ArgumentCaptor<Map> headers = ArgumentCaptor.forClass(Map.class);
     verify(http).postJson(any(), any(), headers.capture());
     assertThat(headers.getValue()).containsEntry("Authorization", "clinic-max");
   }
@@ -76,7 +78,8 @@ class MessengerIntegrationRoutingTest {
   }
 
   private static MessengerIntegration configuration(String type, String token, boolean active) {
-    var apiUrl = type.equals("MAX") ? "https://platform-api2.max.ru" : "https://api.telegram.org";
+    String apiUrl =
+        type.equals("MAX") ? "https://platform-api2.max.ru" : "https://api.telegram.org";
     return new MessengerIntegration(
         new MessengerSettings(apiUrl, "", "", true), new MessengerSecrets(token, "", ""), active);
   }

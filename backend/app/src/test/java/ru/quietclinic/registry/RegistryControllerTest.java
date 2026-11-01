@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,6 +20,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import ru.quietclinic.SecondClinic;
 import ru.quietclinic.StaffSessions;
 
@@ -49,7 +51,7 @@ class RegistryControllerTest {
 
   private ResultActions createTask(String title, String dueDate, String assignee, String patient)
       throws Exception {
-    var patientField = patient == null ? "" : ",\"patientId\":\"" + patient + "\"";
+    String patientField = patient == null ? "" : ",\"patientId\":\"" + patient + "\"";
     return mvc.perform(
         post("/api/v1/registry/tasks")
             .with(staff.admin())
@@ -61,7 +63,7 @@ class RegistryControllerTest {
 
   @Test
   void tasksForTodayAndPatientAreClosedByAssigneeOrAdministrator() throws Exception {
-    var created =
+    String created =
         createTask("Call back about the referral", "2026-10-21", cashier(), MARIA)
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.status").value("OPEN"))
@@ -97,7 +99,7 @@ class RegistryControllerTest {
 
   @Test
   void taskWithoutPatientIsInTodayListButNotInPatientCard() throws Exception {
-    var created =
+    String created =
         createTask("Order printer paper", "2026-10-22", manager(), null)
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.patientId").doesNotExist())
@@ -115,7 +117,8 @@ class RegistryControllerTest {
 
     // Задачу без пациента закрывает её исполнитель; другая клиника её не видит.
     SecondClinic.ensure(jdbc);
-    var other = staff.login(SecondClinic.ADMIN_USERNAME, SecondClinic.ADMIN_PASSWORD);
+    StaffSessions.Login other =
+        staff.login(SecondClinic.ADMIN_USERNAME, SecondClinic.ADMIN_PASSWORD);
     mvc.perform(get("/api/v1/registry/tasks").param("dueTo", "2026-10-22").with(other))
         .andExpect(jsonPath("$[*].id").value(not(hasItem(id))));
     mvc.perform(post("/api/v1/registry/tasks/" + id + "/done").with(other))
@@ -129,7 +132,7 @@ class RegistryControllerTest {
   @Test
   void auditKeepsOnlyWhetherTaskHasPatientNotItsText() throws Exception {
     createTask("Secret task text", "2026-10-23", cashier(), null).andExpect(status().isCreated());
-    var reasons =
+    List<String> reasons =
         jdbc.queryForList(
             "select reason from audit_event where action = 'REGISTRY_TASK_CREATED'", String.class);
     assertThat(reasons)
@@ -158,7 +161,7 @@ class RegistryControllerTest {
 
   @Test
   void waitlistMatchesFreedSlotAndIsClosedByRegularAppointment() throws Exception {
-    var created =
+    String created =
         mvc.perform(
                 post("/api/v1/registry/waitlist")
                     .with(staff.admin())
@@ -175,7 +178,8 @@ class RegistryControllerTest {
             .getResponse()
             .getContentAsString();
     String entry = JsonPath.read(created, "$.id");
-    var matches = get("/api/v1/registry/waitlist").param("practitionerId", StaffSessions.LEBEDEVA);
+    MockHttpServletRequestBuilder matches =
+        get("/api/v1/registry/waitlist").param("practitionerId", StaffSessions.LEBEDEVA);
 
     mvc.perform(matches.param("date", "2026-12-03").with(staff.admin()))
         .andExpect(jsonPath("$[*].id").value(hasItem(entry)));
@@ -187,7 +191,7 @@ class RegistryControllerTest {
         .andExpect(jsonPath("$[*].id").value(not(hasItem(entry))));
 
     // Запись — обычным POST /appointments, затем ожидание закрывается ссылкой на неё.
-    var booked =
+    String booked =
         mvc.perform(
                 post("/api/v1/appointments")
                     .with(staff.admin())

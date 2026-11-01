@@ -1,5 +1,6 @@
 package ru.quietclinic.communications;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -14,7 +15,7 @@ class ConfiguredNotificationPort implements NotificationPort {
   private final SafeMockNotificationAdapter mock;
   private final MessengerChannelFactory scoped;
 
-  @org.springframework.beans.factory.annotation.Autowired
+  @Autowired
   ConfiguredNotificationPort(
       WebhookChannel webhook,
       TelegramChannel telegram,
@@ -44,9 +45,9 @@ class ConfiguredNotificationPort implements NotificationPort {
 
   @Override
   public String channelFor(PatientMessage message) {
-    var preferred = message.preferredMessenger();
-    var telegram = telegramFor(message);
-    var max = maxFor(message);
+    String preferred = message.preferredMessenger();
+    TelegramChannel telegram = telegramFor(message);
+    MaxChannel max = maxFor(message);
     if (MaxChannel.NAME.equals(preferred)
         && present(message.maxUserId())
         && max != null
@@ -67,7 +68,7 @@ class ConfiguredNotificationPort implements NotificationPort {
     return switch (channelFor(message)) {
       case TelegramChannel.NAME -> telegramFor(message).send(message);
       case MaxChannel.NAME -> {
-        var max = maxFor(message);
+        MaxChannel max = maxFor(message);
         yield max == null
             ? DeliveryResult.notConfigured(MaxChannel.NAME, "CHANNEL_NOT_CONFIGURED")
             : max.send(message);

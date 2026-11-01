@@ -1,5 +1,6 @@
 package ru.quietclinic;
 
+import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -27,9 +28,9 @@ public final class SecondClinic {
   private SecondClinic() {}
 
   public static synchronized void ensure(JdbcTemplate jdbc) {
-    var exists = jdbc.queryForObject("select count(*) from clinic where id = ?", Long.class, ID);
+    Long exists = jdbc.queryForObject("select count(*) from clinic where id = ?", Long.class, ID);
     if (exists != null && exists > 0) return;
-    var now = Timestamp.from(Instant.now());
+    Timestamp now = Timestamp.from(Instant.now());
     jdbc.update("insert into clinic(id, name, created_at) values (?, ?, ?)", ID, NAME, now);
     jdbc.update(
         "insert into staff_user(id, clinic_id, full_name, username, password_hash, role,"
@@ -53,7 +54,7 @@ public final class SecondClinic {
         UUID.fromString(PATIENT),
         ID,
         PATIENT_NAME,
-        java.sql.Date.valueOf(LocalDate.parse("1990-01-01")),
+        Date.valueOf(LocalDate.parse("1990-01-01")),
         now);
     jdbc.update(
         "insert into patient_contact(id, patient_id, type, contact_value) values (?, ?, ?, ?)",

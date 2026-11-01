@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.jayway.jsonpath.JsonPath;
 import java.nio.charset.StandardCharsets;
+import java.util.HexFormat;
 import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -51,7 +52,7 @@ class TerminalPaymentControllerTest {
   }
 
   private String charge(String startsAt, String endsAt) throws Exception {
-    var appointment =
+    String appointment =
         mvc.perform(
                 post("/api/v1/appointments")
                     .with(staff.role("ADMINISTRATOR"))
@@ -66,7 +67,7 @@ class TerminalPaymentControllerTest {
             .andReturn()
             .getResponse()
             .getContentAsString();
-    var created =
+    String created =
         mvc.perform(
                 post("/api/v1/billing/charges")
                     .with(staff.role("CASHIER"))
@@ -83,7 +84,7 @@ class TerminalPaymentControllerTest {
   }
 
   private StartedPayment start(String chargeId, String method) throws Exception {
-    var body =
+    String body =
         mvc.perform(
                 post("/api/v1/billing/charges/" + chargeId + "/terminal-payments")
                     .with(staff.role("CASHIER"))
@@ -111,7 +112,7 @@ class TerminalPaymentControllerTest {
 
   private void event(String eventId, String reference, String paymentStatus, boolean duplicate)
       throws Exception {
-    var body =
+    String body =
         "{\"eventId\":\""
             + eventId
             + "\",\"paymentRef\":\""
@@ -132,8 +133,8 @@ class TerminalPaymentControllerTest {
 
   @Test
   void successPaysChargeAndRepeatedEventDoesNotPublishInvoicePaidTwice() throws Exception {
-    var chargeId = charge("2026-12-01T13:00:00Z", "2026-12-01T13:30:00Z");
-    var payment = start(chargeId, "CARD");
+    String chargeId = charge("2026-12-01T13:00:00Z", "2026-12-01T13:30:00Z");
+    StartedPayment payment = start(chargeId, "CARD");
     event("terminal-success-1", payment.reference(), "SUCCEEDED", false);
     event("terminal-success-1", payment.reference(), "SUCCEEDED", true);
 
@@ -163,13 +164,13 @@ class TerminalPaymentControllerTest {
 
   @Test
   void cancellationFailureAndTimeoutNeverMarkChargePaid() throws Exception {
-    var statuses = new String[] {"CANCELLED", "FAILED", "TIMEOUT"};
+    String[] statuses = new String[] {"CANCELLED", "FAILED", "TIMEOUT"};
     for (int index = 0; index < statuses.length; index++) {
-      var chargeId =
+      String chargeId =
           charge(
               "2026-12-01T" + "%02d".formatted(index + 9) + ":00:00Z",
               "2026-12-01T" + "%02d".formatted(index + 9) + ":30:00Z");
-      var payment = start(chargeId, "SBP");
+      StartedPayment payment = start(chargeId, "SBP");
       event("terminal-final-" + statuses[index], payment.reference(), statuses[index], false);
       assertThat(
               jdbc.queryForObject(
@@ -188,8 +189,8 @@ class TerminalPaymentControllerTest {
 
   @Test
   void rejectsUnsignedResultAndTerminalStartWithoutFinancePermission() throws Exception {
-    var chargeId = charge("2026-12-03T09:00:00Z", "2026-12-03T09:30:00Z");
-    var body = "{\"eventId\":\"forged\",\"paymentRef\":\"missing\",\"status\":\"SUCCEEDED\"}";
+    String chargeId = charge("2026-12-03T09:00:00Z", "2026-12-03T09:30:00Z");
+    String body = "{\"eventId\":\"forged\",\"paymentRef\":\"missing\",\"status\":\"SUCCEEDED\"}";
     mvc.perform(
             post("/api/v1/integrations/terminal/events")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -205,9 +206,9 @@ class TerminalPaymentControllerTest {
   }
 
   private static String sign(String body) throws Exception {
-    var mac = Mac.getInstance("HmacSHA256");
+    Mac mac = Mac.getInstance("HmacSHA256");
     mac.init(new SecretKeySpec(SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-    return java.util.HexFormat.of().formatHex(mac.doFinal(body.getBytes(StandardCharsets.UTF_8)));
+    return HexFormat.of().formatHex(mac.doFinal(body.getBytes(StandardCharsets.UTF_8)));
   }
 
   private record StartedPayment(String id, String reference) {}

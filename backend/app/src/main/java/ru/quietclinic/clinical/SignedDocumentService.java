@@ -52,13 +52,13 @@ class SignedDocumentService {
   @Transactional(readOnly = true)
   List<SignedDocumentView> list(UUID practitionerId) {
     requirePermission(Permission.SIGNED_DOCUMENT_READ, Permission.SIGNED_DOCUMENT_READ_OWN);
-    var rows =
+    List<MedicalDocument> rows =
         !can(Permission.SIGNED_DOCUMENT_READ)
             ? documents.findByStateAndSignedByOrderBySignedAtDesc(SIGNED, actorId())
             : practitionerId != null
                 ? documents.findByStateAndSignedByOrderBySignedAtDesc(SIGNED, practitionerId)
                 : documents.findByStateOrderBySignedAtDesc(SIGNED);
-    var result = views(rows);
+    List<SignedDocumentView> result = views(rows);
     result.forEach(
         d ->
             audit.record(actorId(), "SIGNED_DOCUMENT_READ", "DOCUMENT", d.id(), "ALLOWED", "list"));
@@ -68,13 +68,13 @@ class SignedDocumentService {
   @Transactional(readOnly = true)
   SignedDocumentView get(UUID id) {
     requirePermission(Permission.SIGNED_DOCUMENT_READ, Permission.SIGNED_DOCUMENT_READ_OWN);
-    var doc =
+    MedicalDocument doc =
         documents
             .findById(id)
             .filter(d -> SIGNED.equals(d.state))
             .filter(d -> can(Permission.SIGNED_DOCUMENT_READ) || actorId().equals(d.signedBy))
             .orElseThrow(() -> notFound("SIGNED_DOCUMENT_NOT_FOUND", "Signed document not found"));
-    var view =
+    SignedDocumentView view =
         views(List.of(doc)).stream()
             .findFirst()
             .orElseThrow(() -> notFound("SIGNED_DOCUMENT_NOT_FOUND", "Signed document not found"));
@@ -84,9 +84,9 @@ class SignedDocumentService {
 
   /** Только документы врачей своей клиники; имена — из таблиц, без зависимости от кода модулей. */
   private List<SignedDocumentView> views(List<MedicalDocument> rows) {
-    var doctors = names("select id, full_name from practitioner where clinic_id = ?");
-    var patients = names("select id, full_name from patient where clinic_id = ?");
-    var byId =
+    Map<UUID, String> doctors = names("select id, full_name from practitioner where clinic_id = ?");
+    Map<UUID, String> patients = names("select id, full_name from patient where clinic_id = ?");
+    Map<UUID, Encounter> byId =
         encounters.findAllById(rows.stream().map(d -> d.encounterId).distinct().toList()).stream()
             .collect(Collectors.toMap(e -> e.id, Function.identity()));
     return rows.stream()
@@ -94,8 +94,8 @@ class SignedDocumentService {
         .filter(d -> byId.containsKey(d.encounterId))
         .map(
             d -> {
-              var encounter = byId.get(d.encounterId);
-              var fields = NoteContent.parse(encryption.decrypt(d.snapshotEncrypted));
+              Encounter encounter = byId.get(d.encounterId);
+              SnapshotFields fields = NoteContent.parse(encryption.decrypt(d.snapshotEncrypted));
               return new SignedDocumentView(
                   d.id,
                   d.encounterId,
@@ -117,7 +117,7 @@ class SignedDocumentService {
   }
 
   private Map<UUID, String> names(String sql) {
-    var result = new HashMap<UUID, String>();
+    Map<UUID, String> result = new HashMap<>();
     jdbc.query(
         sql,
         (ResultSet row) -> {

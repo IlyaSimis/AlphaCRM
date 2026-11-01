@@ -39,8 +39,8 @@ public class DomainEvents {
   }
 
   public UUID publish(String type, UUID clinicId, UUID actorId, Map<String, ?> payload) {
-    var id = UUID.randomUUID();
-    var now = Instant.now();
+    UUID id = UUID.randomUUID();
+    Instant now = Instant.now();
     jdbc.update(
         "insert into domain_event_outbox(id, type, version, clinic_id, occurred_at, actor_id,"
             + " correlation_id, payload, status, attempts, next_attempt_at)"

@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.jayway.jsonpath.JsonPath;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -63,13 +64,13 @@ class OutboxDispatcherTest {
 
   @Test
   void repeatedRunDoesNotSendTheSameMessageTwice() throws Exception {
-    var appointment = book(DMITRY, "2027-02-02T09:00:00Z", "2027-02-02T09:30:00Z");
+    String appointment = book(DMITRY, "2027-02-02T09:00:00Z", "2027-02-02T09:30:00Z");
     drain(Instant.now());
     drain(Instant.now());
 
-    var sent = port.sentFor(appointment, NoticeTemplates.CONFIRMED);
+    List<PatientMessage> sent = port.sentFor(appointment, NoticeTemplates.CONFIRMED);
     assertThat(sent).hasSize(1);
-    var message = sent.get(0);
+    PatientMessage message = sent.get(0);
     assertThat(message.text()).contains("02.02.2027", "09:00", "Повторный приём");
     assertThat(message.idempotencyKey())
         .isEqualTo(
@@ -77,12 +78,12 @@ class OutboxDispatcherTest {
                 NoticeTemplates.CONFIRMED,
                 UUID.fromString(appointment),
                 Instant.parse("2027-02-02T09:00:00Z")));
-    var row = row(appointment, NoticeTemplates.CONFIRMED);
+    OutboxMessage row = row(appointment, NoticeTemplates.CONFIRMED);
     assertThat(row.status).isEqualTo("SENT");
     assertThat(row.channel).isEqualTo(RecordingPort.CHANNEL);
 
     // В аудит — факт и id, без текста сообщения и без телефона.
-    var reasons =
+    List<String> reasons =
         jdbc.queryForList(
             "select reason from audit_event where action = 'NOTIFICATION_DELIVERED'"
                 + " and object_id = ?",
@@ -93,7 +94,7 @@ class OutboxDispatcherTest {
 
   @Test
   void nothingIsSentWithoutActiveConsent() throws Exception {
-    var created =
+    String created =
         mvc.perform(
                 post("/api/v1/patients")
                     .with(staff.admin())
@@ -114,19 +115,19 @@ class OutboxDispatcherTest {
                 .with(staff.admin()))
         .andExpect(status().isOk());
 
-    var appointment = book(patient, "2027-02-04T09:00:00Z", "2027-02-04T09:30:00Z");
+    String appointment = book(patient, "2027-02-04T09:00:00Z", "2027-02-04T09:30:00Z");
     drain(Instant.now());
     drain(Instant.parse("2027-02-03T10:00:00Z"));
 
     assertThat(port.sentFor(appointment, null)).isEmpty();
-    var row = row(appointment, NoticeTemplates.CONFIRMED);
+    OutboxMessage row = row(appointment, NoticeTemplates.CONFIRMED);
     assertThat(row.status).isEqualTo("SKIPPED");
     assertThat(row.lastError).isEqualTo("NO_CONSENT");
   }
 
   @Test
   void cancelledAppointmentIsNotReminded() throws Exception {
-    var appointment = book(DMITRY, "2027-02-09T09:00:00Z", "2027-02-09T09:30:00Z");
+    String appointment = book(DMITRY, "2027-02-09T09:00:00Z", "2027-02-09T09:30:00Z");
     assertThat(row(appointment, NoticeTemplates.REMINDER).nextAttemptAt)
         .isEqualTo(Instant.parse("2027-02-08T09:00:00Z"));
     mvc.perform(post("/api/v1/appointments/" + appointment + "/cancel").with(staff.admin()))
@@ -137,14 +138,14 @@ class OutboxDispatcherTest {
     assertThat(port.sentFor(appointment, NoticeTemplates.REMINDER)).isEmpty();
     assertThat(port.sentFor(appointment, NoticeTemplates.CONFIRMED)).isEmpty();
     assertThat(port.sentFor(appointment, NoticeTemplates.CANCELLED)).hasSize(1);
-    var reminder = row(appointment, NoticeTemplates.REMINDER);
+    OutboxMessage reminder = row(appointment, NoticeTemplates.REMINDER);
     assertThat(reminder.status).isEqualTo("CANCELLED");
     assertThat(reminder.lastError).isEqualTo("APPOINTMENT_CANCELLED");
   }
 
   @Test
   void rescheduleReplacesUnsentConfirmationWithOneForTheNewTime() throws Exception {
-    var appointment = book(DMITRY, "2027-02-11T09:00:00Z", "2027-02-11T09:30:00Z");
+    String appointment = book(DMITRY, "2027-02-11T09:00:00Z", "2027-02-11T09:30:00Z");
     mvc.perform(
             post("/api/v1/appointments/" + appointment + "/reschedule")
                 .with(staff.admin())
@@ -163,10 +164,11 @@ class OutboxDispatcherTest {
     drain(Instant.now());
     drain(Instant.now().plusMillis(1));
 
-    var sent = port.sentFor(appointment, NoticeTemplates.CONFIRMED);
+    List<PatientMessage> sent = port.sentFor(appointment, NoticeTemplates.CONFIRMED);
     assertThat(sent).hasSize(1);
     assertThat(sent.get(0).text()).contains("11:00").doesNotContain("09:00");
-    var rows = outbox.findByAggregateIdOrderByCreatedAt(UUID.fromString(appointment));
+    List<OutboxMessage> rows =
+        outbox.findByAggregateIdOrderByCreatedAt(UUID.fromString(appointment));
     assertThat(rows)
         .filteredOn(m -> NoticeTemplates.ABOUT_TIME.contains(m.template))
         .filteredOn(m -> m.appointmentStartsAt.equals(Instant.parse("2027-02-11T09:00:00Z")))
@@ -179,14 +181,14 @@ class OutboxDispatcherTest {
 
   @Test
   void storedPayloadAndMessageCarryNoClinicalText() throws Exception {
-    var appointment = book(DMITRY, "2027-02-16T09:00:00Z", "2027-02-16T09:30:00Z");
+    String appointment = book(DMITRY, "2027-02-16T09:00:00Z", "2027-02-16T09:30:00Z");
     mvc.perform(
             post("/api/v1/appointments/" + appointment + "/status")
                 .with(staff.admin())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"status\":\"ARRIVED\"}"))
         .andExpect(status().isOk());
-    var started =
+    String started =
         mvc.perform(
                 post("/api/v1/clinical/encounters")
                     .with(staff.doctor(StaffSessions.PETROV))
@@ -214,7 +216,8 @@ class OutboxDispatcherTest {
 
     drain(Instant.now());
 
-    var rows = outbox.findByAggregateIdOrderByCreatedAt(UUID.fromString(appointment));
+    List<OutboxMessage> rows =
+        outbox.findByAggregateIdOrderByCreatedAt(UUID.fromString(appointment));
     assertThat(rows).isNotEmpty();
     assertThat(rows)
         .allSatisfy(
@@ -229,7 +232,7 @@ class OutboxDispatcherTest {
 
   /** Повторяет проходы, пока очередь общих тестовых данных не опустеет на этот момент. */
   private void drain(Instant now) {
-    for (var i = 0; i < 100 && dispatcher.runOnce(now) > 0; i++) {
+    for (int i = 0; i < 100 && dispatcher.runOnce(now) > 0; i++) {
       // следующий проход
     }
   }
@@ -242,7 +245,7 @@ class OutboxDispatcherTest {
   }
 
   private String book(String patient, String startsAt, String endsAt) throws Exception {
-    var body =
+    String body =
         mvc.perform(
                 post("/api/v1/appointments")
                     .with(staff.admin())

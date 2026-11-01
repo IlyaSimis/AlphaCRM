@@ -12,6 +12,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
@@ -19,6 +20,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.quietclinic.audit.AuditService;
+import ru.quietclinic.integrations.MessengerIntegrationClientFactory;
 import ru.quietclinic.platform.EncryptionService;
 import ru.quietclinic.platform.Permission;
 
@@ -33,7 +35,7 @@ public class PatientMessengerLinks {
   private final ContactTokenService tokens;
   private final TelegramPatients messengerPatients;
   private final AuditService audit;
-  private final ru.quietclinic.integrations.MessengerIntegrationClientFactory integrations;
+  private final MessengerIntegrationClientFactory integrations;
   private final String telegramUrl;
   private final String maxUrl;
 
@@ -45,7 +47,7 @@ public class PatientMessengerLinks {
       ContactTokenService tokens,
       TelegramPatients messengerPatients,
       AuditService audit,
-      ru.quietclinic.integrations.MessengerIntegrationClientFactory integrations,
+      MessengerIntegrationClientFactory integrations,
       @Value("${clinic.messenger.telegram-public-url:}") String telegramUrl,
       @Value("${clinic.messenger.max-public-url:}") String maxUrl) {
     this.jdbc = jdbc;
@@ -61,7 +63,7 @@ public class PatientMessengerLinks {
   }
 
   private String publicUrl(MessengerChannel channel) {
-    var legacy = channel == MessengerChannel.TELEGRAM ? telegramUrl : maxUrl;
+    String legacy = channel == MessengerChannel.TELEGRAM ? telegramUrl : maxUrl;
     return integrations
         .forClinic(clinicId(), channel.name())
         .map(integration -> integration.settings().publicUrl())
@@ -71,13 +73,13 @@ public class PatientMessengerLinks {
   @Transactional
   MessengerLinkView create(UUID patientId, String rawChannel) {
     requirePermission(Permission.PATIENT_WRITE);
-    var channel = MessengerChannel.parse(rawChannel);
+    MessengerChannel channel = MessengerChannel.parse(rawChannel);
     find(patientId);
-    var bytes = new byte[32];
+    byte[] bytes = new byte[32];
     RANDOM.nextBytes(bytes);
-    var token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-    var now = Instant.now();
-    var expires = now.plus(10, ChronoUnit.MINUTES);
+    String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    Instant now = Instant.now();
+    Instant expires = now.plus(10, ChronoUnit.MINUTES);
     jdbc.update(
         "delete from messenger_link_token where patient_id = ? and channel = ? and consumed_at is null",
         patientId,
@@ -92,8 +94,9 @@ public class PatientMessengerLinks {
         hash(token),
         Timestamp.from(now),
         Timestamp.from(expires));
-    var base = publicUrl(channel);
-    var url = base.isBlank() ? null : base + (base.contains("?") ? "&start=" : "?start=") + token;
+    String base = publicUrl(channel);
+    String url =
+        base.isBlank() ? null : base + (base.contains("?") ? "&start=" : "?start=") + token;
     audit.record(
         actorId(),
         "PATIENT_MESSENGER_LINK_CREATED",
@@ -108,8 +111,8 @@ public class PatientMessengerLinks {
   @Transactional
   public TelegramPatient consume(MessengerChannel channel, String externalId, String token) {
     requireRole(TelegramPatients.ROLE);
-    var now = Instant.now();
-    var rows =
+    Instant now = Instant.now();
+    List<LinkRow> rows =
         jdbc.query(
             "select id, patient_id from messenger_link_token where clinic_id = ? and channel = ?"
                 + " and token_hash = ? and consumed_at is null and expires_at > ?",
@@ -121,8 +124,8 @@ public class PatientMessengerLinks {
             Timestamp.from(now));
     if (rows.isEmpty())
       throw conflict("MESSENGER_LINK_INVALID", "Link is invalid, used or expired");
-    var row = rows.get(0);
-    var changed =
+    LinkRow row = rows.get(0);
+    int changed =
         jdbc.update(
             "update messenger_link_token set consumed_at = ? where id = ? and consumed_at is null",
             Timestamp.from(now),
@@ -134,8 +137,8 @@ public class PatientMessengerLinks {
   @Transactional
   PatientView disconnect(UUID patientId, String rawChannel) {
     requirePermission(Permission.PATIENT_WRITE);
-    var channel = MessengerChannel.parse(rawChannel);
-    var patient = find(patientId);
+    MessengerChannel channel = MessengerChannel.parse(rawChannel);
+    Patient patient = find(patientId);
     patient.updateMessenger(channel, null, true);
     return save(patient, "PATIENT_MESSENGER_DISCONNECTED", channel);
   }
@@ -143,8 +146,8 @@ public class PatientMessengerLinks {
   @Transactional
   PatientView prefer(UUID patientId, String rawChannel) {
     requirePermission(Permission.PATIENT_WRITE);
-    var patient = find(patientId);
-    var channel =
+    Patient patient = find(patientId);
+    MessengerChannel channel =
         rawChannel == null || rawChannel.isBlank() ? null : MessengerChannel.parse(rawChannel);
     patient.preferMessenger(channel);
     return save(patient, "PATIENT_MESSENGER_PREFERRED", channel);
@@ -161,11 +164,11 @@ public class PatientMessengerLinks {
         patient.id,
         "ALLOWED",
         channel == null ? "auto" : channel.name().toLowerCase(Locale.ROOT));
-    return PatientView.of(patient, java.util.List.of(), null);
+    return PatientView.of(patient, List.of(), null);
   }
 
   private Patient find(UUID id) {
-    var patient =
+    Patient patient =
         patients
             .findByIdAndClinicId(id, clinicId())
             .orElseThrow(() -> notFound("PATIENT_NOT_FOUND", "Patient not found"));

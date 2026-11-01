@@ -4,8 +4,12 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import java.io.IOException;
+import java.util.Optional;
 import java.util.Set;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -34,12 +38,12 @@ final class ActiveStaffFilter extends OncePerRequestFilter {
   protected void doFilterInternal(
       HttpServletRequest request, HttpServletResponse response, FilterChain chain)
       throws ServletException, IOException {
-    var auth = SecurityContextHolder.getContext().getAuthentication();
+    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
     if (auth != null && auth.getPrincipal() instanceof StaffPrincipal principal) {
-      var user = staff.findById(principal.userId()).filter(found -> found.active);
-      var session = request.getSession(false);
-      var sessionId = session == null ? null : session.getId();
-      var currentSessionId = user.map(found -> found.currentSessionId).orElse(null);
+      Optional<StaffUser> user = staff.findById(principal.userId()).filter(found -> found.active);
+      HttpSession session = request.getSession(false);
+      String sessionId = session == null ? null : session.getId();
+      String currentSessionId = user.map(found -> found.currentSessionId).orElse(null);
       if (user.isEmpty() || currentSessionId == null || !currentSessionId.equals(sessionId)) {
         if (session != null) session.invalidate();
         SecurityContextHolder.clearContext();
@@ -57,11 +61,11 @@ final class ActiveStaffFilter extends OncePerRequestFilter {
       }
       if (!user.get().roleSet().equals(principal.roles())) {
         // Роли сменили, пока сотрудник в системе: права пересчитываются с этого же запроса.
-        var fresh = StaffPrincipal.of(user.get());
+        StaffPrincipal fresh = StaffPrincipal.of(user.get());
         SecurityContextHolder.getContext()
             .setAuthentication(
-                org.springframework.security.authentication.UsernamePasswordAuthenticationToken
-                    .authenticated(fresh, null, fresh.authorities()));
+                UsernamePasswordAuthenticationToken.authenticated(
+                    fresh, null, fresh.authorities()));
       }
       if (user.get().mustChangePassword
           && request.getRequestURI().startsWith("/api/")

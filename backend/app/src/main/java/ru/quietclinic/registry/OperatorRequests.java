@@ -5,6 +5,7 @@ import static ru.quietclinic.platform.PlatformConfig.clinicId;
 import static ru.quietclinic.platform.PlatformConfig.conflict;
 import static ru.quietclinic.platform.PlatformConfig.requireRole;
 
+import java.util.List;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -46,19 +47,19 @@ public class OperatorRequests {
   @Transactional
   public UUID create(String title, UUID patientId) {
     requireRole(ROLE);
-    var text = title.trim();
+    String text = title.trim();
     if (text.length() > MAX_TITLE) text = text.substring(0, MAX_TITLE);
-    var task =
+    RegistryTask task =
         tasks.save(
             new RegistryTask(clinicId(), patientId, text, time.today(), assignee(), actorId()));
-    var reason = task.patientId != null ? "with-patient" : "without-patient";
+    String reason = task.patientId != null ? "with-patient" : "without-patient";
     audit.record(actorId(), "REGISTRY_TASK_CREATED", "TASK", task.id, "ALLOWED", reason);
     return task.id;
   }
 
   private UUID assignee() {
     if (!assigneeUsername.isEmpty()) {
-      var named =
+      List<UUID> named =
           jdbc.queryForList(
               "select id from staff_user where username = ? and active = true and clinic_id = ?",
               UUID.class,
@@ -66,7 +67,7 @@ public class OperatorRequests {
               clinicId());
       if (!named.isEmpty()) return named.get(0);
     }
-    var admins =
+    List<UUID> admins =
         jdbc.queryForList(
             "select u.id from staff_user u where u.active = true and u.clinic_id = ?"
                 + " and exists (select 1 from staff_role r where r.staff_id = u.id"

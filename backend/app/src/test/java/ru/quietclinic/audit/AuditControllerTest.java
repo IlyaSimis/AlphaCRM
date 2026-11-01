@@ -8,6 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
+import java.time.Instant;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,7 +47,7 @@ class AuditControllerTest {
                     """))
         .andExpect(status().isOk());
 
-    var admin = staff.userId(StaffSessions.ADMIN);
+    String admin = staff.userId(StaffSessions.ADMIN);
     mvc.perform(get("/api/v1/audit").with(staff.role("MANAGER")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[?(@.action == 'PATIENT_UPDATED')].reason").value(hasItem("phone")))
@@ -55,9 +57,10 @@ class AuditControllerTest {
   @Test
   void showsOnlyActionsOfOwnClinicStaff() throws Exception {
     SecondClinic.ensure(jdbc);
-    var other = staff.login(SecondClinic.ADMIN_USERNAME, SecondClinic.ADMIN_PASSWORD);
+    StaffSessions.Login other =
+        staff.login(SecondClinic.ADMIN_USERNAME, SecondClinic.ADMIN_PASSWORD);
     mvc.perform(get("/api/v1/patients").with(other)).andExpect(status().isOk());
-    var otherAdmin =
+    String otherAdmin =
         JsonPath.<String>read(
             mvc.perform(get("/api/v1/auth/me").with(other))
                 .andReturn()
@@ -79,10 +82,10 @@ class AuditControllerTest {
 
   @Test
   void pagesTwentyAtATimeNewestFirst() throws Exception {
-    for (var i = 0; i < 3; i++) {
+    for (int i = 0; i < 3; i++) {
       mvc.perform(get("/api/v1/patients").with(staff.role("MANAGER"))).andExpect(status().isOk());
     }
-    var first =
+    String first =
         mvc.perform(get("/api/v1/audit/page").param("size", "2").with(staff.role("MANAGER")))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.page").value(0))
@@ -92,11 +95,11 @@ class AuditControllerTest {
             .getResponse()
             .getContentAsString();
     long total = ((Number) JsonPath.read(first, "$.total")).longValue();
-    org.assertj.core.api.Assertions.assertThat(total).isGreaterThanOrEqualTo(3);
-    var newest = java.time.Instant.parse(JsonPath.<String>read(first, "$.items[0].occurredAt"));
-    var older = java.time.Instant.parse(JsonPath.<String>read(first, "$.items[1].occurredAt"));
-    org.assertj.core.api.Assertions.assertThat(newest).isAfterOrEqualTo(older);
-    var second =
+    Assertions.assertThat(total).isGreaterThanOrEqualTo(3);
+    Instant newest = Instant.parse(JsonPath.<String>read(first, "$.items[0].occurredAt"));
+    Instant older = Instant.parse(JsonPath.<String>read(first, "$.items[1].occurredAt"));
+    Assertions.assertThat(newest).isAfterOrEqualTo(older);
+    String second =
         mvc.perform(
                 get("/api/v1/audit/page")
                     .param("size", "2")
@@ -106,7 +109,7 @@ class AuditControllerTest {
             .andReturn()
             .getResponse()
             .getContentAsString();
-    org.assertj.core.api.Assertions.assertThat(JsonPath.<String>read(second, "$.items[0].id"))
+    Assertions.assertThat(JsonPath.<String>read(second, "$.items[0].id"))
         .isNotIn(
             JsonPath.<String>read(first, "$.items[0].id"),
             JsonPath.<String>read(first, "$.items[1].id"));

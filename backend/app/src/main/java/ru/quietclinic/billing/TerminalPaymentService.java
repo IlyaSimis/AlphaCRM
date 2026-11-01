@@ -9,6 +9,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
@@ -62,13 +63,13 @@ class TerminalPaymentService {
   @Transactional
   BillingView start(UUID chargeId, TerminalPaymentRequest request) {
     requirePermission(Permission.INVOICE_WRITE);
-    var existing = payments.findByIdempotencyKey(request.idempotencyKey());
+    Optional<PaymentRecord> existing = payments.findByIdempotencyKey(request.idempotencyKey());
     if (existing.isPresent()) {
-      var payment = existing.get();
+      PaymentRecord payment = existing.get();
       if (!payment.chargeId.equals(chargeId) || !request.method().name().equals(payment.method)) {
         throw conflict("IDEMPOTENCY_KEY_REUSED", "This key was used for another payment");
       }
-      var charge =
+      Charge charge =
           charges
               .findById(chargeId)
               .filter(chargeService::inClinic)
@@ -79,7 +80,7 @@ class TerminalPaymentService {
       throw conflict(
           "TERMINAL_NOT_CONFIGURED", "Connect the bank or payment terminal provider first");
     }
-    var charge =
+    Charge charge =
         charges
             .findLockedById(chargeId)
             .filter(chargeService::inClinic)
@@ -93,12 +94,12 @@ class TerminalPaymentService {
     if (!Charge.PENDING.equals(charge.status)) {
       throw conflict("CHARGE_NOT_PAYABLE", "Charge is already paid");
     }
-    var latest = payments.findFirstByChargeIdOrderByCreatedAtDesc(charge.id);
+    Optional<PaymentRecord> latest = payments.findFirstByChargeIdOrderByCreatedAtDesc(charge.id);
     if (latest.isPresent() && "PENDING".equals(latest.get().paymentStatus)) {
       throw conflict("TERMINAL_PAYMENT_PENDING", "A terminal payment is already in progress");
     }
-    var now = Instant.now();
-    var payment = new PaymentRecord();
+    Instant now = Instant.now();
+    PaymentRecord payment = new PaymentRecord();
     payment.id = UUID.randomUUID();
     payment.idempotencyKey = request.idempotencyKey();
     payment.chargeId = charge.id;
@@ -109,7 +110,7 @@ class TerminalPaymentService {
     payment.createdAt = now;
     payment.updatedAt = now;
     payments.saveAndFlush(payment);
-    var reference =
+    String reference =
         gateway.start(
             new TerminalPaymentCommand(
                 payment.id,
@@ -135,12 +136,12 @@ class TerminalPaymentService {
 
   @Transactional
   TerminalEventView event(TerminalEventRequest request) {
-    var payment =
+    PaymentRecord payment =
         payments
             .findLockedByProviderRef(request.paymentRef())
             .orElseThrow(
                 () -> notFound("TERMINAL_PAYMENT_NOT_FOUND", "Terminal payment not found"));
-    var duplicate =
+    Integer duplicate =
         jdbc.queryForObject(
             "select count(*) from terminal_payment_event where provider = ? and event_id = ?",
             Integer.class,
@@ -164,7 +165,7 @@ class TerminalPaymentService {
       // Запоздавшее PENDING или повтор финального ответа не откатывает завершённую операцию.
       return new TerminalEventView(true, false, payment.paymentStatus);
     }
-    var charge =
+    Charge charge =
         charges
             .findLockedById(payment.chargeId)
             .orElseThrow(() -> notFound("CHARGE_NOT_FOUND", "Charge not found"));
@@ -184,7 +185,7 @@ class TerminalPaymentService {
       charge.status = Charge.PAID;
       charges.saveAndFlush(charge);
       outbox.fiscalReceipt(payment.id, charge.appointmentId);
-      var clinicId = clinicFor(charge);
+      UUID clinicId = clinicFor(charge);
       audit.record(
           TERMINAL_ACTOR, "PAYMENT_CONFIRMED", "PAYMENT", payment.id, "ALLOWED", "terminal");
       events.publish(

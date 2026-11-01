@@ -2,6 +2,7 @@ package ru.quietclinic.communications;
 
 import java.io.IOException;
 import java.net.URI;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -101,9 +102,9 @@ class TelegramChannel {
         if (relaySecret.isBlank()) {
           return DeliveryResult.notConfigured(NAME, "TELEGRAM_RELAY_SECRET_MISSING");
         }
-        var body = WebhookChannel.body(message);
-        var timestamp = java.time.Instant.now().getEpochSecond();
-        var status =
+        String body = WebhookChannel.body(message);
+        long timestamp = Instant.now().getEpochSecond();
+        int status =
             http.postJson(
                 URI.create(relayUrl + "/internal/send"),
                 body,
@@ -114,12 +115,12 @@ class TelegramChannel {
         return DeliveryResult.ofHttp(NAME, status);
       }
       if (token.isEmpty()) return DeliveryResult.notConfigured(NAME, "CHANNEL_NOT_CONFIGURED");
-      var body = new LinkedHashMap<String, Object>();
+      Map<String, Object> body = new LinkedHashMap<>();
       body.put("chat_id", message.telegramChatId());
       body.put("text", message.text());
-      var markup = replyMarkup(message);
+      String markup = replyMarkup(message);
       if (markup != null) body.put("reply_markup", new RawJson(markup));
-      var status =
+      int status =
           http.postJson(
               URI.create(apiUrl + "/bot" + token + "/sendMessage"), Json.object(body), Map.of());
       return DeliveryResult.ofHttp(NAME, status);
@@ -138,7 +139,7 @@ class TelegramChannel {
         || message.appointmentId() == null) {
       return null;
     }
-    var prefix = CONFIRM_CALLBACK_PREFIX + ":" + message.appointmentId() + ":";
+    String prefix = CONFIRM_CALLBACK_PREFIX + ":" + message.appointmentId() + ":";
     return "{\"inline_keyboard\":[["
         + button(reminderButtons[0], prefix + "yes")
         + ","

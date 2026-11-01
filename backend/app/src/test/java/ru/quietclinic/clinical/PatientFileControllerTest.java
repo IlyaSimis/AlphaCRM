@@ -71,7 +71,7 @@ class PatientFileControllerTest {
 
   private String uploaded(RequestPostProcessor who, String patientId, byte[] bytes)
       throws Exception {
-    var body =
+    String body =
         upload(who, patientId, "scan.pdf", bytes)
             .andExpect(status().isCreated())
             .andReturn()
@@ -81,7 +81,7 @@ class PatientFileControllerTest {
   }
 
   private String newPatient(String name, String phone) throws Exception {
-    var body =
+    String body =
         mvc.perform(
                 post("/api/v1/patients")
                     .with(staff.admin())
@@ -111,8 +111,8 @@ class PatientFileControllerTest {
 
   @Test
   void storedEncryptedSignedOnceAndManagerGetsOnlySignedFiles() throws Exception {
-    var bytes = pdf("Заключение для проверки шифрования");
-    var body =
+    byte[] bytes = pdf("Заключение для проверки шифрования");
+    String body =
         upload(staff.admin(), ANNA, "C:\\scans\\2026\\заключение.pdf", bytes)
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.originalName").value("заключение.pdf"))
@@ -126,10 +126,10 @@ class PatientFileControllerTest {
     String id = JsonPath.read(body, "$.id");
 
     // В столбце ciphertext нет открытых байтов файла.
-    var stored =
+    byte[] stored =
         jdbc.queryForObject(
             "select ciphertext from patient_file where id = ?", byte[].class, UUID.fromString(id));
-    var text = new String(stored, StandardCharsets.ISO_8859_1);
+    String text = new String(stored, StandardCharsets.ISO_8859_1);
     assertThat(text).doesNotContain("%PDF-").doesNotContain("%%EOF");
     assertThat(indexOf(stored, "Заключение".getBytes(StandardCharsets.UTF_8))).isEqualTo(-1);
     assertThat(stored).isNotEqualTo(bytes);
@@ -151,7 +151,7 @@ class PatientFileControllerTest {
         .andExpect(status().isForbidden());
 
     // Врач со связью с лечением подписывает; хеш — SHA-256 байтов файла.
-    var hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+    String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
     mvc.perform(
             post("/api/v1/patient-files/" + id + "/sign").with(staff.doctor(StaffSessions.PETROV)))
         .andExpect(status().isOk())
@@ -198,7 +198,7 @@ class PatientFileControllerTest {
 
   @Test
   void onlyPdfUpToTenMegabytes() throws Exception {
-    var before = count(ANNA);
+    long before = count(ANNA);
     upload(
             staff.admin(),
             ANNA,
@@ -206,7 +206,7 @@ class PatientFileControllerTest {
             "plain text, not a pdf".getBytes(StandardCharsets.UTF_8))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("NOT_A_PDF"));
-    var big = new byte[(int) PatientFileService.MAX_BYTES + 1];
+    byte[] big = new byte[(int) PatientFileService.MAX_BYTES + 1];
     Arrays.fill(big, (byte) ' ');
     System.arraycopy(pdf(""), 0, big, 0, 9);
     upload(staff.admin(), ANNA, "big.pdf", big)
@@ -214,17 +214,17 @@ class PatientFileControllerTest {
         .andExpect(jsonPath("$.code").value("FILE_TOO_LARGE"));
     assertThat(count(ANNA)).isEqualTo(before);
     // Ровно 10 МБ — ещё можно.
-    var limit = Arrays.copyOf(big, (int) PatientFileService.MAX_BYTES);
+    byte[] limit = Arrays.copyOf(big, (int) PatientFileService.MAX_BYTES);
     upload(staff.admin(), ANNA, "limit.pdf", limit).andExpect(status().isCreated());
   }
 
   @Test
   void doctorWithoutCareRelationshipNeitherUploadsNorSignsNorReads() throws Exception {
-    var patient = newPatient("PDF Без Связи", "+70000000401");
+    String patient = newPatient("PDF Без Связи", "+70000000401");
     upload(staff.doctor(StaffSessions.PETROV), patient, "scan.pdf", pdf("без связи"))
         .andExpect(status().isForbidden())
         .andExpect(jsonPath("$.code").value("NO_CARE_RELATIONSHIP"));
-    var id = uploaded(staff.admin(), patient, pdf("от администратора"));
+    String id = uploaded(staff.admin(), patient, pdf("от администратора"));
     mvc.perform(
             post("/api/v1/patient-files/" + id + "/sign").with(staff.doctor(StaffSessions.PETROV)))
         .andExpect(status().isForbidden())
@@ -248,9 +248,10 @@ class PatientFileControllerTest {
 
   @Test
   void anotherClinicSeesNeitherThePatientNorTheFile() throws Exception {
-    var id = uploaded(staff.admin(), ANNA, pdf("своя клиника"));
+    String id = uploaded(staff.admin(), ANNA, pdf("своя клиника"));
     SecondClinic.ensure(jdbc);
-    var other = staff.login(SecondClinic.ADMIN_USERNAME, SecondClinic.ADMIN_PASSWORD);
+    StaffSessions.Login other =
+        staff.login(SecondClinic.ADMIN_USERNAME, SecondClinic.ADMIN_PASSWORD);
     mvc.perform(get("/api/v1/patients/" + ANNA + "/files").with(other))
         .andExpect(status().isNotFound());
     upload(other, ANNA, "scan.pdf", pdf("чужая")).andExpect(status().isNotFound());
@@ -262,16 +263,16 @@ class PatientFileControllerTest {
 
   @Test
   void signedBytesCannotBeReplaced() throws Exception {
-    var original = pdf("подписанный оригинал");
-    var id = uploaded(staff.admin(), ANNA, original);
+    byte[] original = pdf("подписанный оригинал");
+    String id = uploaded(staff.admin(), ANNA, original);
     mvc.perform(post("/api/v1/patient-files/" + id + "/sign").with(staff.admin()))
         .andExpect(status().isOk());
-    var tx = new TransactionTemplate(transactions);
+    TransactionTemplate tx = new TransactionTemplate(transactions);
     assertThatThrownBy(
             () ->
                 tx.executeWithoutResult(
                     status -> {
-                      var file = files.findById(UUID.fromString(id)).orElseThrow();
+                      PatientFile file = files.findById(UUID.fromString(id)).orElseThrow();
                       file.ciphertext = new byte[] {1, 2, 3};
                       file.originalName = "replaced.pdf";
                       files.flush();
@@ -280,13 +281,13 @@ class PatientFileControllerTest {
     mvc.perform(get("/api/v1/patient-files/" + id + "/content").with(staff.admin()))
         .andExpect(content().bytes(original));
     // Новый файл — новая строка, подписанный остаётся как был.
-    var replacement = uploaded(staff.admin(), ANNA, pdf("новая версия"));
+    String replacement = uploaded(staff.admin(), ANNA, pdf("новая версия"));
     assertThat(replacement).isNotEqualTo(id);
   }
 
   @Test
   void doctorAttachesAConclusionToTheirAppointment() throws Exception {
-    var body =
+    String body =
         mvc.perform(
                 multipart("/api/v1/patients/" + ANNA + "/files")
                     .file(
@@ -325,8 +326,8 @@ class PatientFileControllerTest {
 
   private static int indexOf(byte[] haystack, byte[] needle) {
     outer:
-    for (var i = 0; i <= haystack.length - needle.length; i++) {
-      for (var j = 0; j < needle.length; j++) {
+    for (int i = 0; i <= haystack.length - needle.length; i++) {
+      for (int j = 0; j < needle.length; j++) {
         if (haystack[i + j] != needle[j]) continue outer;
       }
       return i;

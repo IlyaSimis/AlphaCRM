@@ -10,12 +10,15 @@ import static ru.quietclinic.platform.PlatformConfig.requirePermission;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -78,7 +81,7 @@ class FinanceService {
   @Transactional
   ChargeView voidCharge(UUID chargeId, VoidRequest request) {
     requirePermission(Permission.INVOICE_VOID);
-    var charge = ownCharge(chargeId);
+    Charge charge = ownCharge(chargeId);
     charge.voidBy(actorId(), request.reason(), Instant.now());
     charges.saveAndFlush(charge);
     audit.record(actorId(), "CHARGE_VOIDED", "CHARGE", charge.id, "ALLOWED", request.reason());
@@ -101,18 +104,18 @@ class FinanceService {
   @Transactional
   RefundView refund(UUID paymentId, RefundRequest request) {
     requirePermission(Permission.PAYMENT_REFUND);
-    var existing = refunds.findByIdempotencyKey(request.idempotencyKey());
+    Optional<RefundRecord> existing = refunds.findByIdempotencyKey(request.idempotencyKey());
     if (existing.isPresent()) {
       if (!existing.get().paymentId.equals(paymentId)) {
         throw conflict("IDEMPOTENCY_KEY_REUSED", "This key was used for another refund");
       }
       return RefundView.of(existing.get());
     }
-    var payment =
+    PaymentRecord payment =
         payments
             .findById(paymentId)
             .orElseThrow(() -> notFound("PAYMENT_NOT_FOUND", "Payment not found"));
-    var charge =
+    Charge charge =
         charges
             .findById(payment.chargeId)
             .filter(chargeService::inClinic)
@@ -123,7 +126,7 @@ class FinanceService {
     if (!Charge.PAID.equals(charge.status)) {
       throw conflict("CHARGE_NOT_PAID", "Only a paid charge can be refunded");
     }
-    var refund =
+    RefundRecord refund =
         refunds.saveAndFlush(
             new RefundRecord(
                 payment, charge, request.idempotencyKey(), request.reason(), actorId()));
@@ -156,15 +159,15 @@ class FinanceService {
     if (ChronoUnit.DAYS.between(from, to) > MAX_REPORT_DAYS) {
       throw badRequest("PERIOD_TOO_LONG", "The report period is limited to about a year");
     }
-    var group = groupBy == null ? "day" : groupBy;
+    String group = groupBy == null ? "day" : groupBy;
     if (!List.of("day", "weekday", "service", "practitioner").contains(group)) {
       throw badRequest("INVALID_GROUP", "Group by day, weekday, service or practitioner");
     }
-    var start = Timestamp.from(time.startOf(from));
-    var end = Timestamp.from(time.startOf(to.plusDays(1)));
-    var zone = time.zone();
-    var rows = new LinkedHashMap<String, Row>();
-    var paid =
+    Timestamp start = Timestamp.from(time.startOf(from));
+    Timestamp end = Timestamp.from(time.startOf(to.plusDays(1)));
+    ZoneId zone = time.zone();
+    Map<String, Row> rows = new LinkedHashMap<>();
+    List<Map<String, Object>> paid =
         jdbc.queryForList(
             "select coalesce(r.completed_at, r.created_at) as at, c.amount_minor as amount,"
                 + " c.price_mode as mode, a.service_name as service, p.id as practitioner_id,"
@@ -178,7 +181,7 @@ class FinanceService {
             clinicId(),
             start,
             end);
-    var returned =
+    List<Map<String, Object>> returned =
         jdbc.queryForList(
             "select f.created_at as at, f.amount_minor as amount, c.price_mode as mode,"
                 + " a.service_name as service, p.id as practitioner_id, p.full_name as practitioner"
@@ -189,16 +192,16 @@ class FinanceService {
             clinicId(),
             start,
             end);
-    for (var sale : paid) add(rows, group, sale, zone, false);
-    for (var refund : returned) add(rows, group, refund, zone, true);
-    var list = new ArrayList<>(rows.values());
+    for (Map<String, Object> sale : paid) add(rows, group, sale, zone, false);
+    for (Map<String, Object> refund : returned) add(rows, group, refund, zone, true);
+    List<Row> list = new ArrayList<>(rows.values());
     list.sort(
         "day".equals(group) || "weekday".equals(group)
             ? Comparator.comparing(Row::key)
             : Comparator.comparingLong(Row::net).reversed().thenComparing(Row::label));
     long payments = 0, amount = 0, refundsCount = 0, refunded = 0, open = 0;
-    var result = new ArrayList<SalesReport.Line>();
-    for (var row : list) {
+    List<SalesReport.Line> result = new ArrayList<>();
+    for (Row row : list) {
       payments += row.payments;
       amount += row.amount;
       refundsCount += row.refunds;
@@ -216,13 +219,9 @@ class FinanceService {
   }
 
   private static void add(
-      Map<String, Row> rows,
-      String group,
-      Map<String, Object> sale,
-      java.time.ZoneId zone,
-      boolean refund) {
-    var at = instant(sale.get("at"));
-    var amount = ((Number) sale.get("amount")).longValue();
+      Map<String, Row> rows, String group, Map<String, Object> sale, ZoneId zone, boolean refund) {
+    Instant at = instant(sale.get("at"));
+    long amount = ((Number) sale.get("amount")).longValue();
     String key;
     String label;
     switch (group) {
@@ -243,7 +242,7 @@ class FinanceService {
         label = key;
       }
     }
-    var row = rows.computeIfAbsent(key, k -> new Row(k, label));
+    Row row = rows.computeIfAbsent(key, k -> new Row(k, label));
     if (refund) {
       row.refunds++;
       row.refunded += amount;
@@ -258,7 +257,7 @@ class FinanceService {
   private static Instant instant(Object value) {
     return switch (value) {
       case Timestamp timestamp -> timestamp.toInstant();
-      case java.time.OffsetDateTime offset -> offset.toInstant();
+      case OffsetDateTime offset -> offset.toInstant();
       case Instant instant -> instant;
       default -> throw new IllegalStateException("Unexpected time value: " + value.getClass());
     };

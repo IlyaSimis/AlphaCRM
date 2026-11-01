@@ -10,6 +10,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import ru.quietclinic.platform.RolePermissions;
@@ -93,8 +94,8 @@ class StaffUser {
   }
 
   /** Роли в порядке экрана «Сотрудники». */
-  java.util.List<String> orderedRoles() {
-    var set = roleSet();
+  List<String> orderedRoles() {
+    Set<String> set = roleSet();
     return RolePermissions.STAFF_ROLES.stream().filter(set::contains).toList();
   }
 

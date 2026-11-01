@@ -13,7 +13,7 @@ class SignatureTest {
 
   @Test
   void anotherTimestampGivesAnotherSignature() {
-    var secret = "secret-of-at-least-32-characters!!";
+    String secret = "secret-of-at-least-32-characters!!";
     assertThat(Signature.sign(secret, 1L, "{}")).isNotEqualTo(Signature.sign(secret, 2L, "{}"));
   }
 }

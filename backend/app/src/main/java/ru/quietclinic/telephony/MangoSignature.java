@@ -11,8 +11,8 @@ final class MangoSignature {
 
   static String sign(String key, String json, String salt) {
     try {
-      var digest = MessageDigest.getInstance("SHA-256");
-      var bytes = digest.digest((key + json + salt).getBytes(StandardCharsets.UTF_8));
+      MessageDigest digest = MessageDigest.getInstance("SHA-256");
+      byte[] bytes = digest.digest((key + json + salt).getBytes(StandardCharsets.UTF_8));
       return HexFormat.of().formatHex(bytes);
     } catch (NoSuchAlgorithmException error) {
       throw new IllegalStateException("SHA-256 is unavailable", error);
@@ -21,8 +21,8 @@ final class MangoSignature {
 
   static boolean valid(String key, String json, String salt, String presented) {
     if (presented == null) return false;
-    var expected = sign(key, json, salt).getBytes(StandardCharsets.US_ASCII);
-    var actual = presented.trim().getBytes(StandardCharsets.US_ASCII);
+    byte[] expected = sign(key, json, salt).getBytes(StandardCharsets.US_ASCII);
+    byte[] actual = presented.trim().getBytes(StandardCharsets.US_ASCII);
     return MessageDigest.isEqual(expected, actual);
   }
 }

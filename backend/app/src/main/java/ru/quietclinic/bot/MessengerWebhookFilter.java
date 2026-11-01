@@ -8,12 +8,15 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 import ru.quietclinic.integrations.MessengerIntegrationClientFactory;
+import ru.quietclinic.integrations.MessengerWebhook;
 
 /** Аутентифицирует scoped webhook и создаёт BOT-контекст именно его клиники. */
 final class MessengerWebhookFilter extends OncePerRequestFilter {
@@ -31,15 +34,15 @@ final class MessengerWebhookFilter extends OncePerRequestFilter {
   protected void doFilterInternal(
       HttpServletRequest request, HttpServletResponse response, FilterChain chain)
       throws ServletException, IOException {
-    var route = route(request);
+    WebhookRoute route = route(request);
     if (route == null) {
       BotTokenFilter.error(
           response, 401, "MESSENGER_WEBHOOK_UNAUTHORIZED", "Webhook authentication failed");
       return;
     }
-    var webhook = integrations.webhook(route.publicKey(), route.type()).orElse(null);
-    var header = "TELEGRAM".equals(route.type()) ? TELEGRAM_HEADER : MAX_HEADER;
-    var presented = request.getHeader(header);
+    MessengerWebhook webhook = integrations.webhook(route.publicKey(), route.type()).orElse(null);
+    String header = "TELEGRAM".equals(route.type()) ? TELEGRAM_HEADER : MAX_HEADER;
+    String presented = request.getHeader(header);
     if (webhook == null
         || presented == null
         || !MessageDigest.isEqual(
@@ -49,7 +52,7 @@ final class MessengerWebhookFilter extends OncePerRequestFilter {
           response, 401, "MESSENGER_WEBHOOK_UNAUTHORIZED", "Webhook authentication failed");
       return;
     }
-    var context = SecurityContextHolder.createEmptyContext();
+    SecurityContext context = SecurityContextHolder.createEmptyContext();
     context.setAuthentication(
         UsernamePasswordAuthenticationToken.authenticated(
             new BotPrincipal(webhook.clinicId()),
@@ -64,11 +67,11 @@ final class MessengerWebhookFilter extends OncePerRequestFilter {
   }
 
   private static WebhookRoute route(HttpServletRequest request) {
-    var path = request.getRequestURI().substring(request.getContextPath().length());
+    String path = request.getRequestURI().substring(request.getContextPath().length());
     if (!path.startsWith(PREFIX)) return null;
-    var parts = path.substring(PREFIX.length()).split("/");
+    String[] parts = path.substring(PREFIX.length()).split("/");
     if (parts.length != 3 || !"events".equals(parts[1])) return null;
-    var type = parts[0].toUpperCase(java.util.Locale.ROOT);
+    String type = parts[0].toUpperCase(Locale.ROOT);
     if (!List.of("TELEGRAM", "MAX").contains(type)) return null;
     try {
       return new WebhookRoute(UUID.fromString(parts[2]), type);

@@ -1,5 +1,6 @@
 package ru.quietclinic.inventory;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -12,5 +13,5 @@ interface ItemRepository extends JpaRepository<Item, UUID> {
 
   List<Item> findByClinicIdAndGtin(UUID clinicId, String gtin);
 
-  List<Item> findByClinicIdAndIdIn(UUID clinicId, java.util.Collection<UUID> ids);
+  List<Item> findByClinicIdAndIdIn(UUID clinicId, Collection<UUID> ids);
 }

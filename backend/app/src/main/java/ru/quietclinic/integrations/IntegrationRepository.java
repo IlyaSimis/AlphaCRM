@@ -51,8 +51,8 @@ class IntegrationRepository {
   }
 
   IntegrationRecord create(UUID clinicId, String type, String settings) {
-    var id = UUID.randomUUID();
-    var now = Timestamp.from(Instant.now());
+    UUID id = UUID.randomUUID();
+    Timestamp now = Timestamp.from(Instant.now());
     jdbc.update(
         "insert into integration(id, clinic_id, type, status, public_key, settings, created_at,"
             + " updated_at) values(?, ?, ?, 'PENDING', ?, ?, ?, ?)",

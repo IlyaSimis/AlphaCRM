@@ -20,14 +20,14 @@ class DevKmsAdapter implements KmsPort {
     this.currentVersion = currentVersion;
     keys = new HashMap<>();
     keys.put("dev-v1", derive(source));
-    for (var entry : additionalKeys.split(",")) {
+    for (String entry : additionalKeys.split(",")) {
       if (entry.isBlank()) continue;
-      var separator = entry.indexOf('=');
+      int separator = entry.indexOf('=');
       if (separator < 1 || separator == entry.length() - 1) {
         throw new IllegalStateException("Each CLINIC_KMS_KEYS entry must be version=key");
       }
-      var version = entry.substring(0, separator).trim();
-      var key = entry.substring(separator + 1).trim();
+      String version = entry.substring(0, separator).trim();
+      String key = entry.substring(separator + 1).trim();
       if (keys.putIfAbsent(version, derive(key)) != null) {
         throw new IllegalStateException("Duplicate KMS key version");
       }
@@ -44,7 +44,7 @@ class DevKmsAdapter implements KmsPort {
   }
 
   public byte[] dataKey(String version) {
-    var key = keys.get(version);
+    byte[] key = keys.get(version);
     if (key == null) throw new IllegalStateException("Unknown KMS key version");
     return key.clone();
   }

@@ -6,6 +6,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -19,7 +20,7 @@ class MaxChannel {
   private final boolean reminderButtons;
   private final boolean active;
 
-  @org.springframework.beans.factory.annotation.Autowired
+  @Autowired
   MaxChannel(
       HttpTransport http,
       @Value("${clinic.outbound.max-bot-token:}") String token,
@@ -46,14 +47,14 @@ class MaxChannel {
       return DeliveryResult.notConfigured(NAME, "NO_MAX_CONTACT");
     }
     if (!configured()) return DeliveryResult.notConfigured(NAME, "CHANNEL_NOT_CONFIGURED");
-    var body = new LinkedHashMap<String, Object>();
+    Map<String, Object> body = new LinkedHashMap<>();
     body.put("text", message.text());
     if (reminderButtons && NoticeTemplates.REMINDER.equals(message.template())) {
       body.put("attachments", new RawJson(keyboard(message.appointmentId().toString())));
     }
     try {
-      var recipient = URLEncoder.encode(message.maxUserId(), StandardCharsets.UTF_8);
-      var status =
+      String recipient = URLEncoder.encode(message.maxUserId(), StandardCharsets.UTF_8);
+      int status =
           http.postJson(
               URI.create(apiUrl + "/messages?user_id=" + recipient),
               Json.object(body),

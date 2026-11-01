@@ -1,6 +1,7 @@
 package ru.quietclinic.inventory;
 
 import jakarta.validation.Valid;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -128,8 +129,7 @@ public class InventoryController {
   }
 
   @GetMapping("/metrics")
-  StockMetricsView metrics(
-      @RequestParam java.time.LocalDate from, @RequestParam java.time.LocalDate to) {
+  StockMetricsView metrics(@RequestParam LocalDate from, @RequestParam LocalDate to) {
     return stock.metrics(from, to);
   }
 

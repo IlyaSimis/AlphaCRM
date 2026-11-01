@@ -12,7 +12,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,23 +44,13 @@ class CatalogService {
       WarehouseRepository warehouses,
       JdbcTemplate jdbc,
       AuditService audit,
-      @org.springframework.beans.factory.annotation.Value(
-              "${clinic.inventory.default-warehouse-name:Main warehouse}")
+      @Value("${clinic.inventory.default-warehouse-name:Main warehouse}")
           String defaultWarehouseName,
-      @org.springframework.beans.factory.annotation.Value(
-              "${clinic.inventory.default-category.drug:Drugs}")
-          String drugs,
-      @org.springframework.beans.factory.annotation.Value(
-              "${clinic.inventory.default-category.medical-device:Medical devices}")
-          String devices,
-      @org.springframework.beans.factory.annotation.Value(
-              "${clinic.inventory.default-category.consumable:Consumables}")
-          String consumables,
-      @org.springframework.beans.factory.annotation.Value(
-              "${clinic.inventory.default-category.goods:Goods}")
-          String goods,
-      @org.springframework.beans.factory.annotation.Value("${clinic.inventory.default-unit:pcs}")
-          String defaultUnit) {
+      @Value("${clinic.inventory.default-category.drug:Drugs}") String drugs,
+      @Value("${clinic.inventory.default-category.medical-device:Medical devices}") String devices,
+      @Value("${clinic.inventory.default-category.consumable:Consumables}") String consumables,
+      @Value("${clinic.inventory.default-category.goods:Goods}") String goods,
+      @Value("${clinic.inventory.default-unit:pcs}") String defaultUnit) {
     this.defaultWarehouseName = defaultWarehouseName;
     this.defaultCategoryNames =
         Map.of("DRUG", drugs, "MEDICAL_DEVICE", devices, "CONSUMABLE", consumables, "GOODS", goods);
@@ -79,13 +71,13 @@ class CatalogService {
   @Transactional
   CategoryView createCategory(CategoryRequest request) {
     requirePermission(Permission.INVENTORY_CATALOG_WRITE);
-    var name = request.name().trim();
+    String name = request.name().trim();
     if (request.parentId() != null) category(request.parentId());
     if (categories.existsByClinicIdAndNameIgnoreCaseAndParentId(
         clinicId(), name, request.parentId())) {
       throw conflict("CATEGORY_NAME_TAKEN", "A category with this name already exists");
     }
-    var category =
+    ItemCategory category =
         categories.save(new ItemCategory(clinicId(), name, request.parentId(), request.kind()));
     audit.record(actorId(), "ITEM_CATEGORY_CREATED", "ITEM_CATEGORY", category.id, "ALLOWED", null);
     return CategoryView.of(category);
@@ -94,7 +86,7 @@ class CatalogService {
   @Transactional
   CategoryView updateCategory(UUID id, CategoryRequest request) {
     requirePermission(Permission.INVENTORY_CATALOG_WRITE);
-    var category = category(id);
+    ItemCategory category = category(id);
     if (id.equals(request.parentId())) {
       throw conflict("INVALID_PARENT", "A category cannot be its own parent");
     }
@@ -113,12 +105,12 @@ class CatalogService {
   @Transactional(readOnly = true)
   List<ItemView> items(UUID categoryId, String kind, Boolean marked, String query, String sort) {
     requirePermission(Permission.INVENTORY_CATALOG_READ, Permission.INVENTORY_STOCK_READ);
-    var allCategories = categories.findByClinicIdOrderByName(clinicId());
-    var byId = new HashMap<UUID, ItemCategory>();
+    List<ItemCategory> allCategories = categories.findByClinicIdOrderByName(clinicId());
+    Map<UUID, ItemCategory> byId = new HashMap<>();
     allCategories.forEach(c -> byId.put(c.id, c));
-    var stock = stockByItem();
-    var needle = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
-    var rows =
+    Map<UUID, BigDecimal> stock = stockByItem();
+    String needle = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
+    List<ItemView> rows =
         items.findByClinicIdOrderByName(clinicId()).stream()
             .filter(i -> categoryId == null || within(i.categoryId, categoryId, byId))
             .filter(i -> kind == null || kind.isBlank() || kind.equals(kindOf(i, byId)))
@@ -147,8 +139,8 @@ class CatalogService {
   @Transactional
   ItemView createItem(ItemRequest request) {
     requirePermission(Permission.INVENTORY_CATALOG_WRITE);
-    var categoryId = categoryOf(request.categoryId(), request.kind());
-    var item = new Item(clinicId(), categoryId, request.name().trim(), request.unit().trim());
+    UUID categoryId = categoryOf(request.categoryId(), request.kind());
+    Item item = new Item(clinicId(), categoryId, request.name().trim(), request.unit().trim());
     apply(item, request);
     items.save(item);
     audit.record(actorId(), "ITEM_CREATED", "ITEM", item.id, "ALLOWED", null);
@@ -158,7 +150,7 @@ class CatalogService {
   @Transactional
   ItemView updateItem(UUID id, ItemRequest request) {
     requirePermission(Permission.INVENTORY_CATALOG_WRITE);
-    var item = item(id);
+    Item item = item(id);
     item.categoryId =
         request.categoryId() == null && request.kind() == null
             ? item.categoryId
@@ -172,8 +164,8 @@ class CatalogService {
   }
 
   private static void apply(Item item, ItemRequest request) {
-    var marked = Boolean.TRUE.equals(request.marked());
-    var system = request.markingSystem() == null ? "NONE" : request.markingSystem();
+    boolean marked = Boolean.TRUE.equals(request.marked());
+    String system = request.markingSystem() == null ? "NONE" : request.markingSystem();
     if (marked && ("NONE".equals(system) || request.gtin() == null)) {
       throw conflict("MARKING_REQUIRES_GTIN", "A marked item needs a GTIN and a marking system");
     }
@@ -200,7 +192,7 @@ class CatalogService {
   WarehouseView createWarehouse(WarehouseRequest request) {
     requirePermission(Permission.INVENTORY_CATALOG_WRITE);
     defaultWarehouse(clinicId());
-    var warehouse = warehouses.save(new Warehouse(clinicId(), request.name().trim(), false));
+    Warehouse warehouse = warehouses.save(new Warehouse(clinicId(), request.name().trim(), false));
     audit.record(actorId(), "WAREHOUSE_CREATED", "WAREHOUSE", warehouse.id, "ALLOWED", null);
     return WarehouseView.of(warehouse);
   }
@@ -216,13 +208,13 @@ class CatalogService {
    * позиции без категории. Так позицию можно завести, не настраивая категории заранее.
    */
   ItemCategory defaultCategory(String kind) {
-    var name = defaultCategoryNames.getOrDefault(kind, kind);
+    String name = defaultCategoryNames.getOrDefault(kind, kind);
     return categories.findByClinicIdOrderByName(clinicId()).stream()
         .filter(c -> c.parentId == null && kind.equals(c.kind) && c.name.equalsIgnoreCase(name))
         .findFirst()
         .orElseGet(
             () -> {
-              var category =
+              ItemCategory category =
                   categories.saveAndFlush(new ItemCategory(clinicId(), name, null, kind));
               audit.record(
                   actorId(),
@@ -236,13 +228,13 @@ class CatalogService {
   }
 
   /** Активная позиция с этим GTIN или названием (без учёта регистра); для быстрого прихода. */
-  java.util.Optional<Item> findItem(String gtin, String name) {
+  Optional<Item> findItem(String gtin, String name) {
     if (gtin != null && !gtin.isBlank()) {
-      var byGtin = items.findByClinicIdAndGtin(clinicId(), gtin);
-      if (!byGtin.isEmpty()) return java.util.Optional.of(byGtin.get(0));
+      List<Item> byGtin = items.findByClinicIdAndGtin(clinicId(), gtin);
+      if (!byGtin.isEmpty()) return Optional.of(byGtin.get(0));
     }
-    if (name == null || name.isBlank()) return java.util.Optional.empty();
-    var needle = name.trim();
+    if (name == null || name.isBlank()) return Optional.empty();
+    String needle = name.trim();
     return items.findByClinicIdOrderByName(clinicId()).stream()
         .filter(i -> i.name.equalsIgnoreCase(needle))
         .sorted(Comparator.comparing((Item i) -> !i.active))
@@ -251,7 +243,7 @@ class CatalogService {
 
   /** Новая немаркируемая позиция в основной категории вида — для строки быстрого прихода. */
   Item createPlainItem(String name, String kind, String unit, String gtin) {
-    var item =
+    Item item =
         new Item(
             clinicId(),
             defaultCategory(kind == null ? "CONSUMABLE" : kind).id,
@@ -265,7 +257,7 @@ class CatalogService {
 
   /** Основной склад клиники; создаётся при первом обращении. */
   Warehouse defaultWarehouse(UUID clinicId) {
-    var all = warehouses.findByClinicIdOrderByName(clinicId);
+    List<Warehouse> all = warehouses.findByClinicIdOrderByName(clinicId);
     return all.stream()
         .filter(w -> w.defaultWarehouse)
         .findFirst()
@@ -295,14 +287,14 @@ class CatalogService {
   }
 
   ItemView view(Item item) {
-    var byId = new HashMap<UUID, ItemCategory>();
+    Map<UUID, ItemCategory> byId = new HashMap<>();
     categories.findByClinicIdOrderByName(clinicId()).forEach(c -> byId.put(c.id, c));
     return view(item, byId, stockByItem());
   }
 
   private static ItemView view(
       Item i, Map<UUID, ItemCategory> categories, Map<UUID, BigDecimal> stock) {
-    var category = categories.get(i.categoryId);
+    ItemCategory category = categories.get(i.categoryId);
     return new ItemView(
         i.id,
         i.categoryId,
@@ -320,23 +312,23 @@ class CatalogService {
   }
 
   private static String kindOf(Item item, Map<UUID, ItemCategory> categories) {
-    var category = categories.get(item.categoryId);
+    ItemCategory category = categories.get(item.categoryId);
     return category == null ? null : category.kind;
   }
 
   /** Категория равна искомой или вложена в неё. */
   private static boolean within(UUID categoryId, UUID wanted, Map<UUID, ItemCategory> categories) {
-    var current = categoryId;
-    for (var depth = 0; current != null && depth < 20; depth++) {
+    UUID current = categoryId;
+    for (int depth = 0; current != null && depth < 20; depth++) {
       if (current.equals(wanted)) return true;
-      var category = categories.get(current);
+      ItemCategory category = categories.get(current);
       current = category == null ? null : category.parentId;
     }
     return false;
   }
 
   private Map<UUID, BigDecimal> stockByItem() {
-    var result = new HashMap<UUID, BigDecimal>();
+    Map<UUID, BigDecimal> result = new HashMap<>();
     jdbc.query(
         "select item_id, sum(quantity) as total from inventory.stock_balance where clinic_id = ?"
             + " group by item_id",

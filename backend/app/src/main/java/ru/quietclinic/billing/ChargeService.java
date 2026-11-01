@@ -8,6 +8,7 @@ import static ru.quietclinic.platform.PlatformConfig.requirePermission;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -58,9 +59,9 @@ public class ChargeService {
    */
   @Transactional
   public UUID chargeForCompletedVisit(UUID appointmentId, long amountMinor, String currency) {
-    var existing = charges.findByAppointmentId(appointmentId);
+    Optional<Charge> existing = charges.findByAppointmentId(appointmentId);
     if (existing.isPresent()) return existing.get().id;
-    var charge = charges.saveAndFlush(new Charge(appointmentId, amountMinor, currency));
+    Charge charge = charges.saveAndFlush(new Charge(appointmentId, amountMinor, currency));
     audit.record(
         actorId(), "CHARGE_CREATED", "CHARGE", charge.id, "ALLOWED", "appointment-completed");
     return charge.id;
@@ -70,9 +71,9 @@ public class ChargeService {
   @Transactional
   public UUID awaitAmountForCompletedVisit(
       UUID appointmentId, String currency, Long minMinor, Long maxMinor, Long estimateMinor) {
-    var existing = charges.findByAppointmentId(appointmentId);
+    Optional<Charge> existing = charges.findByAppointmentId(appointmentId);
     if (existing.isPresent()) return existing.get().id;
-    var charge =
+    Charge charge =
         charges.saveAndFlush(
             Charge.awaitingAmount(appointmentId, currency, minMinor, maxMinor, estimateMinor));
     audit.record(
@@ -84,7 +85,7 @@ public class ChargeService {
   @Transactional
   ChargeView setAmount(UUID chargeId, ChargeAmountRequest request) {
     requirePermission(Permission.INVOICE_SET_AMOUNT);
-    var charge =
+    Charge charge =
         charges
             .findById(chargeId)
             .filter(this::inClinic)
@@ -106,7 +107,7 @@ public class ChargeService {
     if (charges.findByAppointmentId(request.appointmentId()).isPresent()) {
       throw conflict("CHARGE_ALREADY_EXISTS", "A charge for this visit already exists");
     }
-    var charge =
+    Charge charge =
         charges.saveAndFlush(
             new Charge(request.appointmentId(), request.amountMinor(), request.currency()));
     audit.record(actorId(), "CHARGE_CREATED", "CHARGE", charge.id, "ALLOWED", "billing");
@@ -116,7 +117,7 @@ public class ChargeService {
   @Transactional(readOnly = true)
   List<ChargeView> list() {
     requirePermission(Permission.INVOICE_READ);
-    var own = clinicAppointments();
+    Set<UUID> own = clinicAppointments();
     return charges.findAllByOrderByCreatedAtDesc().stream()
         .filter(c -> own.contains(c.appointmentId))
         .map(this::view)

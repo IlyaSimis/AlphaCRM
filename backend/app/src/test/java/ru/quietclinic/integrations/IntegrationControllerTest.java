@@ -67,10 +67,11 @@ class IntegrationControllerTest {
     mvc.perform(post("/api/v1/integrations/mango/activate").with(staff.admin()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.status").value("ACTIVE"));
-    var client = mangoClients.forClinic(MAIN_CLINIC).orElseThrow();
+    MangoClient client = mangoClients.forClinic(MAIN_CLINIC).orElseThrow();
     assertThat(client.configured()).isTrue();
     assertThat(client.defaultExtension()).isEqualTo("101");
-    var ciphertext = jdbc.queryForObject("select ciphertext from integration_secret", byte[].class);
+    byte[] ciphertext =
+        jdbc.queryForObject("select ciphertext from integration_secret", byte[].class);
     assertThat(new String(ciphertext, StandardCharsets.UTF_8))
         .doesNotContain("clinic-a-key")
         .doesNotContain("clinic-a-salt");
@@ -163,7 +164,8 @@ class IntegrationControllerTest {
                 .content("{\"apiKey\":\"clinic-a-key\",\"apiSalt\":\"clinic-a-salt\"}"))
         .andExpect(status().isOk());
     SecondClinic.ensure(jdbc);
-    var secondAdmin = staff.login(SecondClinic.ADMIN_USERNAME, SecondClinic.ADMIN_PASSWORD);
+    StaffSessions.Login secondAdmin =
+        staff.login(SecondClinic.ADMIN_USERNAME, SecondClinic.ADMIN_PASSWORD);
     mvc.perform(get("/api/v1/integrations").with(secondAdmin))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$").isEmpty());

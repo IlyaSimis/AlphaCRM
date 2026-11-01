@@ -1,5 +1,6 @@
 package ru.quietclinic.bot;
 
+import java.util.List;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -22,9 +23,9 @@ class BotClinicResolver {
 
   /** null — клиника не определена (нет клиник или их несколько без явного id). */
   UUID clinicId() {
-    var cached = resolved;
+    UUID cached = resolved;
     if (cached != null) return cached;
-    var ids =
+    List<UUID> ids =
         configured.isEmpty()
             ? jdbc.queryForList("select id from clinic", UUID.class)
             : jdbc.queryForList(

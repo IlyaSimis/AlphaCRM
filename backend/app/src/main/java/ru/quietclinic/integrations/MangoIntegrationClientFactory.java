@@ -33,7 +33,7 @@ public class MangoIntegrationClientFactory {
         .filter(integration -> "ACTIVE".equals(integration.status()))
         .flatMap(
             integration -> {
-              var loaded = load(integration);
+              Loaded loaded = load(integration);
               if (loaded.secrets() == null
                   || loaded.secrets().apiKey().isBlank()
                   || loaded.secrets().apiSalt().isBlank()) {
@@ -48,24 +48,24 @@ public class MangoIntegrationClientFactory {
   }
 
   void requireValid(IntegrationRecord integration) {
-    var loaded = load(integration);
+    Loaded loaded = load(integration);
     if (loaded.secrets() == null) {
       throw conflict("INTEGRATION_SECRET_MISSING", "Integration secret is required");
     }
   }
 
   private MangoClient client(IntegrationRecord integration) {
-    var loaded = load(integration);
+    Loaded loaded = load(integration);
     return new ScopedMangoClient(
         json, loaded.settings(), loaded.secrets(), "ACTIVE".equals(integration.status()));
   }
 
   private Loaded load(IntegrationRecord integration) {
-    var settings = json.readValue(integration.settings(), MangoSettings.class);
+    MangoSettings settings = json.readValue(integration.settings(), MangoSettings.class);
     MangoSecrets secrets = null;
     if (integration.activeSecretVersion() != null) {
-      var version = integration.activeSecretVersion();
-      var sealed =
+      Integer version = integration.activeSecretVersion();
+      IntegrationSecretRecord sealed =
           repository
               .findSecret(integration.id(), version)
               .orElseThrow(

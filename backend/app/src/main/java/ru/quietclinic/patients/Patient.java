@@ -14,6 +14,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 @Entity
@@ -83,8 +85,8 @@ class Patient {
    * Возвращает имена изменённых полей — их, без значений, пишем в аудит.
    */
   List<String> update(PatientDetails details) {
-    var changed = new ArrayList<String>();
-    var name = details.fullName().trim();
+    List<String> changed = new ArrayList<>();
+    String name = details.fullName().trim();
     if (!name.equals(fullName)) {
       fullName = name;
       changed.add("fullName");
@@ -96,11 +98,11 @@ class Patient {
     if (setContact(PHONE, details.phone())) changed.add("phone");
     if (setContact(EMAIL, details.email())) changed.add("email");
     if (setContact(SECOND_PHONE, details.secondPhone())) changed.add("secondPhone");
-    if (!java.util.Objects.equals(details.assignedStaffId(), assignedStaffId)) {
+    if (!Objects.equals(details.assignedStaffId(), assignedStaffId)) {
       assignedStaffId = details.assignedStaffId();
       changed.add("assignedStaff");
     }
-    if (details.profile() != null && !java.util.Objects.equals(details.profile(), profile)) {
+    if (details.profile() != null && !Objects.equals(details.profile(), profile)) {
       profile = details.profile();
       changed.add("profile");
     }
@@ -109,8 +111,8 @@ class Patient {
 
   /** Один контакт этого типа: новое значение, удаление пустым или «без изменений». */
   private boolean setContact(String type, String newValue) {
-    var value = blankToNull(newValue);
-    var current = contacts.stream().filter(c -> type.equals(c.type)).findFirst();
+    String value = blankToNull(newValue);
+    Optional<Contact> current = contacts.stream().filter(c -> type.equals(c.type)).findFirst();
     if (value == null) {
       if (current.isEmpty()) return false;
       contacts.remove(current.get());
@@ -127,13 +129,13 @@ class Patient {
 
   /** Новая действующая версия согласия. Прежние версии не удаляются. */
   Consent grantConsent(String version, String basis) {
-    var consent = new Consent(this, version.trim(), basis.trim());
+    Consent consent = new Consent(this, version.trim(), basis.trim());
     consents.add(consent);
     return consent;
   }
 
   Consent revokeConsent(UUID consentId) {
-    var consent =
+    Consent consent =
         consents.stream()
             .filter(c -> c.id.equals(consentId))
             .findFirst()
@@ -149,14 +151,14 @@ class Patient {
 
   /** Возвращает имена изменённых полей: в аудит попадает факт изменения, без текста заметки. */
   List<String> updateRegistry(String newReferralSource, String newRegistryNote) {
-    var changed = new ArrayList<String>();
-    var source = blankToNull(newReferralSource);
-    if (!java.util.Objects.equals(source, referralSource)) {
+    List<String> changed = new ArrayList<>();
+    String source = blankToNull(newReferralSource);
+    if (!Objects.equals(source, referralSource)) {
       referralSource = source;
       changed.add("referralSource");
     }
-    var note = blankToNull(newRegistryNote);
-    if (!java.util.Objects.equals(note, registryNote)) {
+    String note = blankToNull(newRegistryNote);
+    if (!Objects.equals(note, registryNote)) {
       registryNote = note;
       changed.add("registryNote");
     }
@@ -169,15 +171,15 @@ class Patient {
   }
 
   boolean updateMessenger(MessengerChannel channel, String externalId, boolean remove) {
-    var type = channel.name();
-    var current = contacts.stream().filter(c -> type.equals(c.type)).findFirst();
+    String type = channel.name();
+    Optional<Contact> current = contacts.stream().filter(c -> type.equals(c.type)).findFirst();
     if (remove) {
       if (current.isEmpty()) return false;
       contacts.remove(current.get());
       if (type.equals(preferredMessenger)) preferredMessenger = null;
       return true;
     }
-    var value = blankToNull(externalId);
+    String value = blankToNull(externalId);
     if (value == null || current.map(c -> c.value.equals(value)).orElse(false)) return false;
     if (current.isPresent()) current.get().value = value;
     else contacts.add(new Contact(this, type, value));

@@ -1,6 +1,7 @@
 package ru.quietclinic.billing;
 
 import java.util.Set;
+import java.util.UUID;
 import org.springframework.stereotype.Component;
 import ru.quietclinic.platform.DomainEvent;
 import ru.quietclinic.platform.DomainEventHandler;
@@ -29,9 +30,9 @@ class ChargeOnCompletedVisit implements DomainEventHandler {
 
   @Override
   public void handle(DomainEvent event) {
-    var mode = event.text("priceMode");
-    var appointmentId = event.uuid("appointmentId");
-    var currency = event.text("currency") == null ? "RUB" : event.text("currency");
+    String mode = event.text("priceMode");
+    UUID appointmentId = event.uuid("appointmentId");
+    String currency = event.text("currency") == null ? "RUB" : event.text("currency");
     if ("OPEN".equals(mode)) {
       charges.awaitAmountForCompletedVisit(
           appointmentId,

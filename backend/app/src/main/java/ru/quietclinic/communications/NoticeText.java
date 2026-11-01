@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Properties;
 import org.springframework.beans.factory.annotation.Value;
@@ -25,7 +26,7 @@ class NoticeText {
 
   NoticeText(@Value("${clinic.time-zone:UTC}") String zone) {
     this.zone = ZoneId.of(zone);
-    try (var reader =
+    try (InputStreamReader reader =
         new InputStreamReader(
             new ClassPathResource(RESOURCE).getInputStream(), StandardCharsets.UTF_8)) {
       templates.load(reader);
@@ -36,18 +37,18 @@ class NoticeText {
 
   /** Надпись для пациента, не шаблон сообщения: например, кнопка под напоминанием. */
   String label(String key) {
-    var value = templates.getProperty(key);
+    String value = templates.getProperty(key);
     if (value == null) throw new IllegalStateException("Unknown notice label " + key);
     return value;
   }
 
   PatientMessage render(String template, String idempotencyKey, AppointmentNotice notice) {
-    var pattern = templates.getProperty(template);
+    String pattern = templates.getProperty(template);
     if (pattern == null) throw new IllegalStateException("Unknown notice template " + template);
-    var local = notice.startsAt().atZone(zone);
-    var date = DATE.format(local);
-    var time = TIME.format(local);
-    var text =
+    ZonedDateTime local = notice.startsAt().atZone(zone);
+    String date = DATE.format(local);
+    String time = TIME.format(local);
+    String text =
         pattern
             .replace("{clinic}", notice.clinicName())
             .replace("{service}", notice.serviceName())

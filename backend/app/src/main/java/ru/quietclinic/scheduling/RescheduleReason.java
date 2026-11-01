@@ -15,7 +15,7 @@ final class RescheduleReason {
   private RescheduleReason() {}
 
   static String code(Instant from, Instant to, boolean practitionerChanged) {
-    var code = FORMAT.format(from) + ">" + FORMAT.format(to);
+    String code = FORMAT.format(from) + ">" + FORMAT.format(to);
     return practitionerChanged ? code + ";practitioner" : code;
   }
 }

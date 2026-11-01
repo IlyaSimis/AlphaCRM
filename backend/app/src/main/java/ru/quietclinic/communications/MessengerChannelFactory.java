@@ -5,6 +5,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Component;
 import ru.quietclinic.integrations.MessengerIntegrationClientFactory;
 import ru.quietclinic.integrations.MessengerSecrets;
+import ru.quietclinic.integrations.MessengerSettings;
 
 /** Создаёт канал из DB-конфигурации клиники; вызывающий код решает, допустим ли legacy fallback. */
 @Component
@@ -25,12 +26,12 @@ class MessengerChannelFactory {
         .forClinic(clinicId, TelegramChannel.NAME)
         .map(
             integration -> {
-              var settings = integration.settings();
-              var secrets =
+              MessengerSettings settings = integration.settings();
+              MessengerSecrets secrets =
                   integration.secrets() == null
                       ? new MessengerSecrets("", "", "")
                       : integration.secrets();
-              var buttons =
+              String[] buttons =
                   settings.reminderButtons()
                       ? new String[] {
                         texts.label("telegram-button-confirm"),
@@ -53,8 +54,8 @@ class MessengerChannelFactory {
         .forClinic(clinicId, MaxChannel.NAME)
         .map(
             integration -> {
-              var settings = integration.settings();
-              var token = integration.secrets() == null ? "" : integration.secrets().botToken();
+              MessengerSettings settings = integration.settings();
+              String token = integration.secrets() == null ? "" : integration.secrets().botToken();
               return new MaxChannel(
                   http, token, settings.apiUrl(), settings.reminderButtons(), integration.active());
             });

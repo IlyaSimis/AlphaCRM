@@ -3,8 +3,11 @@ package ru.quietclinic.patients;
 import static ru.quietclinic.platform.PlatformConfig.badRequest;
 import static ru.quietclinic.platform.PlatformConfig.conflict;
 
+import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
@@ -21,14 +24,14 @@ class PostgresPatientReader {
 
   List<ImportedPatient> read(ImportRequest request) {
     validate(request);
-    var limit = request.limit() == null ? 1000 : request.limit();
-    var properties = new Properties();
+    int limit = request.limit() == null ? 1000 : request.limit();
+    Properties properties = new Properties();
     properties.setProperty("user", request.username().trim());
     properties.setProperty("password", request.password());
     properties.setProperty("connectTimeout", "5");
     properties.setProperty("socketTimeout", "20");
     properties.setProperty("ApplicationName", "AlphaCRM patient import");
-    var sql =
+    String sql =
         "select "
             + identifier(request.columns().fullName())
             + " as full_name, "
@@ -41,14 +44,14 @@ class PostgresPatientReader {
             + optionalColumn(request.columns().email(), "email")
             + " from "
             + request.table();
-    try (var connection = DriverManager.getConnection(request.url().trim(), properties)) {
+    try (Connection connection = DriverManager.getConnection(request.url().trim(), properties)) {
       connection.setReadOnly(true);
       connection.setAutoCommit(false);
-      try (var statement = connection.createStatement()) {
+      try (Statement statement = connection.createStatement()) {
         statement.setQueryTimeout(20);
         statement.setMaxRows(limit);
-        try (var rows = statement.executeQuery(sql)) {
-          var result = new ArrayList<ImportedPatient>();
+        try (ResultSet rows = statement.executeQuery(sql)) {
+          List<ImportedPatient> result = new ArrayList<>();
           while (rows.next()) {
             result.add(
                 new ImportedPatient(

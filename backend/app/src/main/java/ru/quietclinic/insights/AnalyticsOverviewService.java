@@ -10,6 +10,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjusters;
@@ -54,12 +55,12 @@ class AnalyticsOverviewService {
     requirePermission(Permission.ANALYTICS_READ);
     validateRange(from, to);
 
-    var practitioners = practitioners(practitionerId);
-    var shifts = shifts(practitionerId);
-    var appointments = appointments(from, to, practitionerId);
-    var finance = finance(from, to, practitionerId);
-    var capacity = capacity(from, to, practitioners, shifts, appointments);
-    var weeks = weekly(from, to, appointments, finance, capacity.weeks());
+    List<PractitionerRow> practitioners = practitioners(practitionerId);
+    List<ShiftRow> shifts = shifts(practitionerId);
+    List<AppointmentRow> appointments = appointments(from, to, practitionerId);
+    List<FinanceRow> finance = finance(from, to, practitionerId);
+    Capacity capacity = capacity(from, to, practitioners, shifts, appointments);
+    List<Week> weeks = weekly(from, to, appointments, finance, capacity.weeks());
 
     long attended = appointments.stream().filter(a -> attended(a.status())).count();
     long noShow = appointments.stream().filter(a -> "NO_SHOW".equals(a.status())).count();
@@ -72,13 +73,13 @@ class AnalyticsOverviewService {
             .filter(f -> !f.refund() && "OPEN".equals(f.priceMode()))
             .mapToLong(FinanceRow::amount)
             .sum();
-    var debt = debt(practitionerId);
-    var patients = patientMetrics(from, to, practitionerId);
-    var retention = retention(from, to, practitionerId);
-    var waitlist = waitlist(from, to, practitionerId);
+    Map<String, Object> debt = debt(practitionerId);
+    Map<String, Object> patients = patientMetrics(from, to, practitionerId);
+    Map<String, Object> retention = retention(from, to, practitionerId);
+    Map<String, Object> waitlist = waitlist(from, to, practitionerId);
     long occupied = capacity.practitioners().stream().mapToLong(Load::occupiedMinutes).sum();
     long available = capacity.practitioners().stream().mapToLong(Load::availableMinutes).sum();
-    var totals =
+    Totals totals =
         new Totals(
             appointments.size(),
             attended,
@@ -116,7 +117,7 @@ class AnalyticsOverviewService {
 
   /** Для виджета загрузки на home: внутренний расчёт без повторной проверки права аналитики. */
   Occupancy occupancy(LocalDate from, LocalDate to, UUID practitionerId) {
-    var capacity =
+    Capacity capacity =
         capacity(
             from,
             to,
@@ -140,7 +141,7 @@ class AnalyticsOverviewService {
   }
 
   private List<PractitionerRow> practitioners(UUID practitionerId) {
-    var sql =
+    String sql =
         "select id, full_name, specialty, coalesce(room, '') as room from practitioner"
             + " where clinic_id = ?"
             + (practitionerId == null ? "" : " and id = ?")
@@ -157,7 +158,7 @@ class AnalyticsOverviewService {
   }
 
   private List<ShiftRow> shifts(UUID practitionerId) {
-    var sql =
+    String sql =
         "select s.practitioner_id, s.day_of_week, s.starts_at, s.ends_at"
             + " from practitioner_schedule s join practitioner p on p.id = s.practitioner_id"
             + " where p.clinic_id = ?"
@@ -172,7 +173,7 @@ class AnalyticsOverviewService {
   }
 
   private List<AppointmentRow> appointments(LocalDate from, LocalDate to, UUID practitionerId) {
-    var sql =
+    String sql =
         "select a.patient_id, a.practitioner_id, a.starts_at, a.ends_at, a.status"
             + " from appointment a join practitioner p on p.id = a.practitioner_id"
             + " where p.clinic_id = ? and a.starts_at >= ? and a.starts_at < ?"
@@ -194,10 +195,10 @@ class AnalyticsOverviewService {
   }
 
   private List<FinanceRow> finance(LocalDate from, LocalDate to, UUID practitionerId) {
-    var start = Timestamp.from(time.startOf(from));
-    var end = Timestamp.from(time.startOf(to.plusDays(1)));
-    var filter = practitionerId == null ? "" : " and a.practitioner_id = ?";
-    var result = new ArrayList<FinanceRow>();
+    Timestamp start = Timestamp.from(time.startOf(from));
+    Timestamp end = Timestamp.from(time.startOf(to.plusDays(1)));
+    String filter = practitionerId == null ? "" : " and a.practitioner_id = ?";
+    List<FinanceRow> result = new ArrayList<>();
     result.addAll(
         jdbc.query(
             "select coalesce(r.completed_at, r.created_at) as at, c.amount_minor as amount, c.price_mode as mode"
@@ -232,7 +233,7 @@ class AnalyticsOverviewService {
   }
 
   private Map<String, Object> debt(UUID practitionerId) {
-    var filter = practitionerId == null ? "" : " and a.practitioner_id = ?";
+    String filter = practitionerId == null ? "" : " and a.practitioner_id = ?";
     return jdbc.queryForMap(
         "select coalesce(sum(case when c.status = 'PENDING' then c.amount_minor else 0 end), 0) as debt,"
             + " count(*) as unpaid from charge c join appointment a on a.id = c.appointment_id"
@@ -243,9 +244,9 @@ class AnalyticsOverviewService {
   }
 
   private Map<String, Object> patientMetrics(LocalDate from, LocalDate to, UUID practitionerId) {
-    var start = Timestamp.from(time.startOf(from));
-    var end = Timestamp.from(time.startOf(to.plusDays(1)));
-    var filter = practitionerId == null ? "" : " and a.practitioner_id = ?";
+    Timestamp start = Timestamp.from(time.startOf(from));
+    Timestamp end = Timestamp.from(time.startOf(to.plusDays(1)));
+    String filter = practitionerId == null ? "" : " and a.practitioner_id = ?";
     long total =
         count(
             "select count(distinct a.patient_id) from appointment a join practitioner p on p.id = a.practitioner_id"
@@ -264,9 +265,9 @@ class AnalyticsOverviewService {
   }
 
   private Map<String, Object> retention(LocalDate from, LocalDate to, UUID practitionerId) {
-    var start = Timestamp.from(time.startOf(from));
-    var end = Timestamp.from(time.startOf(to.plusDays(1)));
-    var filter = practitionerId == null ? "" : " and a.practitioner_id = ?";
+    Timestamp start = Timestamp.from(time.startOf(from));
+    Timestamp end = Timestamp.from(time.startOf(to.plusDays(1)));
+    String filter = practitionerId == null ? "" : " and a.practitioner_id = ?";
     long completed =
         count(
             "select count(distinct a.patient_id) from appointment a join practitioner p on p.id = a.practitioner_id"
@@ -285,14 +286,14 @@ class AnalyticsOverviewService {
   }
 
   private Map<String, Object> waitlist(LocalDate from, LocalDate to, UUID practitionerId) {
-    var filter = practitionerId == null ? "" : " and w.practitioner_id = ?";
+    String filter = practitionerId == null ? "" : " and w.practitioner_id = ?";
     long active =
         count(
             "select count(*) from waitlist_entry w join practitioner p on p.id = w.practitioner_id"
                 + " where p.clinic_id = ? and w.status = 'ACTIVE'"
                 + filter,
             args(practitionerId, clinicId()));
-    var period =
+    Map<String, Object> period =
         jdbc.queryForMap(
             "select count(*) as total, coalesce(sum(case when w.status = 'BOOKED' then 1 else 0 end), 0) as booked"
                 + " from waitlist_entry w join practitioner p on p.id = w.practitioner_id"
@@ -313,11 +314,11 @@ class AnalyticsOverviewService {
   }
 
   private Funnel funnel(LocalDate from, LocalDate to, UUID practitionerId) {
-    var own =
+    String own =
         practitionerId == null
             ? ""
             : " and exists (select 1 from appointment own where own.patient_id = p.id and own.practitioner_id = ?)";
-    var row =
+    Map<String, Object> row =
         jdbc.queryForMap(
             "select count(*) as contacts,"
                 + " coalesce(sum(case when exists (select 1 from appointment a where a.patient_id = p.id) then 1 else 0 end), 0) as booked,"
@@ -339,7 +340,7 @@ class AnalyticsOverviewService {
   }
 
   private Queues queues(UUID practitionerId, long unpaid) {
-    var filter = practitionerId == null ? "" : " and e.practitioner_id = ?";
+    String filter = practitionerId == null ? "" : " and e.practitioner_id = ?";
     long unclosed =
         count(
             "select count(*) from encounter e join practitioner p on p.id = e.practitioner_id"
@@ -375,17 +376,17 @@ class AnalyticsOverviewService {
       List<PractitionerRow> practitioners,
       List<ShiftRow> shifts,
       List<AppointmentRow> appointments) {
-    var doctorResources =
+    List<Resource> doctorResources =
         practitioners.stream()
             .map(p -> new Resource(p.id().toString(), p.fullName(), p.specialty(), Set.of(p.id())))
             .toList();
-    var byRoom =
+    Map<String, List<PractitionerRow>> byRoom =
         practitioners.stream()
             .filter(p -> !p.room().isBlank())
             .collect(
                 Collectors.groupingBy(
                     PractitionerRow::room, LinkedHashMap::new, Collectors.toList()));
-    var roomResources =
+    List<Resource> roomResources =
         byRoom.entrySet().stream()
             .map(
                 e ->
@@ -395,12 +396,12 @@ class AnalyticsOverviewService {
                         null,
                         e.getValue().stream().map(PractitionerRow::id).collect(Collectors.toSet())))
             .toList();
-    var weekCapacity = new LinkedHashMap<LocalDate, MutableWeekCapacity>();
-    for (var monday = monday(from); !monday.isAfter(to); monday = monday.plusWeeks(1)) {
+    Map<LocalDate, MutableWeekCapacity> weekCapacity = new LinkedHashMap<>();
+    for (LocalDate monday = monday(from); !monday.isAfter(to); monday = monday.plusWeeks(1)) {
       weekCapacity.put(monday, new MutableWeekCapacity());
     }
-    var doctorLoads = loads(from, to, doctorResources, shifts, appointments, weekCapacity);
-    var roomLoads = loads(from, to, roomResources, shifts, appointments, null);
+    List<Load> doctorLoads = loads(from, to, doctorResources, shifts, appointments, weekCapacity);
+    List<Load> roomLoads = loads(from, to, roomResources, shifts, appointments, null);
     return new Capacity(doctorLoads, roomLoads, weekCapacity);
   }
 
@@ -411,13 +412,13 @@ class AnalyticsOverviewService {
       List<ShiftRow> shifts,
       List<AppointmentRow> appointments,
       Map<LocalDate, MutableWeekCapacity> weeks) {
-    var result = new ArrayList<Load>();
-    for (var resource : resources) {
+    List<Load> result = new ArrayList<>();
+    for (Resource resource : resources) {
       long available = 0;
       long occupied = 0;
-      for (var date = from; !date.isAfter(to); date = date.plusDays(1)) {
-        var day = date;
-        var availableIntervals =
+      for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
+        LocalDate day = date;
+        List<Interval> availableIntervals =
             shifts.stream()
                 .filter(s -> resource.practitioners().contains(s.practitionerId()))
                 .filter(s -> s.dayOfWeek() == day.getDayOfWeek().getValue())
@@ -426,7 +427,7 @@ class AnalyticsOverviewService {
                         new Interval(
                             s.startsAt().toSecondOfDay() / 60, s.endsAt().toSecondOfDay() / 60))
                 .toList();
-        var occupiedIntervals =
+        List<Interval> occupiedIntervals =
             appointments.stream()
                 .filter(a -> resource.practitioners().contains(a.practitionerId()))
                 .filter(a -> !"CANCELLED".equals(a.status()))
@@ -442,7 +443,7 @@ class AnalyticsOverviewService {
         available += dayAvailable;
         occupied += dayOccupied;
         if (weeks != null) {
-          var week = weeks.get(monday(day));
+          MutableWeekCapacity week = weeks.get(monday(day));
           if (week != null) {
             week.available += dayAvailable;
             week.occupied += dayOccupied;
@@ -461,27 +462,28 @@ class AnalyticsOverviewService {
       List<AppointmentRow> appointments,
       List<FinanceRow> finance,
       Map<LocalDate, MutableWeekCapacity> capacity) {
-    var weeks = new LinkedHashMap<LocalDate, MutableWeek>();
-    for (var monday = monday(from); !monday.isAfter(to); monday = monday.plusWeeks(1)) {
+    Map<LocalDate, MutableWeek> weeks = new LinkedHashMap<>();
+    for (LocalDate monday = monday(from); !monday.isAfter(to); monday = monday.plusWeeks(1)) {
       weeks.put(monday, new MutableWeek());
     }
-    for (var appointment : appointments) {
-      var week = weeks.get(monday(LocalDate.ofInstant(appointment.startsAt(), time.zone())));
+    for (AppointmentRow appointment : appointments) {
+      MutableWeek week =
+          weeks.get(monday(LocalDate.ofInstant(appointment.startsAt(), time.zone())));
       if (week == null) continue;
       week.appointments++;
       if (attended(appointment.status())) week.attended++;
       if ("NO_SHOW".equals(appointment.status())) week.noShow++;
       if ("CANCELLED".equals(appointment.status())) week.cancelled++;
     }
-    for (var row : finance) {
-      var week = weeks.get(monday(LocalDate.ofInstant(row.at(), time.zone())));
+    for (FinanceRow row : finance) {
+      MutableWeek week = weeks.get(monday(LocalDate.ofInstant(row.at(), time.zone())));
       if (week != null) week.revenue += row.refund() ? -row.amount() : row.amount();
     }
     return weeks.entrySet().stream()
         .map(
             e -> {
-              var week = e.getValue();
-              var load = capacity.get(e.getKey());
+              MutableWeek week = e.getValue();
+              MutableWeekCapacity load = capacity.get(e.getKey());
               return new Week(
                   e.getKey(),
                   week.appointments,
@@ -497,12 +499,13 @@ class AnalyticsOverviewService {
 
   private List<NextSlot> nextSlots(
       List<PractitionerRow> practitioners, List<ShiftRow> shifts, UUID practitionerId) {
-    var now = time.now();
-    var today = LocalDate.ofInstant(now, time.zone());
-    var future = appointments(today, today.plusDays(NEXT_SLOT_DAYS), practitionerId);
-    var slots = new HashMap<String, List<Instant>>();
-    for (var practitioner : practitioners) {
-      var slot = nextSlot(practitioner.id(), now, shifts, future);
+    Instant now = time.now();
+    LocalDate today = LocalDate.ofInstant(now, time.zone());
+    List<AppointmentRow> future =
+        appointments(today, today.plusDays(NEXT_SLOT_DAYS), practitionerId);
+    Map<String, List<Instant>> slots = new HashMap<>();
+    for (PractitionerRow practitioner : practitioners) {
+      ZonedDateTime slot = nextSlot(practitioner.id(), now, shifts, future);
       if (slot != null) {
         slots
             .computeIfAbsent(
@@ -514,8 +517,8 @@ class AnalyticsOverviewService {
     return slots.entrySet().stream()
         .map(
             e -> {
-              var nearest = e.getValue().stream().min(Comparator.naturalOrder()).orElseThrow();
-              var average =
+              Instant nearest = e.getValue().stream().min(Comparator.naturalOrder()).orElseThrow();
+              double average =
                   e.getValue().stream()
                           .mapToLong(slot -> Duration.between(now, slot).toMinutes())
                           .average()
@@ -530,27 +533,28 @@ class AnalyticsOverviewService {
 
   private ZonedDateTime nextSlot(
       UUID practitionerId, Instant now, List<ShiftRow> shifts, List<AppointmentRow> appointments) {
-    var zone = time.zone();
-    var current = now.atZone(zone);
-    var ownShifts = shifts.stream().filter(s -> s.practitionerId().equals(practitionerId)).toList();
-    var ownAppointments =
+    ZoneId zone = time.zone();
+    ZonedDateTime current = now.atZone(zone);
+    List<ShiftRow> ownShifts =
+        shifts.stream().filter(s -> s.practitionerId().equals(practitionerId)).toList();
+    List<AppointmentRow> ownAppointments =
         appointments.stream()
             .filter(
                 a -> a.practitionerId().equals(practitionerId) && !"CANCELLED".equals(a.status()))
             .toList();
-    for (var date = current.toLocalDate();
+    for (LocalDate date = current.toLocalDate();
         !date.isAfter(current.toLocalDate().plusDays(NEXT_SLOT_DAYS));
         date = date.plusDays(1)) {
-      for (var shift : ownShifts) {
+      for (ShiftRow shift : ownShifts) {
         if (shift.dayOfWeek() != date.getDayOfWeek().getValue()) continue;
-        var candidate = date.atTime(shift.startsAt()).atZone(zone);
+        ZonedDateTime candidate = date.atTime(shift.startsAt()).atZone(zone);
         if (date.equals(current.toLocalDate()) && candidate.isBefore(current))
           candidate = quarterHourAfter(current);
-        var end = date.atTime(shift.endsAt()).atZone(zone);
+        ZonedDateTime end = date.atTime(shift.endsAt()).atZone(zone);
         while (!candidate.plusMinutes(NEXT_SLOT_MINUTES).isAfter(end)) {
-          var start = candidate.toInstant();
-          var finish = candidate.plusMinutes(NEXT_SLOT_MINUTES).toInstant();
-          var overlaps =
+          Instant start = candidate.toInstant();
+          Instant finish = candidate.plusMinutes(NEXT_SLOT_MINUTES).toInstant();
+          boolean overlaps =
               ownAppointments.stream()
                   .anyMatch(a -> start.isBefore(a.endsAt()) && finish.isAfter(a.startsAt()));
           if (!overlaps && !start.isBefore(now)) return candidate;
@@ -562,8 +566,8 @@ class AnalyticsOverviewService {
   }
 
   private static ZonedDateTime quarterHourAfter(ZonedDateTime value) {
-    var truncated = value.withSecond(0).withNano(0);
-    var add = (15 - truncated.getMinute() % 15) % 15;
+    ZonedDateTime truncated = value.withSecond(0).withNano(0);
+    int add = (15 - truncated.getMinute() % 15) % 15;
     if (add == 0 && !truncated.equals(value)) add = 15;
     return truncated.plusMinutes(add);
   }
@@ -578,7 +582,7 @@ class AnalyticsOverviewService {
 
   /** Длительность занятого/доступного времени без двойного счёта пересекающихся интервалов. */
   static long unionMinutes(List<Interval> intervals) {
-    var sorted =
+    List<Interval> sorted =
         intervals.stream()
             .filter(i -> i.end() > i.start())
             .sorted(Comparator.comparingLong(Interval::start))
@@ -586,7 +590,7 @@ class AnalyticsOverviewService {
     long total = 0;
     long start = -1;
     long end = -1;
-    for (var interval : sorted) {
+    for (Interval interval : sorted) {
       if (end < 0 || interval.start() > end) {
         if (end >= 0) total += end - start;
         start = interval.start();
@@ -599,7 +603,7 @@ class AnalyticsOverviewService {
   }
 
   private long count(String sql, Object... args) {
-    var value = jdbc.queryForObject(sql, Long.class, args);
+    Long value = jdbc.queryForObject(sql, Long.class, args);
     return value == null ? 0 : value;
   }
 
@@ -609,7 +613,7 @@ class AnalyticsOverviewService {
 
   private static Object[] args(UUID practitionerId, Object... head) {
     if (practitionerId == null) return head;
-    var result = new Object[head.length + 1];
+    Object[] result = new Object[head.length + 1];
     System.arraycopy(head, 0, result, 0, head.length);
     result[head.length] = practitionerId;
     return result;

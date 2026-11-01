@@ -1,7 +1,9 @@
 package ru.quietclinic.patients;
 
+import java.util.Objects;
 import org.springframework.stereotype.Service;
 import ru.quietclinic.platform.EncryptionService;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
 /** Шифрование административной карточки и контактов с привязкой к клинике, пациенту и полю. */
@@ -19,7 +21,7 @@ class PatientPrivacyService {
     if (patient.profile == null && patient.profileEncrypted != null) {
       patient.profile = readProfile(patient);
     }
-    for (var contact : patient.contacts) decrypt(contact);
+    for (Contact contact : patient.contacts) decrypt(contact);
   }
 
   void decrypt(Contact contact) {
@@ -37,13 +39,13 @@ class PatientPrivacyService {
   }
 
   void encryptLegacy(Patient patient) {
-    var legacyProfile =
+    boolean legacyProfile =
         patient.profileEncrypted != null
             && (patient.profileEncrypted.stripLeading().startsWith("{")
                 || patient.profileEncrypted.strip().equals("null"));
-    var legacyContact =
+    boolean legacyContact =
         patient.contacts.stream()
-            .anyMatch(contact -> java.util.Objects.equals(contact.value, contact.encryptedValue));
+            .anyMatch(contact -> Objects.equals(contact.value, contact.encryptedValue));
     if (legacyProfile || legacyContact) encrypt(patient);
   }
 
@@ -54,11 +56,11 @@ class PatientPrivacyService {
       try {
         patient.profileEncrypted =
             encryption.encrypt(json.writeValueAsString(patient.profile), profileAad(patient));
-      } catch (tools.jackson.core.JacksonException ex) {
+      } catch (JacksonException ex) {
         throw new IllegalStateException("Cannot serialize patient profile", ex);
       }
     }
-    for (var contact : patient.contacts) {
+    for (Contact contact : patient.contacts) {
       if (contact.value != null) {
         contact.encryptedValue = encryption.encrypt(contact.value, contactAad(contact));
       }
@@ -74,7 +76,7 @@ class PatientPrivacyService {
       if (patient.profileEncrypted.strip().equals("null")) return null;
       return json.readValue(
           encryption.decrypt(patient.profileEncrypted, profileAad(patient)), PatientProfile.class);
-    } catch (tools.jackson.core.JacksonException ex) {
+    } catch (JacksonException ex) {
       throw new IllegalStateException("Cannot read patient profile", ex);
     }
   }

@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.util.List;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -28,14 +29,14 @@ final class TerminalSignatureFilter extends OncePerRequestFilter {
       response.sendError(401);
       return;
     }
-    var body = request.getInputStream().readNBytes(MAX_BODY);
-    var wrapped = new CachedBodyRequestWrapper(request, body);
+    byte[] body = request.getInputStream().readNBytes(MAX_BODY);
+    CachedBodyRequestWrapper wrapped = new CachedBodyRequestWrapper(request, body);
     if (body.length == MAX_BODY
         || !TerminalSignature.valid(secret, body, request.getHeader("X-Terminal-Signature"))) {
       response.sendError(401);
       return;
     }
-    var context = SecurityContextHolder.createEmptyContext();
+    SecurityContext context = SecurityContextHolder.createEmptyContext();
     context.setAuthentication(
         UsernamePasswordAuthenticationToken.authenticated(
             "terminal-webhook", null, List.of(new SimpleGrantedAuthority("ROLE_TERMINAL"))));

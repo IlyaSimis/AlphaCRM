@@ -49,7 +49,7 @@ class PostgresAppointmentIntegrationTest {
 
   @Test
   void rejectsOverlappingAppointment() throws Exception {
-    var first =
+    String first =
         """
         {
           "patientId":"00000000-0000-0000-0000-000000000101",
@@ -59,7 +59,7 @@ class PostgresAppointmentIntegrationTest {
           "serviceName":"Первичный приём"
         }
         """;
-    var overlap = first.replace("09:00:00Z", "09:20:00Z").replace("09:50:00Z", "10:00:00Z");
+    String overlap = first.replace("09:00:00Z", "09:20:00Z").replace("09:50:00Z", "10:00:00Z");
 
     mvc.perform(
             post("/api/v1/appointments")

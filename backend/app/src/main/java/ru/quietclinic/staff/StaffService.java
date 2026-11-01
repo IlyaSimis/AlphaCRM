@@ -8,14 +8,18 @@ import static ru.quietclinic.platform.PlatformConfig.forbidden;
 import static ru.quietclinic.platform.PlatformConfig.notFound;
 import static ru.quietclinic.platform.PlatformConfig.requirePermission;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.quietclinic.audit.AuditService;
+import ru.quietclinic.platform.DomainEvents;
 import ru.quietclinic.platform.Permission;
 import ru.quietclinic.platform.RolePermissions;
 
@@ -33,7 +37,7 @@ class StaffService {
   private final AuthService auth;
   private final JdbcTemplate jdbc;
   private final AuditService audit;
-  private final ru.quietclinic.platform.DomainEvents events;
+  private final DomainEvents events;
   private final PractitionerCards practitionerCards;
 
   StaffService(
@@ -43,7 +47,7 @@ class StaffService {
       JdbcTemplate jdbc,
       AuditService audit,
       PractitionerCards practitionerCards,
-      ru.quietclinic.platform.DomainEvents events) {
+      DomainEvents events) {
     this.staff = staff;
     this.encoder = encoder;
     this.auth = auth;
@@ -62,19 +66,19 @@ class StaffService {
   @Transactional
   StaffView create(CreateStaffRequest request) {
     requirePermission(Permission.STAFF_MANAGE);
-    var role = request.role().trim().toUpperCase(Locale.ROOT);
+    String role = request.role().trim().toUpperCase(Locale.ROOT);
     if (!StaffRoles.ALL.contains(role)) {
       throw conflict("INVALID_ROLE", "Unknown staff role");
     }
     requireMayAssign(role);
-    var username = request.username().trim().toLowerCase(Locale.ROOT);
+    String username = request.username().trim().toLowerCase(Locale.ROOT);
     if (staff.existsByUsername(username)) {
       throw conflict("USERNAME_TAKEN", "Username is already taken");
     }
     UUID id = UUID.randomUUID();
     UUID practitionerId = null;
     if (StaffRoles.DOCTOR.equals(role)) {
-      var card = request.newPractitioner();
+      NewPractitionerRequest card = request.newPractitioner();
       if (card != null && request.practitionerId() != null) {
         throw conflict(
             "PRACTITIONER_AMBIGUOUS", "Choose an existing practitioner or a new card, not both");
@@ -100,7 +104,7 @@ class StaffService {
     } else if (request.practitionerId() != null || request.newPractitioner() != null) {
       throw conflict("PRACTITIONER_NOT_ALLOWED", "Only a doctor account can have a practitioner");
     }
-    var user =
+    StaffUser user =
         staff.save(
             new StaffUser(
                 id,
@@ -118,7 +122,7 @@ class StaffService {
   @Transactional
   StaffView setActive(UUID id, boolean active) {
     requirePermission(Permission.STAFF_MANAGE);
-    var user = find(id);
+    StaffUser user = find(id);
     requireMayManage(user);
     if (!active && user.id.equals(auth.current().id)) {
       throw conflict("CANNOT_DEACTIVATE_SELF", "You cannot deactivate your own account");
@@ -139,10 +143,10 @@ class StaffService {
   @Transactional
   void resetPassword(UUID id, PasswordResetRequest request) {
     requirePermission(Permission.STAFF_PASSWORD_RESET, Permission.STAFF_PASSWORD_RESET_PLATFORM);
-    var user = find(id);
-    var granted = currentPermissions();
+    StaffUser user = find(id);
+    Set<Permission> granted = currentPermissions();
     // Техподдержка сбрасывает пароль любому, кроме владельца; остальные — тем, чью роль назначают.
-    var allowed =
+    boolean allowed =
         (granted.contains(Permission.STAFF_PASSWORD_RESET)
                 && user.roleSet().stream()
                     .allMatch(role -> RolePermissions.mayAssign(granted, role)))
@@ -167,13 +171,13 @@ class StaffService {
   @Transactional
   StaffView setRoles(UUID id, StaffRolesRequest request) {
     requirePermission(Permission.STAFF_MANAGE);
-    var user = find(id);
+    StaffUser user = find(id);
     if (user.id.equals(auth.current().id)) {
       throw conflict("CANNOT_CHANGE_OWN_ROLES", "You cannot change your own roles");
     }
-    var next = new java.util.HashSet<String>();
-    for (var raw : request.roles()) {
-      var role = raw.trim().toUpperCase(Locale.ROOT);
+    Set<String> next = new HashSet<>();
+    for (String raw : request.roles()) {
+      String role = raw.trim().toUpperCase(Locale.ROOT);
       if (!StaffRoles.ALL.contains(role)) throw conflict("INVALID_ROLE", "Unknown staff role");
       next.add(role);
     }
@@ -181,10 +185,10 @@ class StaffService {
       throw conflict(
           "DOCTOR_ROLE_FIXED", "The doctor role follows the practitioner card and cannot change");
     }
-    var touched = new java.util.HashSet<>(user.roleSet());
+    Set<String> touched = new HashSet<>(user.roleSet());
     touched.addAll(next);
     touched.forEach(this::requireMayAssign);
-    var before = user.orderedRoles();
+    List<String> before = user.orderedRoles();
     user.assignRoles(next);
     staff.saveAndFlush(user);
     audit.record(
@@ -195,8 +199,7 @@ class StaffService {
         "ALLOWED",
         "roles:" + String.join(",", user.orderedRoles()));
     events.publish(
-        "RolesChanged",
-        java.util.Map.of("staffId", user.id, "before", before, "after", user.orderedRoles()));
+        "RolesChanged", Map.of("staffId", user.id, "before", before, "after", user.orderedRoles()));
     return auth.view(user);
   }
 
@@ -213,7 +216,7 @@ class StaffService {
   }
 
   private boolean practitionerExists(UUID practitionerId) {
-    var count =
+    Long count =
         jdbc.queryForObject(
             "select count(*) from practitioner where id = ? and clinic_id = ?",
             Long.class,

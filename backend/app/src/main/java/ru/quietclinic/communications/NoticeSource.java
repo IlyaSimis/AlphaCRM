@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
+import ru.quietclinic.patients.PatientContactGateway;
 
 /**
  * Читает запись для сообщения. Модуль связан с расписанием и пациентами только таблицами — без
@@ -17,9 +18,9 @@ import org.springframework.stereotype.Component;
 @Component
 class NoticeSource {
   private final JdbcTemplate jdbc;
-  private final ru.quietclinic.patients.PatientContactGateway patientContacts;
+  private final PatientContactGateway patientContacts;
 
-  NoticeSource(JdbcTemplate jdbc, ru.quietclinic.patients.PatientContactGateway patientContacts) {
+  NoticeSource(JdbcTemplate jdbc, PatientContactGateway patientContacts) {
     this.jdbc = jdbc;
     this.patientContacts = patientContacts;
   }
@@ -34,7 +35,7 @@ class NoticeSource {
                 + " join clinic c on c.id = p.clinic_id join patient pt on pt.id = a.patient_id"
                 + " where a.id = ?",
             (row, index) -> {
-              var patientId = row.getObject("patient_id", UUID.class);
+              UUID patientId = row.getObject("patient_id", UUID.class);
               return new AppointmentNotice(
                   row.getObject("id", UUID.class),
                   patientId,
@@ -68,7 +69,7 @@ class NoticeSource {
   }
 
   private boolean hasActiveConsent(UUID patientId) {
-    var count =
+    Long count =
         jdbc.queryForObject(
             "select count(*) from patient_consent where patient_id = ? and revoked_at is null",
             Long.class,
