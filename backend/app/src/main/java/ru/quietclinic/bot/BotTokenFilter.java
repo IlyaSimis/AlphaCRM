@@ -26,9 +26,14 @@ final class BotTokenFilter extends OncePerRequestFilter {
   private final BotClinicResolver clinics;
 
   BotTokenFilter(String token, BotClinicResolver clinics) {
-    this.tokens = token == null ? List.of() : java.util.Arrays.stream(token.split(","))
-        .map(String::trim).filter(value -> !value.isEmpty())
-        .map(value -> value.getBytes(StandardCharsets.UTF_8)).toList();
+    this.tokens =
+        token == null
+            ? List.of()
+            : java.util.Arrays.stream(token.split(","))
+                .map(String::trim)
+                .filter(value -> !value.isEmpty())
+                .map(value -> value.getBytes(StandardCharsets.UTF_8))
+                .toList();
     this.clinics = clinics;
   }
 
@@ -42,7 +47,8 @@ final class BotTokenFilter extends OncePerRequestFilter {
       return;
     }
     var presented = request.getHeader(HEADER);
-    var presentedBytes = presented == null ? null : presented.trim().getBytes(StandardCharsets.UTF_8);
+    var presentedBytes =
+        presented == null ? null : presented.trim().getBytes(StandardCharsets.UTF_8);
     if (presentedBytes == null
         || tokens.stream().noneMatch(token -> MessageDigest.isEqual(token, presentedBytes))) {
       error(response, 401, "BOT_TOKEN_INVALID", "Bot token is missing or wrong");

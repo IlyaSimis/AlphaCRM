@@ -84,8 +84,11 @@ class WorkspaceControllerTest {
                     .with(staff.role("MANAGER"))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(
-                        "{\"title\":\"" + title + "\",\"type\":\"Задача\",\"assigneeId\":\""
-                            + assigneeId + "\"}"))
+                        "{\"title\":\""
+                            + title
+                            + "\",\"type\":\"Задача\",\"assigneeId\":\""
+                            + assigneeId
+                            + "\"}"))
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.creatorId").value(creatorId))
             .andExpect(jsonPath("$.assigneeId").value(assigneeId))
@@ -109,8 +112,12 @@ class WorkspaceControllerTest {
                 .with(staff.role("DOCTOR"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
-                    "{\"title\":\"" + title + "\",\"type\":\"Задача\",\"completed\":true,"
-                        + "\"assigneeId\":\"" + assigneeId + "\"}"))
+                    "{\"title\":\""
+                        + title
+                        + "\",\"type\":\"Задача\",\"completed\":true,"
+                        + "\"assigneeId\":\""
+                        + assigneeId
+                        + "\"}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.completed").value(true));
     mvc.perform(

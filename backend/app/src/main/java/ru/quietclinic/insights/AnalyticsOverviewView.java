@@ -56,7 +56,8 @@ record AnalyticsOverviewView(
       String id, String label, String specialty, long occupiedMinutes, long availableMinutes) {}
 
   /** Ближайший свободный получасовой слот; среднее — по врачам этой специальности. */
-  record NextSlot(String specialty, long practitioners, double averageHours, Instant nextAvailableAt) {}
+  record NextSlot(
+      String specialty, long practitioners, double averageHours, Instant nextAvailableAt) {}
 
   /** Когорта пациентов, созданных в периоде: карточка → запись → визит → оплата. */
   record Funnel(long contacts, long booked, long visited, long paid) {}

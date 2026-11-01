@@ -37,6 +37,7 @@ class TelephonyControllerTest {
 
   @BeforeEach
   void setUp() {
+    jdbc.update("delete from integration");
     staff = new StaffSessions(mvc);
     when(mango.configured()).thenReturn(true);
     when(mango.defaultExtension()).thenReturn("101");

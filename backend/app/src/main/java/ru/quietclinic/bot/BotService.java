@@ -114,15 +114,23 @@ class BotService {
   }
 
   BotPatientView patient(ru.quietclinic.patients.MessengerChannel channel, String externalId) {
-    return patients.findByExternalId(channel, externalId).map(BotService::view)
+    return patients
+        .findByExternalId(channel, externalId)
+        .map(BotService::view)
         .orElseThrow(() -> notFound("PATIENT_NOT_FOUND", "Patient not found"));
   }
 
   BotAppointmentView book(MessengerBookingRequest request) {
     var channel = ru.quietclinic.patients.MessengerChannel.parse(request.channel());
-    var patientId = patients.resolveForBooking(channel,
-        new TelegramPatientRequest(request.externalId(), request.fullName(), request.birthDate(),
-            request.phone().trim(), request.consentVersion()));
+    var patientId =
+        patients.resolveForBooking(
+            channel,
+            new TelegramPatientRequest(
+                request.externalId(),
+                request.fullName(),
+                request.birthDate(),
+                request.phone().trim(),
+                request.consentVersion()));
     return view(booking.book(patientId, request.practitionerId(), request.startsAt().toInstant()));
   }
 
@@ -134,12 +142,19 @@ class BotService {
     var args = new java.util.ArrayList<Object>();
     linked.forEach(p -> args.add(p.id()));
     args.add(java.sql.Timestamp.from(time.now()));
-    var ids = jdbc.queryForList(
-        "select id from appointment where patient_id in (" + placeholders + ")"
-            + " and starts_at > ? and status in ('BOOKED','CONFIRMED') order by starts_at limit 20",
-        UUID.class, args.toArray());
-    return ids.stream().map(booking::appointment).flatMap(java.util.Optional::stream)
-        .map(this::view).toList();
+    var ids =
+        jdbc.queryForList(
+            "select id from appointment where patient_id in ("
+                + placeholders
+                + ")"
+                + " and starts_at > ? and status in ('BOOKED','CONFIRMED') order by starts_at limit 20",
+            UUID.class,
+            args.toArray());
+    return ids.stream()
+        .map(booking::appointment)
+        .flatMap(java.util.Optional::stream)
+        .map(this::view)
+        .toList();
   }
 
   BotAppointmentView appointment(
@@ -161,14 +176,18 @@ class BotService {
 
   BotTicketView operatorRequest(MessengerOperatorRequest request) {
     var channel = ru.quietclinic.patients.MessengerChannel.parse(request.channel());
-    var patientId = patients.findByExternalId(channel, request.externalId())
-        .map(TelegramPatient::id).orElse(null);
+    var patientId =
+        patients
+            .findByExternalId(channel, request.externalId())
+            .map(TelegramPatient::id)
+            .orElse(null);
     return new BotTicketView(operator.create(request.title(), patientId), patientId);
   }
 
   private OnlineAppointment owned(
       UUID id, ru.quietclinic.patients.MessengerChannel channel, String externalId) {
-    return booking.appointment(id)
+    return booking
+        .appointment(id)
         .filter(a -> patients.isLinked(a.patientId(), channel, externalId))
         .orElseThrow(() -> notFound("APPOINTMENT_NOT_FOUND", "Appointment not found"));
   }

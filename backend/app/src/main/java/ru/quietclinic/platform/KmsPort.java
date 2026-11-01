@@ -1,6 +1,6 @@
 package ru.quietclinic.platform;
 
-interface KmsPort {
+public interface KmsPort {
   byte[] dataKey();
 
   /** Ключ конкретной версии: старые записи остаются читаемыми после ротации. */

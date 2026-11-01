@@ -21,14 +21,16 @@ class ProductionReadinessCheckTest {
         "local-only-demo-key-change-before-sharing"
       })
   void rejectsMissingShortOrDefaultKeys(String key) {
-    assertThatThrownBy(() -> new ProductionReadinessCheck(key, ADMIN_PASSWORD, "", "", "", "", "", "", ""))
+    assertThatThrownBy(
+            () -> new ProductionReadinessCheck(key, ADMIN_PASSWORD, "", "", "", "", "", "", ""))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("CLINIC_DEV_KMS_KEY");
   }
 
   @Test
   void acceptsRandomKeyAndStrongAdminPassword() {
-    assertThatCode(() -> new ProductionReadinessCheck(KEY, ADMIN_PASSWORD, "", "", "", "", "", "", ""))
+    assertThatCode(
+            () -> new ProductionReadinessCheck(KEY, ADMIN_PASSWORD, "", "", "", "", "", "", ""))
         .doesNotThrowAnyException();
   }
 
@@ -36,7 +38,8 @@ class ProductionReadinessCheckTest {
   @ParameterizedTest
   @ValueSource(strings = {"", "   ", "admin", "ADMIN", "short-pass1"})
   void rejectsMissingShortOrDefaultAdminPassword(String password) {
-    assertThatThrownBy(() -> new ProductionReadinessCheck(KEY, password, "", "", "", "", "", "", ""))
+    assertThatThrownBy(
+            () -> new ProductionReadinessCheck(KEY, password, "", "", "", "", "", "", ""))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("CLINIC_ADMIN_PASSWORD");
   }
@@ -65,8 +68,10 @@ class ProductionReadinessCheckTest {
 
   @Test
   void telegramRelayNeedsLongSigningSecret() {
-    assertThatThrownBy(() -> new ProductionReadinessCheck(
-            KEY, ADMIN_PASSWORD, "", "", "http://10.77.0.2:8081", "short", "", "", ""))
+    assertThatThrownBy(
+            () ->
+                new ProductionReadinessCheck(
+                    KEY, ADMIN_PASSWORD, "", "", "http://10.77.0.2:8081", "short", "", "", ""))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("CLINIC_OUTBOUND_TELEGRAM_RELAY_SECRET");
   }

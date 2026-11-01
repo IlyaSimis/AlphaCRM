@@ -9,6 +9,7 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
+import ru.quietclinic.integrations.MangoIntegrationClientFactory;
 
 /** Webhook Mango не принимает сессию сотрудника и не работает без действительной подписи. */
 @Configuration
@@ -18,16 +19,18 @@ class MangoSecurityConfig {
   SecurityFilterChain mangoSecurity(
       HttpSecurity http,
       MangoClinicResolver clinics,
+      MangoIntegrationClientFactory integrations,
       @Value("${clinic.telephony.mango.api-key:}") String key,
       @Value("${clinic.telephony.mango.api-salt:}") String salt)
       throws Exception {
-    return http.securityMatcher("/api/v1/integrations/mango/**")
+    return http.securityMatcher("/api/v1/integrations/mango/events/**")
         .csrf(AbstractHttpConfigurer::disable)
         .cors(AbstractHttpConfigurer::disable)
         .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .requestCache(cache -> cache.disable())
         .addFilterBefore(
-            new MangoSignatureFilter(key, salt, clinics), AnonymousAuthenticationFilter.class)
+            new MangoSignatureFilter(key, salt, clinics, integrations),
+            AnonymousAuthenticationFilter.class)
         .authorizeHttpRequests(auth -> auth.anyRequest().hasRole("MANGO"))
         .exceptionHandling(
             errors ->

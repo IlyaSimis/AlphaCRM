@@ -38,8 +38,9 @@ class ProductionReadinessCheck {
     if (problem != null) throw new IllegalStateException(problem);
     problem = signingSecretProblem("CLINIC_OUTBOUND_WEBHOOK", webhookUrl, webhookSecret);
     if (problem != null) throw new IllegalStateException(problem);
-    problem = signingSecretProblem(
-        "CLINIC_OUTBOUND_TELEGRAM_RELAY", telegramRelayUrl, telegramRelaySecret);
+    problem =
+        signingSecretProblem(
+            "CLINIC_OUTBOUND_TELEGRAM_RELAY", telegramRelayUrl, telegramRelaySecret);
     if (problem != null) throw new IllegalStateException(problem);
     problem = signingSecretProblem("CLINIC_CASHBOX", cashboxUrl, cashboxSecret);
     if (problem != null) throw new IllegalStateException(problem);

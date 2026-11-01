@@ -27,10 +27,11 @@ class AnalyticsOverviewControllerTest {
 
   @Test
   void returnsWeeklyFinancialPatientAndOperationalAggregates() throws Exception {
-    mvc.perform(get("/api/v1/analytics/overview")
-            .param("from", "2026-10-01")
-            .param("to", "2026-10-31")
-            .with(staff.role("MANAGER")))
+    mvc.perform(
+            get("/api/v1/analytics/overview")
+                .param("from", "2026-10-01")
+                .param("to", "2026-10-31")
+                .with(staff.role("MANAGER")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.totals.appointments").isNumber())
         .andExpect(jsonPath("$.totals.revenueMinor").isNumber())
@@ -46,22 +47,32 @@ class AnalyticsOverviewControllerTest {
 
   @Test
   void filtersByDoctorAndRejectsRolesWithoutAnalytics() throws Exception {
-    mvc.perform(get("/api/v1/analytics/overview")
-            .param("from", "2026-10-01")
-            .param("to", "2026-10-31")
-            .param("practitionerId", StaffSessions.PETROV)
-            .with(staff.role("MANAGER")))
+    mvc.perform(
+            get("/api/v1/analytics/overview")
+                .param("from", "2026-10-01")
+                .param("to", "2026-10-31")
+                .param("practitionerId", StaffSessions.PETROV)
+                .with(staff.role("MANAGER")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.practitioners.length()").value(1))
         .andExpect(jsonPath("$.practitioners[0].id").value(StaffSessions.PETROV));
-    mvc.perform(get("/api/v1/analytics/overview")
-            .param("from", "2026-10-01").param("to", "2026-10-31").with(staff.role("SUPPORT")))
+    mvc.perform(
+            get("/api/v1/analytics/overview")
+                .param("from", "2026-10-01")
+                .param("to", "2026-10-31")
+                .with(staff.role("SUPPORT")))
         .andExpect(status().isForbidden());
-    mvc.perform(get("/api/v1/analytics/overview")
-            .param("from", "2026-10-01").param("to", "2026-10-31").with(staff.role("DOCTOR")))
+    mvc.perform(
+            get("/api/v1/analytics/overview")
+                .param("from", "2026-10-01")
+                .param("to", "2026-10-31")
+                .with(staff.role("DOCTOR")))
         .andExpect(status().isForbidden());
-    mvc.perform(get("/api/v1/analytics/overview")
-            .param("from", "2026-10-31").param("to", "2026-10-01").with(staff.role("MANAGER")))
+    mvc.perform(
+            get("/api/v1/analytics/overview")
+                .param("from", "2026-10-31")
+                .param("to", "2026-10-01")
+                .with(staff.role("MANAGER")))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("INVALID_RANGE"));
   }

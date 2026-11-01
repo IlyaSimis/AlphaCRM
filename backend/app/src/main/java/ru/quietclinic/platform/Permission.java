@@ -108,7 +108,11 @@ public enum Permission {
 
   // communications
   DELIVERY_READ("communications.delivery.read"),
-  DELIVERY_RETRY("communications.delivery.retry");
+  DELIVERY_RETRY("communications.delivery.retry"),
+
+  // integrations
+  INTEGRATION_READ("integration.configuration.read"),
+  INTEGRATION_MANAGE("integration.configuration.manage");
 
   private final String code;
 

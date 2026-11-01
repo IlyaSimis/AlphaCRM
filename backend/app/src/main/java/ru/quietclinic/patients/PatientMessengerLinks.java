@@ -69,15 +69,26 @@ public class PatientMessengerLinks {
     var expires = now.plus(10, ChronoUnit.MINUTES);
     jdbc.update(
         "delete from messenger_link_token where patient_id = ? and channel = ? and consumed_at is null",
-        patientId, channel.name());
+        patientId,
+        channel.name());
     jdbc.update(
         "insert into messenger_link_token(id, patient_id, clinic_id, channel, token_hash, created_at, expires_at)"
             + " values (?, ?, ?, ?, ?, ?, ?)",
-        UUID.randomUUID(), patientId, clinicId(), channel.name(), hash(token),
-        Timestamp.from(now), Timestamp.from(expires));
+        UUID.randomUUID(),
+        patientId,
+        clinicId(),
+        channel.name(),
+        hash(token),
+        Timestamp.from(now),
+        Timestamp.from(expires));
     var base = channel == MessengerChannel.TELEGRAM ? telegramUrl : maxUrl;
     var url = base.isBlank() ? null : base + (base.contains("?") ? "&start=" : "?start=") + token;
-    audit.record(actorId(), "PATIENT_MESSENGER_LINK_CREATED", "PATIENT", patientId, "ALLOWED",
+    audit.record(
+        actorId(),
+        "PATIENT_MESSENGER_LINK_CREATED",
+        "PATIENT",
+        patientId,
+        "ALLOWED",
         channel.name().toLowerCase(Locale.ROOT));
     return new MessengerLinkView(channel.name(), token, url, expires);
   }
@@ -87,16 +98,24 @@ public class PatientMessengerLinks {
   public TelegramPatient consume(MessengerChannel channel, String externalId, String token) {
     requireRole(TelegramPatients.ROLE);
     var now = Instant.now();
-    var rows = jdbc.query(
-        "select id, patient_id from messenger_link_token where clinic_id = ? and channel = ?"
-            + " and token_hash = ? and consumed_at is null and expires_at > ?",
-        (rs, i) -> new LinkRow(rs.getObject("id", UUID.class), rs.getObject("patient_id", UUID.class)),
-        clinicId(), channel.name(), hash(token), Timestamp.from(now));
-    if (rows.isEmpty()) throw conflict("MESSENGER_LINK_INVALID", "Link is invalid, used or expired");
+    var rows =
+        jdbc.query(
+            "select id, patient_id from messenger_link_token where clinic_id = ? and channel = ?"
+                + " and token_hash = ? and consumed_at is null and expires_at > ?",
+            (rs, i) ->
+                new LinkRow(rs.getObject("id", UUID.class), rs.getObject("patient_id", UUID.class)),
+            clinicId(),
+            channel.name(),
+            hash(token),
+            Timestamp.from(now));
+    if (rows.isEmpty())
+      throw conflict("MESSENGER_LINK_INVALID", "Link is invalid, used or expired");
     var row = rows.get(0);
-    var changed = jdbc.update(
-        "update messenger_link_token set consumed_at = ? where id = ? and consumed_at is null",
-        Timestamp.from(now), row.id());
+    var changed =
+        jdbc.update(
+            "update messenger_link_token set consumed_at = ? where id = ? and consumed_at is null",
+            Timestamp.from(now),
+            row.id());
     if (changed != 1) throw conflict("MESSENGER_LINK_INVALID", "Link is invalid, used or expired");
     return messengerPatients.link(row.patientId(), channel, externalId);
   }
@@ -114,7 +133,8 @@ public class PatientMessengerLinks {
   PatientView prefer(UUID patientId, String rawChannel) {
     requirePermission(Permission.PATIENT_WRITE);
     var patient = find(patientId);
-    var channel = rawChannel == null || rawChannel.isBlank() ? null : MessengerChannel.parse(rawChannel);
+    var channel =
+        rawChannel == null || rawChannel.isBlank() ? null : MessengerChannel.parse(rawChannel);
     patient.preferMessenger(channel);
     return save(patient, "PATIENT_MESSENGER_PREFERRED", channel);
   }
@@ -123,14 +143,21 @@ public class PatientMessengerLinks {
     privacy.encrypt(patient);
     patients.saveAndFlush(patient);
     tokens.rebuild(patient);
-    audit.record(actorId(), action, "PATIENT", patient.id, "ALLOWED",
+    audit.record(
+        actorId(),
+        action,
+        "PATIENT",
+        patient.id,
+        "ALLOWED",
         channel == null ? "auto" : channel.name().toLowerCase(Locale.ROOT));
     return PatientView.of(patient, java.util.List.of(), null);
   }
 
   private Patient find(UUID id) {
-    var patient = patients.findByIdAndClinicId(id, clinicId())
-        .orElseThrow(() -> notFound("PATIENT_NOT_FOUND", "Patient not found"));
+    var patient =
+        patients
+            .findByIdAndClinicId(id, clinicId())
+            .orElseThrow(() -> notFound("PATIENT_NOT_FOUND", "Patient not found"));
     privacy.decrypt(patient);
     return patient;
   }

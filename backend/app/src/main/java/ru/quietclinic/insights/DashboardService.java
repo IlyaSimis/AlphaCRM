@@ -50,7 +50,8 @@ class DashboardService {
     var scope = own ? "OWN" : "CLINIC";
     var widgets = new ArrayList<Widget>();
 
-    if (can(Permission.SCHEDULE_READ) && (can(Permission.ANALYTICS_READ) || can(Permission.ANALYTICS_READ_OWN))) {
+    if (can(Permission.SCHEDULE_READ)
+        && (can(Permission.ANALYTICS_READ) || can(Permission.ANALYTICS_READ_OWN))) {
       var filter = appointmentFilter(own);
       var month =
           jdbc.queryForMap(
@@ -96,9 +97,16 @@ class DashboardService {
               .map(t -> HH_MM.format(t.atZone(time.zone())))
               .toList();
       widgets.add(new Widget("appointments.today", scope, upcoming.size(), null, "count", next));
-      var load = analytics.occupancy(monthStart, monthStart.plusMonths(1).minusDays(1), own ? actorId() : null);
-      long loadPercent = load.availableMinutes() == 0 ? 0 : Math.round(load.occupiedMinutes() * 100.0 / load.availableMinutes());
-      widgets.add(new Widget("schedule.load", scope, loadPercent, load.occupiedMinutes(), "percent", List.of()));
+      var load =
+          analytics.occupancy(
+              monthStart, monthStart.plusMonths(1).minusDays(1), own ? actorId() : null);
+      long loadPercent =
+          load.availableMinutes() == 0
+              ? 0
+              : Math.round(load.occupiedMinutes() * 100.0 / load.availableMinutes());
+      widgets.add(
+          new Widget(
+              "schedule.load", scope, loadPercent, load.occupiedMinutes(), "percent", List.of()));
     }
 
     if (can(Permission.CLINICAL_RECORD)) {

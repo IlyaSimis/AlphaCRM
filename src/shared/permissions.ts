@@ -25,6 +25,7 @@ export type Permission =
   | 'insights.dashboard.read' | 'insights.analytics.read' | 'insights.analytics.read-own'
   | 'audit.event.read' | 'audit.event.read-platform'
   | 'communications.delivery.read' | 'communications.delivery.retry'
+  | 'integration.configuration.read' | 'integration.configuration.manage'
 
 const OPERATIONS: Permission[] = [
   'identity.staff.read', 'identity.staff.manage', 'identity.role.assign-admin', 'identity.staff.reset-password',
@@ -37,6 +38,7 @@ const OPERATIONS: Permission[] = [
   'inventory.stock.read', 'inventory.marking.read', 'inventory.marking.manage',
   'drive.file.use', 'workspace.item.use', 'assistant.navigation.use', 'drive.clinic.admin', 'insights.dashboard.read', 'insights.analytics.read', 'audit.event.read',
   'communications.delivery.read', 'communications.delivery.retry', 'identity.hr.read-own',
+  'integration.configuration.read', 'integration.configuration.manage',
 ]
 
 export const rolePermissions: Record<StaffRole, Permission[]> = {

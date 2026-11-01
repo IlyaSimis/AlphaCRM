@@ -60,8 +60,12 @@ class TelegramChannel {
   }
 
   TelegramChannel(
-      HttpTransport http, String token, String apiUrl, String[] reminderButtons,
-      String relayUrl, String relaySecret) {
+      HttpTransport http,
+      String token,
+      String apiUrl,
+      String[] reminderButtons,
+      String relayUrl,
+      String relaySecret) {
     this.http = http;
     this.token = token == null ? "" : token.trim();
     this.apiUrl = apiUrl.endsWith("/") ? apiUrl.substring(0, apiUrl.length() - 1) : apiUrl;
@@ -85,12 +89,14 @@ class TelegramChannel {
         }
         var body = WebhookChannel.body(message);
         var timestamp = java.time.Instant.now().getEpochSecond();
-        var status = http.postJson(
-            URI.create(relayUrl + "/internal/send"), body,
-            Map.of(
-                Signature.IDEMPOTENCY_HEADER, message.idempotencyKey(),
-                Signature.TIMESTAMP_HEADER, Long.toString(timestamp),
-                Signature.SIGNATURE_HEADER, Signature.sign(relaySecret, timestamp, body)));
+        var status =
+            http.postJson(
+                URI.create(relayUrl + "/internal/send"),
+                body,
+                Map.of(
+                    Signature.IDEMPOTENCY_HEADER, message.idempotencyKey(),
+                    Signature.TIMESTAMP_HEADER, Long.toString(timestamp),
+                    Signature.SIGNATURE_HEADER, Signature.sign(relaySecret, timestamp, body)));
         return DeliveryResult.ofHttp(NAME, status);
       }
       if (token.isEmpty()) return DeliveryResult.notConfigured(NAME, "CHANNEL_NOT_CONFIGURED");
@@ -99,8 +105,9 @@ class TelegramChannel {
       body.put("text", message.text());
       var markup = replyMarkup(message);
       if (markup != null) body.put("reply_markup", new RawJson(markup));
-      var status = http.postJson(
-          URI.create(apiUrl + "/bot" + token + "/sendMessage"), Json.object(body), Map.of());
+      var status =
+          http.postJson(
+              URI.create(apiUrl + "/bot" + token + "/sendMessage"), Json.object(body), Map.of());
       return DeliveryResult.ofHttp(NAME, status);
     } catch (IOException | IllegalArgumentException ex) {
       return DeliveryResult.retry(NAME, "NETWORK_ERROR");

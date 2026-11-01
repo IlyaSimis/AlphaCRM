@@ -29,7 +29,9 @@ class MaxChannel {
     this.reminderButtons = reminderButtons;
   }
 
-  boolean configured() { return !token.isEmpty(); }
+  boolean configured() {
+    return !token.isEmpty();
+  }
 
   DeliveryResult send(PatientMessage message) {
     if (message.maxUserId() == null || message.maxUserId().isBlank()) {
@@ -43,8 +45,11 @@ class MaxChannel {
     }
     try {
       var recipient = URLEncoder.encode(message.maxUserId(), StandardCharsets.UTF_8);
-      var status = http.postJson(URI.create(apiUrl + "/messages?user_id=" + recipient),
-          Json.object(body), Map.of("Authorization", token));
+      var status =
+          http.postJson(
+              URI.create(apiUrl + "/messages?user_id=" + recipient),
+              Json.object(body),
+              Map.of("Authorization", token));
       return DeliveryResult.ofHttp(NAME, status);
     } catch (IOException | IllegalArgumentException ex) {
       return DeliveryResult.retry(NAME, "NETWORK_ERROR");
@@ -54,8 +59,10 @@ class MaxChannel {
   static String keyboard(String appointmentId) {
     return "[{\"type\":\"inline_keyboard\",\"payload\":{\"buttons\":[["
         + "{\"type\":\"callback\",\"text\":\"Подтвердить\",\"payload\":\"cf:"
-        + appointmentId + ":yes\"},"
+        + appointmentId
+        + ":yes\"},"
         + "{\"type\":\"callback\",\"text\":\"Отменить запись\",\"payload\":\"cf:"
-        + appointmentId + ":no\"}]]}}]";
+        + appointmentId
+        + ":no\"}]]}}]";
   }
 }

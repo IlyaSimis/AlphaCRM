@@ -20,7 +20,8 @@ class PatientMessengerController {
   }
 
   @PostMapping("/link")
-  MessengerLinkView link(@PathVariable UUID patientId, @Valid @RequestBody MessengerLinkRequest request) {
+  MessengerLinkView link(
+      @PathVariable UUID patientId, @Valid @RequestBody MessengerLinkRequest request) {
     return links.create(patientId, request.channel());
   }
 

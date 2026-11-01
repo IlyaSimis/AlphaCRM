@@ -260,8 +260,7 @@ class DriveControllerTest {
       mvc.perform(get("/api/v1/drive/files/" + officeId + "/preview").with(staff.admin()))
           .andExpect(status().isOk())
           .andExpect(content().contentType(MediaType.APPLICATION_PDF))
-          .andExpect(
-              content().bytes(("%PDF-" + extension).getBytes(StandardCharsets.UTF_8)));
+          .andExpect(content().bytes(("%PDF-" + extension).getBytes(StandardCharsets.UTF_8)));
     }
 
     var textId =

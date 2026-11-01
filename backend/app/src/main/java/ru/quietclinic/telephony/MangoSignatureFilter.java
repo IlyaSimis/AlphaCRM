@@ -14,14 +14,22 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 /** Отдельная stateless-аутентификация webhook Mango по его ключу и подписи тела JSON. */
 final class MangoSignatureFilter extends OncePerRequestFilter {
-  private final String key;
-  private final String salt;
-  private final MangoClinicResolver clinics;
+  private static final String EVENTS_PREFIX = "/api/v1/integrations/mango/events/";
 
-  MangoSignatureFilter(String key, String salt, MangoClinicResolver clinics) {
-    this.key = key == null ? "" : key.trim();
-    this.salt = salt == null ? "" : salt.trim();
+  private final String legacyKey;
+  private final String legacySalt;
+  private final MangoClinicResolver clinics;
+  private final ru.quietclinic.integrations.MangoIntegrationClientFactory integrations;
+
+  MangoSignatureFilter(
+      String key,
+      String salt,
+      MangoClinicResolver clinics,
+      ru.quietclinic.integrations.MangoIntegrationClientFactory integrations) {
+    this.legacyKey = key == null ? "" : key.trim();
+    this.legacySalt = salt == null ? "" : salt.trim();
     this.clinics = clinics;
+    this.integrations = integrations;
   }
 
   @Override
@@ -29,9 +37,32 @@ final class MangoSignatureFilter extends OncePerRequestFilter {
       HttpServletRequest request, HttpServletResponse response, FilterChain chain)
       throws ServletException, IOException {
     var json = request.getParameter("json");
-    if (key.isEmpty() || salt.isEmpty()) {
-      error(response, 401, "TELEPHONY_NOT_CONFIGURED", "Mango integration is disabled");
+    var scoped = scoped(request);
+    var publicKey = scoped ? publicKey(request) : null;
+    if (scoped && publicKey == null) {
+      error(response, 401, "MANGO_SIGNATURE_INVALID", "Mango signature is missing or wrong");
       return;
+    }
+    String key;
+    String salt;
+    java.util.UUID clinicId;
+    if (scoped) {
+      var webhook = integrations.webhook(publicKey).orElse(null);
+      if (webhook == null) {
+        error(response, 401, "MANGO_SIGNATURE_INVALID", "Mango signature is missing or wrong");
+        return;
+      }
+      key = webhook.apiKey();
+      salt = webhook.apiSalt();
+      clinicId = webhook.clinicId();
+    } else {
+      if (legacyKey.isEmpty() || legacySalt.isEmpty()) {
+        error(response, 401, "TELEPHONY_NOT_CONFIGURED", "Mango integration is disabled");
+        return;
+      }
+      key = legacyKey;
+      salt = legacySalt;
+      clinicId = null;
     }
     if (json == null
         || json.length() > 65536
@@ -40,10 +71,12 @@ final class MangoSignatureFilter extends OncePerRequestFilter {
       error(response, 401, "MANGO_SIGNATURE_INVALID", "Mango signature is missing or wrong");
       return;
     }
-    var clinicId = clinics.clinicId();
     if (clinicId == null) {
-      error(response, 409, "MANGO_CLINIC_UNKNOWN", "Set MANGO_CLINIC_ID: clinic is ambiguous");
-      return;
+      clinicId = clinics.clinicId();
+      if (clinicId == null) {
+        error(response, 409, "MANGO_CLINIC_UNKNOWN", "Set MANGO_CLINIC_ID: clinic is ambiguous");
+        return;
+      }
     }
     var context = SecurityContextHolder.createEmptyContext();
     context.setAuthentication(
@@ -54,6 +87,25 @@ final class MangoSignatureFilter extends OncePerRequestFilter {
       chain.doFilter(request, response);
     } finally {
       SecurityContextHolder.clearContext();
+    }
+  }
+
+  private static boolean scoped(HttpServletRequest request) {
+    var path = request.getRequestURI().substring(request.getContextPath().length());
+    return path.startsWith(EVENTS_PREFIX)
+        && path.substring(EVENTS_PREFIX.length()).indexOf('/') >= 0;
+  }
+
+  private static java.util.UUID publicKey(HttpServletRequest request) {
+    var path = request.getRequestURI().substring(request.getContextPath().length());
+    if (!path.startsWith(EVENTS_PREFIX)) return null;
+    var remainder = path.substring(EVENTS_PREFIX.length());
+    var slash = remainder.indexOf('/');
+    if (slash < 0) return null;
+    try {
+      return java.util.UUID.fromString(remainder.substring(0, slash));
+    } catch (IllegalArgumentException error) {
+      return null;
     }
   }
 

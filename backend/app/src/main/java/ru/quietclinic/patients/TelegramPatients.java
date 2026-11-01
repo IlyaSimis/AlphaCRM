@@ -97,8 +97,10 @@ public class TelegramPatients {
     var patient =
         patients
             .findByIdAndClinicId(patientId, clinicId())
-            .orElseThrow(() -> ru.quietclinic.platform.PlatformConfig.notFound(
-                "PATIENT_NOT_FOUND", "Patient not found"));
+            .orElseThrow(
+                () ->
+                    ru.quietclinic.platform.PlatformConfig.notFound(
+                        "PATIENT_NOT_FOUND", "Patient not found"));
     privacy.decrypt(patient);
     patient.updateMessenger(channel, externalId, false);
     if (patient.preferredMessenger == null) patient.preferMessenger(channel);
@@ -107,7 +109,12 @@ public class TelegramPatients {
     // После merge Hibernate может вернуть другой экземпляр: transient-значения нужно восстановить.
     privacy.decrypt(saved);
     tokens.rebuild(saved);
-    audit.record(actorId(), "PATIENT_MESSENGER_LINKED", "PATIENT", patient.id, "ALLOWED",
+    audit.record(
+        actorId(),
+        "PATIENT_MESSENGER_LINKED",
+        "PATIENT",
+        patient.id,
+        "ALLOWED",
         channel.name().toLowerCase(Locale.ROOT));
     return TelegramPatient.of(patient);
   }
@@ -139,7 +146,12 @@ public class TelegramPatients {
     if (existing.isPresent()) {
       var patient = existing.get();
       if (patient.updateMessenger(channel, request.chatId(), false)) {
-        audit.record(actorId(), "PATIENT_REGISTRY_UPDATED", "PATIENT", patient.id, "ALLOWED",
+        audit.record(
+            actorId(),
+            "PATIENT_REGISTRY_UPDATED",
+            "PATIENT",
+            patient.id,
+            "ALLOWED",
             channel.name().toLowerCase(Locale.ROOT));
       }
       if (patient.preferredMessenger == null) patient.preferMessenger(channel);
@@ -161,12 +173,14 @@ public class TelegramPatients {
         new PatientDetails(name, request.birthDate(), request.phone(), null, null, null));
     patient.updateMessenger(channel, request.chatId(), false);
     patient.preferMessenger(channel);
-    patient.consents.add(new Consent(patient, request.consentVersion().trim(), channel.consentBasis()));
+    patient.consents.add(
+        new Consent(patient, request.consentVersion().trim(), channel.consentBasis()));
     privacy.encrypt(patient);
     var saved = patients.saveAndFlush(patient);
     privacy.decrypt(saved);
     tokens.rebuild(saved);
-    audit.record(actorId(), "PATIENT_CREATED", "PATIENT", saved.id, "ALLOWED", channel.consentBasis());
+    audit.record(
+        actorId(), "PATIENT_CREATED", "PATIENT", saved.id, "ALLOWED", channel.consentBasis());
     return saved.id;
   }
 

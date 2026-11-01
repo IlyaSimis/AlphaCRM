@@ -127,7 +127,8 @@ class OutboxDispatcher {
             var message = outbox.findById(stuck.id).orElseThrow();
             if (!"SENDING".equals(message.status)) return;
             message.lastError = "DELIVERY_UNCERTAIN";
-            if (TelegramChannel.NAME.equals(message.channel) || MaxChannel.NAME.equals(message.channel)) {
+            if (TelegramChannel.NAME.equals(message.channel)
+                || MaxChannel.NAME.equals(message.channel)) {
               message.status = "FAILED";
               message.attempts = MAX_ATTEMPTS;
               message.nextAttemptAt = null;

@@ -26,14 +26,14 @@ import tools.jackson.databind.json.JsonMapper;
 class TelephonyService {
   private final JdbcTemplate jdbc;
   private final JsonMapper json;
-  private final MangoGateway mango;
+  private final MangoRoutingGateway mango;
   private final AuditService audit;
   private final ru.quietclinic.patients.PatientContactGateway patientContacts;
 
   TelephonyService(
       JdbcTemplate jdbc,
       JsonMapper json,
-      MangoGateway mango,
+      MangoRoutingGateway mango,
       AuditService audit,
       ru.quietclinic.patients.PatientContactGateway patientContacts) {
     this.jdbc = jdbc;
@@ -45,17 +45,19 @@ class TelephonyService {
 
   CallView start(UUID patientId, String requestedExtension) {
     requirePermission(Permission.PATIENT_CONTACTS_READ);
-    if (!mango.configured())
+    var clinic = clinicId();
+    var client = mango.forClinic(clinic);
+    if (!client.configured())
       throw conflict("TELEPHONY_NOT_CONFIGURED", "Mango integration is not configured");
     var phone =
         normalize(
             patientContacts
-                .value(patientId, clinicId(), "PHONE")
+                .value(patientId, clinic, "PHONE")
                 .orElseThrow(() -> notFound("PATIENT_NOT_FOUND", "Patient not found")));
     if (phone.isEmpty()) throw conflict("PATIENT_PHONE_MISSING", "Patient has no callable phone");
     var extension =
         requestedExtension == null || requestedExtension.isBlank()
-            ? mango.defaultExtension()
+            ? client.defaultExtension()
             : requestedExtension.trim();
     if (!extension.matches("[0-9]{1,32}")) {
       throw conflict("MANGO_EXTENSION_REQUIRED", "Enter the employee extension");
@@ -68,7 +70,7 @@ class TelephonyService {
             + " phone, extension, status, occurred_at, updated_at, created_by)"
             + " values(?,?,?,?,?,'OUTBOUND',?,?,'REQUESTING',?,?,?)",
         id,
-        clinicId(),
+        clinic,
         patientId,
         commandId,
         commandId,
@@ -78,7 +80,7 @@ class TelephonyService {
         Timestamp.from(now),
         actorId());
     try {
-      mango.callback(commandId, extension, phone);
+      client.callback(commandId, extension, phone);
     } catch (RuntimeException error) {
       jdbc.update(
           "update telephony_call set status = 'FAILED', updated_at = ? where id = ?",

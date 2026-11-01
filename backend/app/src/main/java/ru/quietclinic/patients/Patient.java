@@ -194,7 +194,8 @@ class Patient {
 
   void preferMessenger(MessengerChannel channel) {
     if (channel != null && !messengerConnected(channel)) {
-      throw conflict("MESSENGER_NOT_CONNECTED", "Connect this messenger before making it preferred");
+      throw conflict(
+          "MESSENGER_NOT_CONNECTED", "Connect this messenger before making it preferred");
     }
     preferredMessenger = channel == null ? null : channel.name();
   }

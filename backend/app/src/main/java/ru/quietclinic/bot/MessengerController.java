@@ -29,13 +29,19 @@ class MessengerController {
   }
 
   @GetMapping("/clinic")
-  BotClinicView clinic() { return bot.clinic(); }
+  BotClinicView clinic() {
+    return bot.clinic();
+  }
 
   @GetMapping("/practitioners")
-  List<BotPractitionerView> practitioners() { return bot.practitioners(); }
+  List<BotPractitionerView> practitioners() {
+    return bot.practitioners();
+  }
 
   @GetMapping("/practitioners/{id}/slots")
-  List<BotSlotView> slots(@PathVariable UUID id) { return bot.slots(id); }
+  List<BotSlotView> slots(@PathVariable UUID id) {
+    return bot.slots(id);
+  }
 
   @GetMapping("/patients/{channel}/{externalId}")
   BotPatientView patient(
@@ -46,8 +52,11 @@ class MessengerController {
 
   @PostMapping("/link/consume")
   BotPatientView consume(@Valid @RequestBody MessengerLinkConsumeRequest request) {
-    var patient = links.consume(MessengerChannel.parse(request.channel()), request.externalId(), request.token());
-    return new BotPatientView(patient.id(), patient.fullName(), patient.birthDate(), patient.phone());
+    var patient =
+        links.consume(
+            MessengerChannel.parse(request.channel()), request.externalId(), request.token());
+    return new BotPatientView(
+        patient.id(), patient.fullName(), patient.birthDate(), patient.phone());
   }
 
   @PostMapping("/appointments")
@@ -57,7 +66,8 @@ class MessengerController {
   }
 
   @GetMapping("/appointments")
-  List<BotAppointmentView> appointments(@RequestParam String channel, @RequestParam String externalId) {
+  List<BotAppointmentView> appointments(
+      @RequestParam String channel, @RequestParam String externalId) {
     return bot.appointments(MessengerChannel.parse(channel), externalId);
   }
 
@@ -68,12 +78,14 @@ class MessengerController {
   }
 
   @PostMapping("/appointments/{id}/confirm")
-  BotAppointmentView confirm(@PathVariable UUID id, @Valid @RequestBody MessengerIdentityRequest request) {
+  BotAppointmentView confirm(
+      @PathVariable UUID id, @Valid @RequestBody MessengerIdentityRequest request) {
     return bot.confirm(id, MessengerChannel.parse(request.channel()), request.externalId());
   }
 
   @PostMapping("/appointments/{id}/cancel")
-  BotAppointmentView cancel(@PathVariable UUID id, @Valid @RequestBody MessengerIdentityRequest request) {
+  BotAppointmentView cancel(
+      @PathVariable UUID id, @Valid @RequestBody MessengerIdentityRequest request) {
     return bot.cancel(id, MessengerChannel.parse(request.channel()), request.externalId());
   }
 

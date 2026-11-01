@@ -18,16 +18,17 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class TelephonyController {
   private final TelephonyService telephony;
-  private final MangoGateway mango;
+  private final MangoRoutingGateway mango;
 
-  TelephonyController(TelephonyService telephony, MangoGateway mango) {
+  TelephonyController(TelephonyService telephony, MangoRoutingGateway mango) {
     this.telephony = telephony;
     this.mango = mango;
   }
 
   @GetMapping("/api/v1/telephony/status")
   StatusView status() {
-    return new StatusView(mango.configured(), mango.defaultExtension());
+    var client = mango.forClinic(ru.quietclinic.platform.PlatformConfig.clinicId());
+    return new StatusView(client.configured(), client.defaultExtension());
   }
 
   @PostMapping("/api/v1/telephony/calls")
@@ -50,9 +51,25 @@ public class TelephonyController {
   }
 
   @PostMapping(
+      value = "/api/v1/integrations/mango/events/{publicKey}/call",
+      consumes = "application/x-www-form-urlencoded")
+  EventAck scopedCallEvent(@RequestParam String json) {
+    telephony.callEvent(json);
+    return new EventAck(true);
+  }
+
+  @PostMapping(
       value = "/api/v1/integrations/mango/events/recording",
       consumes = "application/x-www-form-urlencoded")
   EventAck recordingEvent(@RequestParam String json) {
+    telephony.recordingEvent(json);
+    return new EventAck(true);
+  }
+
+  @PostMapping(
+      value = "/api/v1/integrations/mango/events/{publicKey}/recording",
+      consumes = "application/x-www-form-urlencoded")
+  EventAck scopedRecordingEvent(@RequestParam String json) {
     telephony.recordingEvent(json);
     return new EventAck(true);
   }

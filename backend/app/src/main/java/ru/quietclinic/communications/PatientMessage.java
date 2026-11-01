@@ -26,11 +26,33 @@ record PatientMessage(
     String preferredMessenger) {
 
   PatientMessage(
-      String idempotencyKey, String template, UUID appointmentId, UUID patientId, String clinicName,
-      String serviceName, String practitionerName, Instant startsAt, String date, String time,
-      String text, String telegramChatId) {
-    this(idempotencyKey, template, appointmentId, patientId, clinicName, serviceName,
-        practitionerName, startsAt, date, time, text, telegramChatId, null, null);
+      String idempotencyKey,
+      String template,
+      UUID appointmentId,
+      UUID patientId,
+      String clinicName,
+      String serviceName,
+      String practitionerName,
+      Instant startsAt,
+      String date,
+      String time,
+      String text,
+      String telegramChatId) {
+    this(
+        idempotencyKey,
+        template,
+        appointmentId,
+        patientId,
+        clinicName,
+        serviceName,
+        practitionerName,
+        startsAt,
+        date,
+        time,
+        text,
+        telegramChatId,
+        null,
+        null);
   }
 
   @Override

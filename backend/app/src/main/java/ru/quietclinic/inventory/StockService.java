@@ -488,22 +488,47 @@ class StockService {
             + " from inventory.stock_line l join inventory.stock_document d on d.id = l.document_id"
             + " where d.clinic_id = ? and d.status = 'POSTED' and d.document_date >= ? and d.document_date <= ?"
             + " group by l.item_id) m on m.item_id = i.id where i.clinic_id = ? order by i.name";
-    var rows = jdbc.query(sql, (rs, n) -> {
-      var stock = rs.getBigDecimal("stock");
-      var received = rs.getBigDecimal("received");
-      var consumption = rs.getBigDecimal("consumption");
-      var writeOff = rs.getBigDecimal("write_off");
-      var outgoing = consumption.add(writeOff);
-      var opening = stock.subtract(received).add(outgoing);
-      var average = opening.add(stock).divide(BigDecimal.valueOf(2), 6, java.math.RoundingMode.HALF_UP);
-      var turnover = average.signum() > 0
-          ? outgoing.divide(average, 2, java.math.RoundingMode.HALF_UP) : null;
-      var daysStock = outgoing.signum() > 0 && stock.signum() > 0
-          ? stock.multiply(BigDecimal.valueOf(days)).divide(outgoing, 1, java.math.RoundingMode.HALF_UP) : null;
-      return new StockMetricsView.Row(
-          rs.getObject("id", UUID.class), rs.getString("name"), rs.getString("unit"),
-          stock, rs.getBigDecimal("min_stock"), received, consumption, writeOff, turnover, daysStock);
-    }, clinicId(), clinicId(), Date.valueOf(from), Date.valueOf(to), clinicId());
+    var rows =
+        jdbc.query(
+            sql,
+            (rs, n) -> {
+              var stock = rs.getBigDecimal("stock");
+              var received = rs.getBigDecimal("received");
+              var consumption = rs.getBigDecimal("consumption");
+              var writeOff = rs.getBigDecimal("write_off");
+              var outgoing = consumption.add(writeOff);
+              var opening = stock.subtract(received).add(outgoing);
+              var average =
+                  opening
+                      .add(stock)
+                      .divide(BigDecimal.valueOf(2), 6, java.math.RoundingMode.HALF_UP);
+              var turnover =
+                  average.signum() > 0
+                      ? outgoing.divide(average, 2, java.math.RoundingMode.HALF_UP)
+                      : null;
+              var daysStock =
+                  outgoing.signum() > 0 && stock.signum() > 0
+                      ? stock
+                          .multiply(BigDecimal.valueOf(days))
+                          .divide(outgoing, 1, java.math.RoundingMode.HALF_UP)
+                      : null;
+              return new StockMetricsView.Row(
+                  rs.getObject("id", UUID.class),
+                  rs.getString("name"),
+                  rs.getString("unit"),
+                  stock,
+                  rs.getBigDecimal("min_stock"),
+                  received,
+                  consumption,
+                  writeOff,
+                  turnover,
+                  daysStock);
+            },
+            clinicId(),
+            clinicId(),
+            Date.valueOf(from),
+            Date.valueOf(to),
+            clinicId());
     return new StockMetricsView(from, to, rows);
   }
 

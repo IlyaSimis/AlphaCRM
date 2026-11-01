@@ -128,7 +128,8 @@ public class InventoryController {
   }
 
   @GetMapping("/metrics")
-  StockMetricsView metrics(@RequestParam java.time.LocalDate from, @RequestParam java.time.LocalDate to) {
+  StockMetricsView metrics(
+      @RequestParam java.time.LocalDate from, @RequestParam java.time.LocalDate to) {
     return stock.metrics(from, to);
   }
 

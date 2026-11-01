@@ -28,7 +28,7 @@ public final class RolePermissions {
   public static final String SUPPORT = "SUPPORT";
 
   /** Версия набора разрешений: отдаётся в /auth/me как permissionsVersion. */
-  public static final String VERSION = "2026-10-31.1";
+  public static final String VERSION = "2026-11-01.1";
 
   /** Роли сотрудников в порядке экрана «Сотрудники». */
   public static final List<String> STAFF_ROLES =
@@ -98,7 +98,9 @@ public final class RolePermissions {
             ANALYTICS_READ,
             AUDIT_READ,
             DELIVERY_READ,
-            DELIVERY_RETRY);
+            DELIVERY_RETRY,
+            INTEGRATION_READ,
+            INTEGRATION_MANAGE);
 
     var owner = EnumSet.copyOf(operations);
     owner.add(ROLE_ASSIGN_PRIVILEGED);
