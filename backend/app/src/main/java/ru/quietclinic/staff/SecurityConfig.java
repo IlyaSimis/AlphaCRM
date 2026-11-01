@@ -50,7 +50,7 @@ class SecurityConfig {
   }
 
   @Bean
-  SecurityFilterChain security(HttpSecurity http, StaffRepository staff, AuthService auth)
+  SecurityFilterChain security(HttpSecurity http, StaffRepository staff, AuthService authService)
       throws Exception {
     return http.csrf(
             csrf ->
@@ -85,7 +85,7 @@ class SecurityConfig {
                     .logoutUrl("/api/v1/auth/logout")
                     .addLogoutHandler(
                         (request, response, authentication) ->
-                            auth.logout(request, authentication))
+                            authService.logout(request, authentication))
                     .deleteCookies(SESSION_COOKIE, "SESSION")
                     .logoutSuccessHandler(
                         (request, response, authentication) -> response.setStatus(204)))
