@@ -39,6 +39,19 @@ describe('apiFetch', () => {
     expect(handler).not.toHaveBeenCalled()
     await apiFetch('/appointments?date=2026-10-20')
     expect(handler).toHaveBeenCalledTimes(1)
+    expect(handler).toHaveBeenCalledWith(undefined)
+  })
+
+  it('passes SESSION_REPLACED without consuming the original response', async () => {
+    const handler = vi.fn()
+    onUnauthorized(handler)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ code: 'SESSION_REPLACED' }),
+      { status: 401, headers: { 'Content-Type': 'application/json' } },
+    )))
+    const response = await apiFetch('/patients')
+    expect(handler).toHaveBeenCalledWith('SESSION_REPLACED')
+    await expect(response.json()).resolves.toEqual({ code: 'SESSION_REPLACED' })
   })
 })
 

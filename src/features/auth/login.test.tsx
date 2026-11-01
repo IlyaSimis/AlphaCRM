@@ -59,6 +59,15 @@ describe('staff sign-in', () => {
     expect(screen.getByLabelText('Логин')).toBeInTheDocument()
   })
 
+  it('explains when another sign-in replaced the current session', async () => {
+    withAuth((address) => (address.includes('/appointments')
+      ? new Response(JSON.stringify({ code: 'SESSION_REPLACED' }), { status: 401 })
+      : api(address)))
+    renderApp()
+    expect(await screen.findByText('Выполнен вход на другом устройстве. Войдите снова.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Логин')).toBeInTheDocument()
+  })
+
   it('without a server opens a per-role sandbox with no people and no requests on behalf of a role', async () => {
     const fetchMock = vi.fn().mockRejectedValue(new Error('offline'))
     vi.stubGlobal('fetch', fetchMock)

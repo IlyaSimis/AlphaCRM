@@ -124,6 +124,7 @@ class StaffService {
       throw conflict("CANNOT_DEACTIVATE_SELF", "You cannot deactivate your own account");
     }
     user.active = active;
+    if (!active) user.currentSessionId = null;
     audit.record(
         actorId(),
         active ? "STAFF_ACTIVATED" : "STAFF_DEACTIVATED",
@@ -154,6 +155,7 @@ class StaffService {
     }
     user.passwordHash = encoder.encode(request.newPassword());
     user.mustChangePassword = true;
+    user.currentSessionId = null;
     audit.record(actorId(), "STAFF_PASSWORD_RESET", "STAFF", user.id, "ALLOWED", null);
   }
 

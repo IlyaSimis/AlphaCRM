@@ -12,10 +12,10 @@ export const LEBEDEVA_ID = '00000000-0000-0000-0000-000000000202'
 const CSRF_COOKIE = 'XSRF-TOKEN'
 const SAFE_METHODS = ['GET', 'HEAD', 'OPTIONS']
 
-let unauthorizedHandler: (() => void) | null = null
+let unauthorizedHandler: ((code?: string) => void) | null = null
 
 /** Вызывается, когда живой API ответил 401: сессия закончилась — вернуться на страницу входа. */
-export function onUnauthorized(handler: (() => void) | null) {
+export function onUnauthorized(handler: ((code?: string) => void) | null) {
   unauthorizedHandler = handler
 }
 
@@ -50,7 +50,18 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
     if (token) headers['X-XSRF-TOKEN'] = token
   }
   const response = await fetch(`${API}${path}`, { ...init, method, headers, credentials: 'include' })
-  if (response.status === 401 && !path.startsWith('/auth/')) unauthorizedHandler?.()
+  if (response.status === 401 && !path.startsWith('/auth/')) {
+    let code: string | undefined
+    try {
+      const body: unknown = await response.clone().json()
+      if (body && typeof body === 'object' && 'code' in body && typeof body.code === 'string') {
+        code = body.code
+      }
+    } catch {
+      // Нестандартный ответ прокси: достаточно обычного возврата на страницу входа.
+    }
+    unauthorizedHandler?.(code)
+  }
   return response
 }
 

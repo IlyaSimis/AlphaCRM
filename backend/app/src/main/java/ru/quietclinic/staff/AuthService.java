@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.util.Locale;
 import java.util.UUID;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
@@ -51,7 +52,7 @@ class AuthService {
   }
 
   /** Один и тот же ответ на неизвестный логин, неверный пароль и выключенную учётную запись. */
-  @Transactional(readOnly = true)
+  @Transactional
   StaffView login(LoginRequest request, HttpServletRequest http, HttpServletResponse response) {
     var address = http.getRemoteAddr();
     var username = request.username().trim().toLowerCase(Locale.ROOT);
@@ -60,7 +61,8 @@ class AuthService {
     if (throttle.blocked(address, username, now)) {
       throw tooManyRequests("TOO_MANY_LOGIN_ATTEMPTS", "Too many failed sign-in attempts");
     }
-    var user = staff.findByUsername(username);
+    // Блокировка строки не даёт двум одновременным входам оставить две активные сессии.
+    var user = staff.findForLogin(username);
     var hash = user.map(u -> u.passwordHash).orElse(unknownUserHash);
     var matches = encoder.matches(request.password(), hash);
     if (user.isEmpty() || !matches || !user.get().active) {
@@ -78,7 +80,28 @@ class AuthService {
     http.getSession(true);
     http.changeSessionId();
     contexts.saveContext(context, http, response);
+    user.get().currentSessionId = http.getSession(false).getId();
+    staff.save(user.get());
     return view(user.get());
+  }
+
+  /** Поздний выход старой вкладки не отзывает более новую сессию того же сотрудника. */
+  @Transactional
+  void logout(HttpServletRequest http, Authentication authentication) {
+    if (authentication == null
+        || !(authentication.getPrincipal() instanceof StaffPrincipal principal)) {
+      return;
+    }
+    var session = http.getSession(false);
+    if (session == null) return;
+    staff
+        .findById(principal.userId())
+        .filter(user -> session.getId().equals(user.currentSessionId))
+        .ifPresent(
+            user -> {
+              user.currentSessionId = null;
+              staff.save(user);
+            });
   }
 
   @Transactional(readOnly = true)

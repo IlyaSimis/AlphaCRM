@@ -37,11 +37,25 @@ final class ActiveStaffFilter extends OncePerRequestFilter {
     var auth = SecurityContextHolder.getContext().getAuthentication();
     if (auth != null && auth.getPrincipal() instanceof StaffPrincipal principal) {
       var user = staff.findById(principal.userId()).filter(found -> found.active);
-      if (user.isEmpty()) {
-        var session = request.getSession(false);
+      var session = request.getSession(false);
+      var sessionId = session == null ? null : session.getId();
+      var currentSessionId = user.map(found -> found.currentSessionId).orElse(null);
+      if (user.isEmpty() || currentSessionId == null || !currentSessionId.equals(sessionId)) {
         if (session != null) session.invalidate();
         SecurityContextHolder.clearContext();
-      } else if (!user.get().roleSet().equals(principal.roles())) {
+        // Со старым cookie можно получить CSRF и войти заново, не очищая браузер вручную.
+        if (isSessionRecovery(request)) {
+          chain.doFilter(request, response);
+          return;
+        }
+        if (currentSessionId != null) {
+          JsonErrors.sessionReplaced(response);
+        } else {
+          JsonErrors.unauthorized(response);
+        }
+        return;
+      }
+      if (!user.get().roleSet().equals(principal.roles())) {
         // Роли сменили, пока сотрудник в системе: права пересчитываются с этого же запроса.
         var fresh = StaffPrincipal.of(user.get());
         SecurityContextHolder.getContext()
@@ -49,8 +63,7 @@ final class ActiveStaffFilter extends OncePerRequestFilter {
                 org.springframework.security.authentication.UsernamePasswordAuthenticationToken
                     .authenticated(fresh, null, fresh.authorities()));
       }
-      if (user.isPresent()
-          && user.get().mustChangePassword
+      if (user.get().mustChangePassword
           && request.getRequestURI().startsWith("/api/")
           && !ALLOWED_BEFORE_PASSWORD_CHANGE.contains(request.getRequestURI())) {
         JsonErrors.passwordChangeRequired(response);
@@ -58,5 +71,10 @@ final class ActiveStaffFilter extends OncePerRequestFilter {
       }
     }
     chain.doFilter(request, response);
+  }
+
+  private boolean isSessionRecovery(HttpServletRequest request) {
+    return "/api/v1/auth/login".equals(request.getRequestURI())
+        || "/api/v1/auth/csrf".equals(request.getRequestURI());
   }
 }

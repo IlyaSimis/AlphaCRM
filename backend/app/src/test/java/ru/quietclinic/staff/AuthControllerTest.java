@@ -136,6 +136,21 @@ class AuthControllerTest {
   }
 
   @Test
+  void newLoginReplacesOnlyThePreviousSession() throws Exception {
+    var previous = staff.login(StaffSessions.ADMIN, StaffSessions.ADMIN_PASSWORD);
+    var current = staff.login(StaffSessions.ADMIN, StaffSessions.ADMIN_PASSWORD);
+
+    mvc.perform(get("/api/v1/auth/me").with(previous))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("SESSION_REPLACED"));
+    mvc.perform(get("/api/v1/auth/me").with(current)).andExpect(status().isOk());
+
+    // Даже если выход старой сессии дошёл до обработчика, новую он отозвать не может.
+    mvc.perform(post("/api/v1/auth/logout").with(previous));
+    mvc.perform(get("/api/v1/auth/me").with(current)).andExpect(status().isOk());
+  }
+
+  @Test
   void staffChangesOwnPasswordWithCurrentOne() throws Exception {
     mvc.perform(
             post("/api/v1/staff")

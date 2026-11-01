@@ -1,4 +1,7 @@
 spring:
+  session:
+    # В локальных тестах — обычная MockHttpSession; правило одной активной сессии общее с prod.
+    store-type: none
   datasource:
     url: jdbc:h2:mem:quietclinic;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
     username: sa

@@ -5,6 +5,7 @@
  */
 export const errorMessages: Record<string, string> = {
   UNAUTHORIZED: 'Сессия закончилась. Войдите снова.',
+  SESSION_REPLACED: 'Выполнен вход на другом устройстве. Войдите снова.',
   INVALID_CREDENTIALS: 'Неверный логин или пароль',
   TOO_MANY_LOGIN_ATTEMPTS: 'Слишком много неудачных попыток входа. Подождите 15 минут и попробуйте снова',
   CSRF_INVALID: 'Обновите страницу и повторите действие',

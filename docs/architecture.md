@@ -31,7 +31,7 @@ flowchart LR
         API["backend<br/>Spring Boot 4.1 · порт 8081"]
         PG[("postgres 18<br/>база quiet_clinic")]
     end
-    SPA -- "HTTPS/HTTP, cookie JSESSIONID + X-XSRF-TOKEN" --> NGINX
+    SPA -- "HTTPS/HTTP, cookie SESSION + X-XSRF-TOKEN" --> NGINX
     NGINX -- "/api/v1/* proxy" --> API
     API -- "JDBC, Liquibase" --> PG
     SPA --- LS
@@ -153,7 +153,7 @@ sequenceDiagram
     participant A as AuditService
 
     UI->>C: setServiceActive(id, false)
-    C->>N: POST /api/v1/services/{id}/deactivate<br/>cookie JSESSIONID, X-XSRF-TOKEN
+    C->>N: POST /api/v1/services/{id}/deactivate<br/>cookie SESSION, X-XSRF-TOKEN
     N->>S: proxy
     S->>S: сессия, CSRF, активен ли сотрудник,<br/>не нужна ли смена пароля
     S->>Ctl: deactivate(id)
@@ -172,7 +172,7 @@ sequenceDiagram
 
 - **Вход** — `POST /api/v1/auth/login`, логин и пароль из `staff_user` (bcrypt). Неверный логин и неверный пароль дают одинаковый `401 INVALID_CREDENTIALS`. Серия неудач закрывает вход с адреса на 15 минут (`LoginThrottle`, `429 TOO_MANY_LOGIN_ATTEMPTS`). Внешнего OIDC/Keycloak нет.
 - **Время** — `platform.ClinicTime`: пояс клиники (`CLINIC_TIME_ZONE`) для дней, смен и экрана, моменты в базе — UTC; запись в прошлое отклоняется (`409 APPOINTMENT_IN_PAST`). Интерфейс берёт пояс из `/auth/me` (`shared/clinicTime.ts`).
-- **Сессия** — cookie `JSESSIONID`, `HttpOnly`, `SameSite=Lax`, 8 часов, `Secure` при `SESSION_COOKIE_SECURE=true`. Хранится в памяти backend.
+- **Сессия** — в production cookie `SESSION`, `HttpOnly`, `SameSite=Lax`, 8 часов, `Secure` при `SESSION_COOKIE_SECURE=true`; хранится в PostgreSQL через Spring Session JDBC. Один логин — одна активная сессия: новый вход вытесняет прежний с `401 SESSION_REPLACED`; выход старой сессии не отзывает новую, собственная смена пароля текущую сохраняет. Сброс пароля администратором и отключение сотрудника отзывают доступ.
 - **CSRF** — `CookieCsrfTokenRepository`: сервер кладёт `XSRF-TOKEN`, интерфейс отправляет его в `X-XSRF-TOKEN` на изменяющих запросах (`src/api/client.ts`).
 - **Мессенджеры** — `/api/v1/messenger/**` и совместимый `/api/v1/bot/**` имеют отдельную цепочку без сессии и CSRF, с `X-Bot-Token` и ролью `BOT`; nginx не публикует эти пути. Привязка возможна только по одноразовому HMAC-хешированному токену на 10 минут, внешние id пациентов зашифрованы, а подтвердить или отменить запись может лишь владелец связанного id. Telegram relay подписывает тело и timestamp через HMAC-SHA256; MAX webhook проверяет отдельный секрет.
 - **ИИ-навигатор** — ключ модели только на backend; внешний запрос содержит вопрос и безопасные метаданные страниц, но не пациентов или содержимое. Модель выбирает лишь id из серверного whitelist. Текст вопроса не сохраняется, учитываются только количество запросов и токенов.

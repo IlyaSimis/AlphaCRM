@@ -29,6 +29,14 @@ final class JsonErrors {
     }
   }
 
+  static void unauthorized(HttpServletResponse response) throws IOException {
+    write(response, 401, "UNAUTHORIZED", "Sign-in required");
+  }
+
+  static void sessionReplaced(HttpServletResponse response) throws IOException {
+    write(response, 401, "SESSION_REPLACED", "Signed in on another device");
+  }
+
   static void passwordChangeRequired(HttpServletResponse response) throws IOException {
     write(response, 403, "PASSWORD_CHANGE_REQUIRED", "Change the temporary password first");
   }

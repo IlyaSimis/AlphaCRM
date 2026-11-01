@@ -51,6 +51,10 @@ class StaffUser {
   @Column(nullable = false)
   boolean mustChangePassword;
 
+  /** Id текущей HttpSession. Новый вход заменяет значение и вытесняет прежнюю сессию. */
+  @Column(length = 36)
+  String currentSessionId;
+
   @Column(nullable = false)
   Instant createdAt;
 
