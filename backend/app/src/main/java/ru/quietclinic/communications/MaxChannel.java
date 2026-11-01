@@ -17,20 +17,28 @@ class MaxChannel {
   private final String token;
   private final String apiUrl;
   private final boolean reminderButtons;
+  private final boolean active;
 
+  @org.springframework.beans.factory.annotation.Autowired
   MaxChannel(
       HttpTransport http,
       @Value("${clinic.outbound.max-bot-token:}") String token,
       @Value("${clinic.outbound.max-api-url:https://platform-api2.max.ru}") String apiUrl,
       @Value("${clinic.outbound.max-reminder-buttons:true}") boolean reminderButtons) {
+    this(http, token, apiUrl, reminderButtons, true);
+  }
+
+  MaxChannel(
+      HttpTransport http, String token, String apiUrl, boolean reminderButtons, boolean active) {
     this.http = http;
     this.token = token == null ? "" : token.trim();
     this.apiUrl = apiUrl.endsWith("/") ? apiUrl.substring(0, apiUrl.length() - 1) : apiUrl;
     this.reminderButtons = reminderButtons;
+    this.active = active;
   }
 
   boolean configured() {
-    return !token.isEmpty();
+    return active && !token.isEmpty();
   }
 
   DeliveryResult send(PatientMessage message) {

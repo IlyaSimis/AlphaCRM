@@ -15,7 +15,35 @@ record AppointmentNotice(
     boolean activeConsent,
     String telegramChatId,
     String maxUserId,
-    String preferredMessenger) {
+    String preferredMessenger,
+    UUID clinicId) {
+
+  AppointmentNotice(
+      UUID appointmentId,
+      UUID patientId,
+      String status,
+      Instant startsAt,
+      String serviceName,
+      String practitionerName,
+      String clinicName,
+      boolean activeConsent,
+      String telegramChatId,
+      String maxUserId,
+      String preferredMessenger) {
+    this(
+        appointmentId,
+        patientId,
+        status,
+        startsAt,
+        serviceName,
+        practitionerName,
+        clinicName,
+        activeConsent,
+        telegramChatId,
+        maxUserId,
+        preferredMessenger,
+        null);
+  }
 
   AppointmentNotice(
       UUID appointmentId,
@@ -37,6 +65,7 @@ record AppointmentNotice(
         clinicName,
         activeConsent,
         telegramChatId,
+        null,
         null,
         null);
   }

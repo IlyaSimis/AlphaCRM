@@ -68,6 +68,7 @@ class NoticeText {
         text,
         notice.telegramChatId(),
         notice.maxUserId(),
-        notice.preferredMessenger());
+        notice.preferredMessenger(),
+        notice.clinicId());
   }
 }

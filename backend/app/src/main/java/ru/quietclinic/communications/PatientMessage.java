@@ -23,7 +23,41 @@ record PatientMessage(
     String text,
     String telegramChatId,
     String maxUserId,
-    String preferredMessenger) {
+    String preferredMessenger,
+    UUID clinicId) {
+
+  PatientMessage(
+      String idempotencyKey,
+      String template,
+      UUID appointmentId,
+      UUID patientId,
+      String clinicName,
+      String serviceName,
+      String practitionerName,
+      Instant startsAt,
+      String date,
+      String time,
+      String text,
+      String telegramChatId,
+      String maxUserId,
+      String preferredMessenger) {
+    this(
+        idempotencyKey,
+        template,
+        appointmentId,
+        patientId,
+        clinicName,
+        serviceName,
+        practitionerName,
+        startsAt,
+        date,
+        time,
+        text,
+        telegramChatId,
+        maxUserId,
+        preferredMessenger,
+        null);
+  }
 
   PatientMessage(
       String idempotencyKey,
@@ -51,6 +85,7 @@ record PatientMessage(
         time,
         text,
         telegramChatId,
+        null,
         null,
         null);
   }

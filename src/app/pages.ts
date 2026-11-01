@@ -2,7 +2,7 @@ import { canManagePrices, canManageSchedule, canSeeAnalytics, canSeeAudit, canSe
 import { can } from '../shared/permissions'
 
 export type Page =
-  | 'today' | 'workspace' | 'analytics' | 'hr-me' | 'staff' | 'hr' | 'audit' | 'break-glass' | 'outbox'
+  | 'today' | 'workspace' | 'analytics' | 'hr-me' | 'staff' | 'hr' | 'audit' | 'break-glass' | 'outbox' | 'integrations'
   | 'schedule' | 'patients' | 'patient' | 'visit' | 'registry' | 'documents' | 'contract-templates' | 'hours'
   | 'stock-balances' | 'stock-items' | 'stock-documents' | 'stock-marking' | 'stock-norms'
   | 'cashier' | 'sales' | 'prices'
@@ -33,6 +33,7 @@ export const pageTitles: Record<Page, string> = {
   audit: 'Журнал аудита',
   'break-glass': 'Экстренные доступы',
   outbox: 'Внешние выводы',
+  integrations: 'Интеграции',
   schedule: 'Расписание',
   patients: 'Пациенты',
   patient: 'Карточка пациента',
@@ -60,7 +61,7 @@ export const serviceSections: Record<Service, Array<{ label: string; pages: Page
     { label: 'ОБЗОР', pages: ['today', 'workspace', 'analytics', 'hr-me'] },
   ],
   management: [
-    { label: 'УПРАВЛЕНИЕ', pages: ['staff', 'hours', 'hr', 'audit', 'break-glass', 'outbox'] },
+    { label: 'УПРАВЛЕНИЕ', pages: ['staff', 'hours', 'hr', 'audit', 'break-glass', 'outbox', 'integrations'] },
   ],
   patients: [
     { label: 'РАБОТА С ПАЦИЕНТАМИ', pages: ['schedule', 'patients', 'registry', 'documents'] },
@@ -98,6 +99,7 @@ function allowed(page: Page, role: Role): boolean {
     case 'audit': return canSeeAudit(role)
     case 'break-glass': return can(role, 'clinical.break-glass.review')
     case 'outbox': return canSeeOutbox(role)
+    case 'integrations': return can(role, 'integration.configuration.read')
     case 'schedule': return true
     case 'patients':
     case 'patient': return canSeePatients(role)

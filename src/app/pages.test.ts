@@ -19,7 +19,7 @@ describe('services and pages by role', () => {
 
   it('the administrator sees everything operational, grouped by service', () => {
     expect(navigationFor('ADMINISTRATOR')).toEqual([
-      'today', 'workspace', 'analytics', 'hr-me', 'staff', 'hours', 'audit', 'outbox',
+      'today', 'workspace', 'analytics', 'hr-me', 'staff', 'hours', 'audit', 'outbox', 'integrations',
       'schedule', 'patients', 'registry', 'contract-templates',
       'stock-balances', 'stock-items', 'stock-documents', 'stock-marking', 'stock-norms',
       'cashier', 'sales', 'prices',

@@ -16,7 +16,7 @@ import { driveView, stockSection, type Page } from './pages'
 import {
   Analytics, AuditLog, BreakGlassLog, Cashier, ContractsPage, ContractTemplatesPage, DrivePage, InventoryPage, MyContractPage,
   OutboxPage, PatientCard, PatientContracts, PatientFiles, PatientsList, RegistryPage, RegistryPanel, SalesPage,
-  SettingsPage, SignedDocuments, StaffPage, Visit, WorkspacePage,
+  SettingsPage, SignedDocuments, StaffPage, Visit, WorkspacePage, IntegrationsPage,
 } from './lazyPages'
 
 type WorkspaceContentProps = {
@@ -91,6 +91,7 @@ export function WorkspaceContent(props: WorkspaceContentProps) {
       {page === 'cashier' && <Cashier role={role} apiOnline={clinic.apiOnline} practitioners={practitioners} localAppointments={scheduleItems} localCharges={clinic.localCharges} onLocalCharge={clinic.addLocalCharge} onLocalPay={clinic.payLocalCharge} onLocalAmount={clinic.setLocalChargeAmount} notify={clinic.notify} />}
       {(page === 'hours' || page === 'prices') && <SettingsPage key={page} section={page} practitioners={practitioners} services={clinic.services} onSaveHours={clinic.saveHours} onSaveCard={clinic.saveCard} onSavePrice={clinic.savePrice} onCreateService={clinic.addService} canEditPrices={canManagePrices(role)} />}
       {page === 'outbox' && <OutboxPage apiOnline={clinic.apiOnline} />}
+      {page === 'integrations' && <IntegrationsPage staff={staff} apiOnline={clinic.apiOnline} notify={clinic.notify} />}
       {page === 'sales' && <SalesPage apiOnline={clinic.apiOnline} />}
       {page === 'break-glass' && <BreakGlassLog apiOnline={clinic.apiOnline} />}
       {page === 'hr' && <ContractsPage apiOnline={clinic.apiOnline} notify={clinic.notify} />}

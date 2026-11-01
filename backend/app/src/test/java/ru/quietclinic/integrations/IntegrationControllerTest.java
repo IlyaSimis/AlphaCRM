@@ -111,6 +111,50 @@ class IntegrationControllerTest {
   }
 
   @Test
+  void configuresTelegramAndMaxWithoutReturningBotTokens() throws Exception {
+    mvc.perform(
+            put("/api/v1/integrations/telegram/settings")
+                .with(staff.admin())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"apiUrl\":\"https://api.telegram.org\",\"publicUrl\":\"https://t.me/clinic_bot\",\"relayUrl\":\"\",\"reminderButtons\":true}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.settings.publicUrl").value("https://t.me/clinic_bot"));
+    mvc.perform(
+            put("/api/v1/integrations/telegram/secret")
+                .with(staff.admin())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"botToken\":\"telegram-clinic-token\"}"))
+        .andExpect(status().isOk())
+        .andExpect(content().string(not(containsString("telegram-clinic-token"))));
+    mvc.perform(post("/api/v1/integrations/telegram/activate").with(staff.admin()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("ACTIVE"));
+
+    mvc.perform(
+            put("/api/v1/integrations/max/settings")
+                .with(staff.admin())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"apiUrl\":\"https://platform-api2.max.ru\",\"publicUrl\":\"https://max.ru/clinic_bot\",\"relayUrl\":\"\",\"reminderButtons\":false}"))
+        .andExpect(status().isOk());
+    mvc.perform(
+            put("/api/v1/integrations/max/secret")
+                .with(staff.admin())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"botToken\":\"max-clinic-token\"}"))
+        .andExpect(status().isOk())
+        .andExpect(content().string(not(containsString("max-clinic-token"))));
+    mvc.perform(post("/api/v1/integrations/max/activate").with(staff.admin()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("ACTIVE"));
+    mvc.perform(get("/api/v1/integrations").with(staff.admin()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(2))
+        .andExpect(content().string(not(containsString("clinic-token"))));
+  }
+
+  @Test
   void keepsConfigurationInsideItsClinic() throws Exception {
     mvc.perform(
             put("/api/v1/integrations/mango/secret")

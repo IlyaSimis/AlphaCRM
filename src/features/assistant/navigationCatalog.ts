@@ -22,6 +22,7 @@ const details: Record<Page, { description: string; keywords: string[] }> = {
   audit: { description: 'Журнал действий и событий безопасности', keywords: ['история действий', 'лог', 'аудит'] },
   'break-glass': { description: 'Журнал экстренного доступа к клиническим записям', keywords: ['экстренный доступ', 'break glass'] },
   outbox: { description: 'Очередь внешних сообщений, чеков и ошибок доставки', keywords: ['доставка', 'сообщения', 'очередь'] },
+  integrations: { description: 'Настройка Mango, Telegram и MAX для клиники', keywords: ['боты', 'телефония', 'токены', 'webhook', 'манго', 'телеграм'] },
   schedule: { description: 'Расписание врачей, записи пациентов и свободные интервалы', keywords: ['календарь', 'записи', 'приёмы', 'записать'] },
   patients: { description: 'Поиск и список пациентов клиники', keywords: ['картотека', 'база пациентов', 'найти пациента'] },
   patient: { description: 'Карточка выбранного пациента', keywords: ['карта пациента'] },

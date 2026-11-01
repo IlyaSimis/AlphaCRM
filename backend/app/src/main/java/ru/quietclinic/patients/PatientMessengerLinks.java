@@ -33,6 +33,7 @@ public class PatientMessengerLinks {
   private final ContactTokenService tokens;
   private final TelegramPatients messengerPatients;
   private final AuditService audit;
+  private final ru.quietclinic.integrations.MessengerIntegrationClientFactory integrations;
   private final String telegramUrl;
   private final String maxUrl;
 
@@ -44,6 +45,7 @@ public class PatientMessengerLinks {
       ContactTokenService tokens,
       TelegramPatients messengerPatients,
       AuditService audit,
+      ru.quietclinic.integrations.MessengerIntegrationClientFactory integrations,
       @Value("${clinic.messenger.telegram-public-url:}") String telegramUrl,
       @Value("${clinic.messenger.max-public-url:}") String maxUrl) {
     this.jdbc = jdbc;
@@ -53,8 +55,17 @@ public class PatientMessengerLinks {
     this.tokens = tokens;
     this.messengerPatients = messengerPatients;
     this.audit = audit;
+    this.integrations = integrations;
     this.telegramUrl = telegramUrl == null ? "" : telegramUrl.trim();
     this.maxUrl = maxUrl == null ? "" : maxUrl.trim();
+  }
+
+  private String publicUrl(MessengerChannel channel) {
+    var legacy = channel == MessengerChannel.TELEGRAM ? telegramUrl : maxUrl;
+    return integrations
+        .forClinic(clinicId(), channel.name())
+        .map(integration -> integration.settings().publicUrl())
+        .orElse(legacy);
   }
 
   @Transactional
@@ -81,7 +92,7 @@ public class PatientMessengerLinks {
         hash(token),
         Timestamp.from(now),
         Timestamp.from(expires));
-    var base = channel == MessengerChannel.TELEGRAM ? telegramUrl : maxUrl;
+    var base = publicUrl(channel);
     var url = base.isBlank() ? null : base + (base.contains("?") ? "&start=" : "?start=") + token;
     audit.record(
         actorId(),

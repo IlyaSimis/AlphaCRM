@@ -25,6 +25,7 @@ class TelegramChannel {
   private final String apiUrl;
   private final String relayUrl;
   private final String relaySecret;
+  private final boolean active;
 
   /** Надписи кнопок «Подтвердить» и «Отменить запись»; null — напоминание уходит без кнопок. */
   private final String[] reminderButtons;
@@ -66,22 +67,35 @@ class TelegramChannel {
       String[] reminderButtons,
       String relayUrl,
       String relaySecret) {
+    this(http, token, apiUrl, reminderButtons, relayUrl, relaySecret, true);
+  }
+
+  TelegramChannel(
+      HttpTransport http,
+      String token,
+      String apiUrl,
+      String[] reminderButtons,
+      String relayUrl,
+      String relaySecret,
+      boolean active) {
     this.http = http;
     this.token = token == null ? "" : token.trim();
     this.apiUrl = apiUrl.endsWith("/") ? apiUrl.substring(0, apiUrl.length() - 1) : apiUrl;
     this.relayUrl = relayUrl == null ? "" : relayUrl.trim().replaceAll("/$", "");
     this.relaySecret = relaySecret == null ? "" : relaySecret;
     this.reminderButtons = reminderButtons;
+    this.active = active;
   }
 
   boolean configured() {
-    return !relayUrl.isEmpty() || !token.isEmpty();
+    return active && (!relayUrl.isEmpty() || !token.isEmpty());
   }
 
   DeliveryResult send(PatientMessage message) {
     if (message.telegramChatId() == null || message.telegramChatId().isBlank()) {
       return DeliveryResult.notConfigured(NAME, "NO_TELEGRAM_CONTACT");
     }
+    if (!configured()) return DeliveryResult.notConfigured(NAME, "CHANNEL_NOT_CONFIGURED");
     try {
       if (!relayUrl.isEmpty()) {
         if (relaySecret.isBlank()) {

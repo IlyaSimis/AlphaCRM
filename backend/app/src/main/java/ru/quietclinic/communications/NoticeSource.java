@@ -28,7 +28,8 @@ class NoticeSource {
     List<AppointmentNotice> rows =
         jdbc.query(
             "select a.id, a.patient_id, a.status, a.starts_at, a.service_name,"
-                + " p.full_name as practitioner_name, c.name as clinic_name, pt.preferred_messenger"
+                + " p.full_name as practitioner_name, c.name as clinic_name, c.id as clinic_id,"
+                + " pt.preferred_messenger"
                 + " from appointment a join practitioner p on p.id = a.practitioner_id"
                 + " join clinic c on c.id = p.clinic_id join patient pt on pt.id = a.patient_id"
                 + " where a.id = ?",
@@ -45,7 +46,8 @@ class NoticeSource {
                   hasActiveConsent(patientId),
                   contact(patientId, "TELEGRAM"),
                   contact(patientId, "MAX"),
-                  row.getString("preferred_messenger"));
+                  row.getString("preferred_messenger"),
+                  row.getObject("clinic_id", UUID.class));
             },
             appointmentId);
     return rows.stream().findFirst();
