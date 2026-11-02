@@ -61,4 +61,39 @@ describe('analytics', () => {
     expect(screen.getByText('Операционные очереди')).toBeInTheDocument()
     expect(screen.queryByText('Анна Михайлова')).not.toBeInTheDocument()
   })
+
+  it('drills down from a service to its source appointments and patient card', async () => {
+    const totals = { appointments: 2, visits: 1, uniquePatients: 1, newPatients: 0, returningPatients: 1, noShow: 1, cancelled: 0, withoutNextVisit: 1, revenueMinor: 450000, payments: 1, averageCheckMinor: 450000 }
+    const fetchMock = withAuth((address: string) => {
+      if (address.includes('/analytics/services/appointments')) return jsonResponse({
+        from: '2026-09-23', to: '2026-10-20', serviceKey: '00000000-0000-0000-0000-000000000601', serviceName: 'Первичный приём',
+        appointments: [{ appointmentId: 'a-service', patientId: '00000000-0000-0000-0000-000000000101', patientName: 'Анна Михайлова', practitionerId: '00000000-0000-0000-0000-000000000201', practitionerName: 'Александр Петров', startsAt: '2026-10-20T09:00:00Z', status: 'COMPLETED', chargeId: 'charge-1', chargeStatus: 'PAID', amountMinor: 450000, currency: 'RUB', withoutNextVisit: true }],
+      })
+      if (address.includes('/analytics/services')) return jsonResponse({
+        from: '2026-09-23', to: '2026-10-20', previousFrom: '2026-08-26', previousTo: '2026-09-22', currency: 'RUB', totals, previousTotals: { ...totals, visits: 0, revenueMinor: 0 },
+        rows: [{ ...totals, serviceKey: '00000000-0000-0000-0000-000000000601', serviceName: 'Первичный приём', previousVisits: 0, previousRevenueMinor: 0 }],
+      })
+      if (address.includes('/analytics/appointments')) return jsonResponse({ rows: [] })
+      if (address.includes('/analytics/overview')) return jsonResponse(overview)
+      if (address.includes('/practitioners')) return jsonResponse([{ id: '00000000-0000-0000-0000-000000000201', fullName: 'Александр Петров', specialty: 'Психиатр', room: '101', workingHours: [] }])
+      if (address.includes('/patients')) return jsonResponse([{ id: '00000000-0000-0000-0000-000000000101', fullName: 'Анна Михайлова', birthDate: '1991-05-14', contacts: [], consents: [] }])
+      if (address.includes('/registry/') || address.includes('/workspace/') || address.includes('/appointments')) return jsonResponse([])
+      return jsonResponse({}, 404)
+    }, 't.manager', { services: null })
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByText('API подключён')).toBeInTheDocument()
+    await openPage(user, 'Аналитика')
+    await user.click(screen.getByRole('button', { name: 'Услуги' }))
+    await user.click(await screen.findByRole('button', { name: 'Открыть приёмы: Первичный приём' }))
+
+    const details = await screen.findByRole('dialog', { name: 'Приёмы по услуге Первичный приём' })
+    expect(await screen.findByText('Завершён')).toBeInTheDocument()
+    expect(screen.getByText('PAID')).toBeInTheDocument()
+    expect(screen.getByText('Нет')).toBeInTheDocument()
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/analytics/services/appointments') && String(url).includes('serviceKey=00000000-0000-0000-0000-000000000601'))).toBe(true)
+    await user.click(screen.getByRole('button', { name: 'Анна Михайлова' }))
+    expect(await screen.findByRole('heading', { name: 'Анна Михайлова' })).toBeInTheDocument()
+    expect(details).not.toBeVisible()
+  })
 })

@@ -36,7 +36,7 @@ type WorkspaceDialogsProps = {
   registry: Registry
   administrators: StaffItem[]
   doctorFilter: string
-  booking: { date: string; practitionerId?: string; time?: string } | null
+  booking: { date: string; practitionerId?: string; time?: string; patientId?: string } | null
   bookingKey: number
   bookingError: string
   pendingBookingPatient: PendingBookingPatient | null
@@ -91,7 +91,7 @@ export function WorkspaceDialogs(props: WorkspaceDialogsProps) {
 
   return (
     <>
-      <BookingDialog key={bookingKey} checkPast={clinic.apiOnline} open={Boolean(booking)} patients={patientItems} practitioners={practitioners} services={clinic.services} defaultPractitionerId={booking?.practitionerId ?? (doctorFilter === 'all' ? practitioners[0]?.id ?? PETROV_ID : doctorFilter)} error={bookingError} initialDate={booking?.date ?? scheduleDate} initialTime={booking?.time} onClose={onBookingClose} onSave={onBookingSave} onSaveNewPatient={onBookingNewPatient} />
+      <BookingDialog key={bookingKey} checkPast={clinic.apiOnline} open={Boolean(booking)} patients={patientItems} practitioners={practitioners} services={clinic.services} defaultPractitionerId={booking?.practitionerId ?? (doctorFilter === 'all' ? practitioners[0]?.id ?? PETROV_ID : doctorFilter)} error={bookingError} initialDate={booking?.date ?? scheduleDate} initialTime={booking?.time} initialPatientId={booking?.patientId} onClose={onBookingClose} onSave={onBookingSave} onSaveNewPatient={onBookingNewPatient} />
       {pendingBookingPatient && <PatientDialog key={pendingBookingPatient.patient?.id ?? 'booking-new-patient'} open mode={pendingBookingPatient.patient ? 'edit' : 'create'} initial={pendingBookingPatient.patient ? patientInput(pendingBookingPatient.patient) : newPatientInput(pendingBookingPatient.fullName)} patients={patientItems} selfId={pendingBookingPatient.patient?.id} administrators={administrators} currentAssigned={pendingBookingPatient.patient?.assignedStaff} error={createError} onClose={onBookingPatientClose} onSave={onBookingPatientSave} />}
       {moving && <RescheduleDialog key={moving.id} item={moving} practitioners={practitioners} error={moveError} onClose={onMovingClose} onSave={onMovingSave} />}
       {waitSlot && <WaitlistMatchesDialog slot={waitSlot} matches={registry.matches(waitSlot.practitionerId, waitSlot.date)} patients={patientItems} services={clinic.services} error={waitError} onClose={onWaitlistClose} onBook={onBookWaiting} />}

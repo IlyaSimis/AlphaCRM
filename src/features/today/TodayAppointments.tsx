@@ -8,11 +8,12 @@ type TodayAppointmentsProps = {
   apiOnline: boolean
   appointments: ScheduleItem[]
   practitioners: Practitioner[]
+  revision: number
   onOpen: () => void
 }
 
 /** Все записи текущего дня, независимо от даты, выбранной в основном расписании. */
-export function TodayAppointments({ apiOnline, appointments, practitioners, onOpen }: TodayAppointmentsProps) {
+export function TodayAppointments({ apiOnline, appointments, practitioners, revision, onOpen }: TodayAppointmentsProps) {
   const today = localToday()
   const [items, setItems] = useState<ScheduleItem[] | null>(null)
   const [error, setError] = useState('')
@@ -24,7 +25,7 @@ export function TodayAppointments({ apiOnline, appointments, practitioners, onOp
       .then((rows) => { if (!cancelled) { setItems(rows); setError('') } })
       .catch(() => { if (!cancelled) setError('Не удалось загрузить приёмы на сегодня') })
     return () => { cancelled = true }
-  }, [apiOnline, today])
+  }, [apiOnline, today, revision])
 
   const loaded = apiOnline ? items : appointments
   const visible = (loaded ?? [])

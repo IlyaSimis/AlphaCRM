@@ -40,7 +40,7 @@ type WorkspaceContentProps = {
   onQuery: (query: string) => void
   onDoctorFilter: (id: string) => void
   onNavigate: (page: Page) => void
-  onOpenBooking: (date?: string, practitionerId?: string, time?: string) => void
+  onOpenBooking: (date?: string, practitionerId?: string, time?: string, patientId?: string) => void
   onNewPatient: () => void
   onCreatePatient: () => void
   onImportPatients: () => void
@@ -69,7 +69,7 @@ export function WorkspaceContent(props: WorkspaceContentProps) {
 
   return (
     <Suspense fallback={<Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress aria-label="Загрузка раздела" /></Box>}>
-      {page === 'today' && <TodayPage role={role} selfId={staff.id} selfName={staff.fullName} onNewAppointment={() => onOpenBooking(localToday())} onNewPatient={onNewPatient} apiOnline={clinic.apiOnline} patients={patientItems} appointments={scheduleItems} practitioners={practitioners} dueTasks={registry.todayTasks} tasksError={registry.error} staffName={registry.staffName} onOpen={onNavigate} />}
+      {page === 'today' && <TodayPage role={role} selfId={staff.id} selfName={staff.fullName} onNewAppointment={() => onOpenBooking(localToday())} onNewPatient={onNewPatient} apiOnline={clinic.apiOnline} patients={patientItems} appointments={scheduleItems} practitioners={practitioners} revision={clinic.revision} dueTasks={registry.todayTasks} tasksError={registry.error} staffName={registry.staffName} onOpen={onNavigate} onOpenPatient={onOpenPatientById} onRebook={(item) => onOpenBooking(localToday(), item.practitionerId, undefined, item.patientId)} />}
       {page === 'workspace' && <WorkspacePage key={staff.id} apiOnline={clinic.apiOnline} selfId={staff.id} staff={registry.staffList} patients={canSeePatients(role) ? patientItems : []} appointments={scheduleItems} notify={clinic.notify} navigationIntent={workspaceIntent} />}
       {/* Врача встречают на расписании; остальных — на «Сегодня». */}
       {page === 'schedule' && canWriteClinical(role) && <Typography className="greeting" sx={{ mb: 1.5 }}>{greeting(staff.fullName)}</Typography>}
@@ -86,7 +86,7 @@ export function WorkspaceContent(props: WorkspaceContentProps) {
       {page === 'documents' && <SignedDocuments role={role} apiOnline={clinic.apiOnline} practitioners={practitioners} />}
       {page === 'contract-templates' && <ContractTemplatesPage role={role} apiOnline={clinic.apiOnline} services={clinic.services} notify={clinic.notify} />}
       {page === 'registry' && <RegistryPage staff={staff} registry={registry} patients={patientItems} practitioners={practitioners} services={clinic.services} />}
-      {page === 'analytics' && <Analytics apiOnline={clinic.apiOnline} anchor={scheduleDate} practitioners={practitioners} scheduleItems={scheduleItems} />}
+      {page === 'analytics' && <Analytics apiOnline={clinic.apiOnline} anchor={scheduleDate} practitioners={practitioners} scheduleItems={scheduleItems} onOpenPatient={onOpenPatientById} />}
       {page === 'audit' && <AuditLog apiOnline={clinic.apiOnline} />}
       {page === 'cashier' && <Cashier role={role} apiOnline={clinic.apiOnline} practitioners={practitioners} localAppointments={scheduleItems} localCharges={clinic.localCharges} onLocalCharge={clinic.addLocalCharge} onLocalPay={clinic.payLocalCharge} onLocalAmount={clinic.setLocalChargeAmount} notify={clinic.notify} />}
       {(page === 'hours' || page === 'prices') && <SettingsPage key={page} section={page} practitioners={practitioners} services={clinic.services} onSaveHours={clinic.saveHours} onSaveCard={clinic.saveCard} onSavePrice={clinic.savePrice} onCreateService={clinic.addService} canEditPrices={canManagePrices(role)} />}

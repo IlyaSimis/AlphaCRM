@@ -41,7 +41,7 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
   const [drawer, setDrawer] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [doctorFilter, setDoctorFilter] = useState('all')
-  const [booking, setBooking] = useState<{ date: string; practitionerId?: string; time?: string } | null>(null)
+  const [booking, setBooking] = useState<{ date: string; practitionerId?: string; time?: string; patientId?: string } | null>(null)
   const [bookingKey, setBookingKey] = useState(0)
   const [bookingError, setBookingError] = useState('')
   const [pendingBookingPatient, setPendingBookingPatient] = useState<{ draft: BookingDraft; fullName: string; patient?: PatientItem } | null>(null)
@@ -89,10 +89,10 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
     if (target) navigate(target)
   }
 
-  const openBooking = (date = scheduleDate, practitionerId?: string, time?: string) => {
+  const openBooking = (date = scheduleDate, practitionerId?: string, time?: string, patientId?: string) => {
     setBookingError('')
     setBookingKey((value) => value + 1)
-    setBooking({ date, practitionerId, time })
+    setBooking({ date, practitionerId, time, patientId })
   }
 
   const openPatient = (patient: PatientItem) => {

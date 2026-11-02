@@ -249,6 +249,11 @@ button, input, textarea { font: inherit; }
 .today-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 4px; border: 0; border-bottom: 1px solid var(--border-soft); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .today-row:last-child { border-bottom: 0; }
 .today-row:hover, .today-row:focus-visible { background: var(--surface-hover, rgba(127, 127, 127, 0.08)); }
+.work-queue-row { display: flex; align-items: center; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--border-soft); }
+.work-queue-row:last-child { border-bottom: 0; }
+.work-queue-time { display: flex; align-items: flex-start; flex-direction: column; gap: 6px; min-width: 112px; }
+.service-details { width: min(1050px, 94vw); padding: 24px; }
+.service-details-table { min-width: 850px; }
 .patient-files { margin-top: 16px; }
 .settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 16px; }
 .shift-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 6px 0; border-bottom: 1px solid var(--border-soft); }

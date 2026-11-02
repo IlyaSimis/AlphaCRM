@@ -60,6 +60,32 @@ describe('«Сегодня»', () => {
     expect(await screen.findByRole('heading', { name: 'Дашборды', level: 4 })).toBeInTheDocument()
   })
 
+  it('confirms a queue item and rebooks through the standard booking dialog', async () => {
+    const doctorId = '00000000-0000-0000-0000-000000000201'
+    const base = server()
+    const fetchMock = withAuth((address: string, init?: RequestInit) => {
+      if (address.includes('/registry/work-queue')) return jsonResponse({ date: '2026-10-20', items: [
+        { id: 'confirmation:a-confirm', kind: 'CONFIRMATION', appointmentId: 'a-confirm', patientId: anna.id, patientName: 'Анна Михайлова', practitionerId: doctorId, practitionerName: 'Александр Петров', startsAt: '2026-10-20T09:00:00Z', serviceName: 'Первичный приём', appointmentStatus: 'BOOKED', chargeId: null, amountMinor: null, currency: null, reason: 'Запись ещё не подтверждена' },
+        { id: 'rebook:a-repeat', kind: 'REBOOK', appointmentId: 'a-repeat', patientId: anna.id, patientName: 'Анна Михайлова', practitionerId: doctorId, practitionerName: 'Александр Петров', startsAt: '2026-10-20T10:00:00Z', serviceName: 'Повторный приём', appointmentStatus: 'COMPLETED', chargeId: null, amountMinor: null, currency: null, reason: 'Проверьте, нужна ли следующая запись' },
+      ] })
+      if (address.endsWith('/appointments/a-confirm/status') && init?.method === 'POST') return jsonResponse({ id: 'a-confirm', status: 'CONFIRMED' })
+      return base(address, init)
+    }, 'admin', { dashboard })
+    const user = userEvent.setup()
+    renderApp()
+    const queue = await screen.findByRole('region', { name: 'Требуют действия' })
+    await user.click(await within(queue).findByRole('button', { name: 'Подтвердить запись Анна Михайлова' }))
+    await waitFor(() => expect(within(queue).queryByRole('button', { name: 'Подтвердить запись Анна Михайлова' })).not.toBeInTheDocument())
+    const statusCall = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith('/appointments/a-confirm/status') && init?.method === 'POST')
+    expect(JSON.parse(String(statusCall?.[1]?.body))).toEqual({ status: 'CONFIRMED' })
+
+    await user.click(within(queue).getByRole('button', { name: 'Записать снова Анна Михайлова' }))
+    const booking = await screen.findByRole('dialog')
+    expect(booking).toHaveTextContent('Новая запись')
+    expect(within(booking).getByLabelText('Пациент')).toHaveTextContent('Анна Михайлова')
+    expect(within(booking).getByLabelText('Врач')).toHaveTextContent('Александр Петров')
+  })
+
   it('opens salary details and the schedule from analytical widgets', async () => {
     withAuth(server(), 'admin', { dashboard })
     const user = userEvent.setup()

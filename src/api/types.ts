@@ -312,6 +312,43 @@ export type AnalyticsOverview = {
   queues: { unclosedEncounters: number; unsignedDocuments: number; unpaidCharges: number }
 }
 
+export type WorkQueueKind = 'CONFIRMATION' | 'PAYMENT' | 'REBOOK' | 'NO_SHOW' | 'DELIVERY'
+export type WorkQueueItem = {
+  id: string
+  kind: WorkQueueKind
+  appointmentId: string
+  patientId: string
+  patientName: string
+  practitionerId: string
+  practitionerName: string
+  startsAt: string
+  serviceName: string
+  appointmentStatus: AppointmentStatus
+  chargeId: string | null
+  amountMinor: number | null
+  currency: string | null
+  reason: string
+}
+export type RegistryWorkQueue = { date: string; items: WorkQueueItem[] }
+
+export type ServiceAnalyticsTotals = {
+  appointments: number; visits: number; uniquePatients: number; newPatients: number; returningPatients: number
+  noShow: number; cancelled: number; withoutNextVisit: number; revenueMinor: number; payments: number; averageCheckMinor: number | null
+}
+export type ServiceAnalyticsRow = Omit<ServiceAnalyticsTotals, 'cancelled'> & {
+  serviceKey: string; serviceName: string; cancelled: number; previousVisits: number; previousRevenueMinor: number
+}
+export type ServiceAnalyticsReport = {
+  from: string; to: string; previousFrom: string; previousTo: string; currency: string
+  totals: ServiceAnalyticsTotals; previousTotals: ServiceAnalyticsTotals; rows: ServiceAnalyticsRow[]
+}
+export type ServiceAppointment = {
+  appointmentId: string; patientId: string; patientName: string; practitionerId: string; practitionerName: string
+  startsAt: string; status: AppointmentStatus; chargeId: string | null; chargeStatus: string | null
+  amountMinor: number | null; currency: string | null; withoutNextVisit: boolean
+}
+export type ServiceAppointmentDetails = { from: string; to: string; serviceKey: string; serviceName: string; appointments: ServiceAppointment[] }
+
 export type AuditItem = {
   id: string
   occurredAt: string

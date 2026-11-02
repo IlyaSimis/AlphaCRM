@@ -12,9 +12,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/analytics")
 public class AnalyticsOverviewController {
   private final AnalyticsOverviewService analytics;
+  private final ServiceAnalyticsService services;
 
-  AnalyticsOverviewController(AnalyticsOverviewService analytics) {
+  AnalyticsOverviewController(AnalyticsOverviewService analytics, ServiceAnalyticsService services) {
     this.analytics = analytics;
+    this.services = services;
   }
 
   @GetMapping("/overview")
@@ -23,5 +25,22 @@ public class AnalyticsOverviewController {
       @RequestParam LocalDate to,
       @RequestParam(required = false) UUID practitionerId) {
     return analytics.overview(from, to, practitionerId);
+  }
+
+  @GetMapping("/services")
+  ServiceAnalyticsView services(
+      @RequestParam LocalDate from,
+      @RequestParam LocalDate to,
+      @RequestParam(required = false) UUID practitionerId) {
+    return services.report(from, to, practitionerId);
+  }
+
+  @GetMapping("/services/appointments")
+  ServiceAnalyticsView.Details serviceAppointments(
+      @RequestParam LocalDate from,
+      @RequestParam LocalDate to,
+      @RequestParam String serviceKey,
+      @RequestParam(required = false) UUID practitionerId) {
+    return services.details(from, to, serviceKey, practitionerId);
   }
 }

@@ -1,11 +1,13 @@
+import { useState } from 'react'
 import { AddRounded, PaymentsRounded, PersonAddAlt1Rounded } from '@mui/icons-material'
 import { Box, Button, Stack, Typography } from '@mui/material'
-import type { PatientItem, Practitioner, ScheduleItem, TaskItem } from '../../api/types'
+import type { PatientItem, Practitioner, ScheduleItem, TaskItem, WorkQueueItem } from '../../api/types'
 import type { Page } from '../../app/pages'
 import { formatDay, localToday, shortDate } from '../../shared/dates'
 import { greeting } from '../../shared/greeting'
-import type { Role } from '../../shared/roles'
+import { canManageRegistry, type Role } from '../../shared/roles'
 import { overdueTasks, todayActions, todayBlocks } from './today'
+import { AdminWorkQueue } from './AdminWorkQueue'
 import { DashboardWidgets } from './DashboardWidgets'
 import { dashboardCodes } from './dashboardCodes'
 import { TodayBlock } from './TodayBlock'
@@ -21,23 +23,27 @@ type TodayPageProps = {
   patients: PatientItem[]
   appointments: ScheduleItem[]
   practitioners: Practitioner[]
+  revision: number
   /** Открытые задачи со сроком до сегодня включительно — их уже загрузила регистратура. */
   dueTasks: TaskItem[]
   tasksError: string
   staffName: (id: string) => string
   onOpen: (page: Page) => void
+  onOpenPatient: (patientId: string) => void
+  onRebook: (item: WorkQueueItem) => void
   /** Те же сценарии, что на расписании и в списке пациентов, — не отдельные мастера. */
   onNewAppointment: () => void
   onNewPatient: () => void
 }
 
-/** Главная: месячные показатели, личные заметки и просроченные задачи без дублирования других разделов. */
+/** Главная: очередь администратора, персональные показатели и записи текущего дня. */
 export function TodayPage(props: TodayPageProps) {
   const { role, apiOnline, patients } = props
   const blocks = todayBlocks(role)
   const actions = todayActions(role)
   const today = localToday()
   const overdue = overdueTasks(props.dueTasks, today)
+  const [queueRevision, setQueueRevision] = useState(0)
   const patientName = (id: string | null) => (id ? patients.find((patient) => patient.id === id)?.name : null) ?? null
 
   return (
@@ -55,6 +61,7 @@ export function TodayPage(props: TodayPageProps) {
           </Stack>}
         </Box>
       </Box>
+      {canManageRegistry(role) && <AdminWorkQueue apiOnline={apiOnline} appointments={props.appointments} practitioners={props.practitioners} revision={props.revision} onOpenPatient={props.onOpenPatient} onOpenCashier={() => props.onOpen('cashier')} onRebook={props.onRebook} onChanged={() => setQueueRevision((value) => value + 1)} />}
       <Box className="today-grid">
         <Box className="today-column">
           <TodayNotes apiOnline={apiOnline} selfId={props.selfId} onOpen={() => props.onOpen('workspace')} />
@@ -69,7 +76,7 @@ export function TodayPage(props: TodayPageProps) {
               </Box>
             ))}
           </TodayBlock>}
-          <TodayAppointments apiOnline={apiOnline} appointments={props.appointments} practitioners={props.practitioners} onOpen={() => props.onOpen('schedule')} />
+          <TodayAppointments apiOnline={apiOnline} appointments={props.appointments} practitioners={props.practitioners} revision={props.revision + queueRevision} onOpen={() => props.onOpen('schedule')} />
         </Box>
       </Box>
     </>

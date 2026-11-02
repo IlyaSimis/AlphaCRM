@@ -16,6 +16,7 @@ type BookingDialogProps = {
   error: string
   initialDate: string
   initialTime?: string
+  initialPatientId?: string
   onClose: () => void
   onSave: (draft: BookingDraft) => void
   onSaveNewPatient: (draft: BookingDraft, fullName: string) => void
@@ -23,11 +24,11 @@ type BookingDialogProps = {
   checkPast?: boolean
 }
 
-export function BookingDialog({ open, patients, practitioners, services: catalog, defaultPractitionerId, error, initialDate, initialTime = '13:00', onClose, onSave, onSaveNewPatient, checkPast = false }: BookingDialogProps) {
+export function BookingDialog({ open, patients, practitioners, services: catalog, defaultPractitionerId, error, initialDate, initialTime = '13:00', initialPatientId, onClose, onSave, onSaveNewPatient, checkPast = false }: BookingDialogProps) {
   const services = bookableServices(catalog)
   const fallbackPatientId = patients[0]?.id ?? ''
   const fallbackServiceId = services[0]?.id ?? ''
-  const [patientId, setPatientId] = useState(fallbackPatientId)
+  const [patientId, setPatientId] = useState(initialPatientId ?? fallbackPatientId)
   const [newPatientName, setNewPatientName] = useState('')
   const [date, setDate] = useState(initialDate)
   const [time, setTime] = useState(initialTime)

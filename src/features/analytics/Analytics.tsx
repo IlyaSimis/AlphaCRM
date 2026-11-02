@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { InsightsRounded } from '@mui/icons-material'
-import { Alert, Box, Chip, CircularProgress, MenuItem, Stack, TextField, Typography } from '@mui/material'
+import { Alert, Box, Chip, CircularProgress, MenuItem, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material'
 import { loadAnalyticsOverview, loadAppointmentStats } from '../../api/analytics'
 import type { AnalyticsLoad, AnalyticsOverview, Practitioner, ScheduleItem, StatRow } from '../../api/types'
 import { shiftDate, shortDate } from '../../shared/dates'
 import { Metric } from '../../shared/ui'
 import { formatMoney } from '../schedule/booking'
 import { demoOccupancy, demoWeeks, loadRate, waitlistConversion } from './overview'
+import { ServiceAnalytics } from './ServiceAnalytics'
 import { buckets, rate, rowsFromSchedule, summarize, type Bucket, type Counts, type DayStats } from './stats'
 
 const periods = [
@@ -29,7 +30,8 @@ function money(value: number | undefined, currency: string) {
   return value == null ? '—' : formatMoney(value, currency)
 }
 
-export function Analytics({ apiOnline, anchor, practitioners, scheduleItems }: { apiOnline: boolean; anchor: string; practitioners: Practitioner[]; scheduleItems: ScheduleItem[] }) {
+export function Analytics({ apiOnline, anchor, practitioners, scheduleItems, onOpenPatient }: { apiOnline: boolean; anchor: string; practitioners: Practitioner[]; scheduleItems: ScheduleItem[]; onOpenPatient: (patientId: string) => void }) {
+  const [section, setSection] = useState<'overview' | 'services'>('overview')
   const [periodDays, setPeriodDays] = useState(28)
   const [to, setTo] = useState(anchor)
   const [doctor, setDoctor] = useState('all')
@@ -74,9 +76,13 @@ export function Analytics({ apiOnline, anchor, practitioners, scheduleItems }: {
   return (
     <>
       <Box className="section-intro">
-        <Box><Typography variant="h4" sx={{ fontWeight: 750 }}>Показатели клиники</Typography><Typography sx={{ color: 'text.secondary' }}>Тренды за 4–12 недель: только агрегаты, без имён пациентов и клинических данных</Typography></Box>
+        <Box><Typography variant="h4" sx={{ fontWeight: 750 }}>Показатели клиники</Typography><Typography sx={{ color: 'text.secondary' }}>Общие тренды, посещаемость и выручка по услугам с переходом к исходным записям</Typography></Box>
         <Chip size="small" label={apiOnline ? 'Данные API' : 'Демо-данные из расписания'} color={apiOnline ? 'success' : 'default'} variant="outlined" />
       </Box>
+      <ToggleButtonGroup exclusive size="small" value={section} onChange={(_, next: 'overview' | 'services' | null) => { if (next) setSection(next) }} aria-label="Раздел аналитики" sx={{ mb: 2 }}>
+        <ToggleButton value="overview">Обзор</ToggleButton>
+        <ToggleButton value="services">Услуги</ToggleButton>
+      </ToggleButtonGroup>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} className="analytics-filters">
         <TextField select size="small" label="Период" value={periodDays} onChange={(event) => setPeriodDays(Number(event.target.value))}>
           {periods.map((period) => <MenuItem key={period.days} value={period.days}>{period.label}</MenuItem>)}
@@ -88,8 +94,8 @@ export function Analytics({ apiOnline, anchor, practitioners, scheduleItems }: {
         </TextField>
         {loading && <CircularProgress size={22} sx={{ alignSelf: 'center' }} aria-label="Загрузка аналитики" />}
       </Stack>
-      {error && <Alert severity="warning" sx={{ mb: 2 }}>{error}. Показаны данные из расписания.</Alert>}
-
+      {section === 'overview' && error && <Alert severity="warning" sx={{ mb: 2 }}>{error}. Показаны данные из расписания.</Alert>}
+      {section === 'services' ? <ServiceAnalytics apiOnline={apiOnline} from={from} to={to} practitionerId={practitionerId} onOpenPatient={onOpenPatient} /> : <>
       <Box className="summary-grid analytics-kpis">
         <Metric value={String(stats.totals.total)} label="записей за период" note={`${shortDate(from)}–${shortDate(to)}`} />
         <Metric value={percent(stats.attendanceRate)} label="явка" note={`пришли ${stats.totals.attended} из ${stats.totals.attended + stats.totals.noShow}`} />
@@ -220,6 +226,7 @@ export function Analytics({ apiOnline, anchor, practitioners, scheduleItems }: {
           <tbody>{stats.days.filter((day) => day.total > 0).map((day) => <tr key={day.date}><td>{shortDate(day.date)}</td>{buckets.map((bucket) => <td key={bucket.key}>{day[bucket.key]}</td>)}<td>{day.total}</td></tr>)}</tbody>
         </table>
       </details>
+      </>}
     </>
   )
 }

@@ -1,5 +1,11 @@
 import { apiFetch, failure } from './client'
-import type { TaskItem, WaitlistItem } from './types'
+import type { RegistryWorkQueue, TaskItem, WaitlistItem } from './types'
+
+export async function loadRegistryWorkQueue(date: string): Promise<RegistryWorkQueue> {
+  const response = await apiFetch(`/registry/work-queue?${new URLSearchParams({ date })}`)
+  if (!response.ok) throw await failure(response, 'Рабочая очередь недоступна')
+  return response.json()
+}
 
 /** Открытые задачи со сроком до dueTo включительно (просроченные тоже). */
 export async function loadTasksDue(dueTo: string): Promise<TaskItem[]> {
