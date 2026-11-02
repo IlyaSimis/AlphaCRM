@@ -21,7 +21,14 @@ class ClinicBootstrapTest {
 
   ClinicBootstrap bootstrap(String name, String password, boolean mustChange) {
     return new ClinicBootstrap(
-        staff, clinics, encoder, name, "Clinic Administrator", password, mustChange);
+        staff,
+        clinics,
+        encoder,
+        mock(ru.quietclinic.tenancy.TenantDirectory.class),
+        name,
+        "Clinic Administrator",
+        password,
+        mustChange);
   }
 
   @Test
@@ -62,6 +69,7 @@ class ClinicBootstrapTest {
   @Test
   void existingStaffMeansNothingIsCreated() {
     when(staff.count()).thenReturn(3L);
+    when(clinics.findAllByOrderByCreatedAt()).thenReturn(List.of(new Clinic("Seed Clinic")));
     bootstrap("AlphaCRM", "", true).run(null);
     verify(staff, never()).save(any());
     verify(clinics, never()).save(any());
@@ -88,7 +96,16 @@ class ClinicBootstrapTest {
   void blankNamesFallBackToAlphaCrmAndDefaultAdministratorName() {
     Clinic legacy = new Clinic("Seed Clinic");
     when(clinics.findAllByOrderByCreatedAt()).thenReturn(List.of(legacy));
-    new ClinicBootstrap(staff, clinics, encoder, " ", "", "admin", false).run(null);
+    new ClinicBootstrap(
+            staff,
+            clinics,
+            encoder,
+            mock(ru.quietclinic.tenancy.TenantDirectory.class),
+            " ",
+            "",
+            "admin",
+            false)
+        .run(null);
     assertThat(legacy.name).isEqualTo("AlphaCRM");
     ArgumentCaptor<StaffUser> admin = ArgumentCaptor.forClass(StaffUser.class);
     verify(staff).save(admin.capture());

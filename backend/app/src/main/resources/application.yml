@@ -54,6 +54,12 @@ clinic:
   # Текущая версия для новых записей; прежние версии перечисляются через запятую: v2=secret,v3=secret.
   kms-key-version: ${CLINIC_KMS_KEY_VERSION:dev-v1}
   kms-keys: ${CLINIC_KMS_KEYS:}
+  # Отдельная PostgreSQL-база на клинику. Каталог и HTTP-сессии остаются в управляющей БД.
+  tenancy:
+    enabled: ${CLINIC_TENANCY_ENABLED:false}
+    maximum-pool-size: ${CLINIC_TENANCY_POOL_SIZE:5}
+    # Отдельный токен control-plane API /api/v1/tenancy/**, не клиническая сессия.
+    provisioning-token: ${CLINIC_TENANCY_PROVISIONING_TOKEN:}
   # Пустая база: клиника и её администратор admin (см. ClinicBootstrap). Пароля в коде нет.
   name: ${CLINIC_NAME:AlphaCRM}
   # ФИО начального администратора — данные, поэтому по-русски и в конфигурации, а не в коде.

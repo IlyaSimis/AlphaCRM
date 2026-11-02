@@ -15,15 +15,17 @@ import org.springframework.scheduling.annotation.Scheduled;
     matchIfMissing = true)
 class MarkingScheduler {
   private final MarkingRelay relay;
+  private final ru.quietclinic.tenancy.TenantExecutor tenants;
 
-  MarkingScheduler(MarkingRelay relay) {
+  MarkingScheduler(MarkingRelay relay, ru.quietclinic.tenancy.TenantExecutor tenants) {
     this.relay = relay;
+    this.tenants = tenants;
   }
 
   @Scheduled(
       initialDelayString = "${clinic.marking.poll-interval:PT60S}",
       fixedDelayString = "${clinic.marking.poll-interval:PT60S}")
   void run() {
-    relay.runOnce(Instant.now());
+    tenants.forEachTenant(() -> relay.runOnce(Instant.now()));
   }
 }

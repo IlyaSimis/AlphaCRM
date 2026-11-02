@@ -13,12 +13,17 @@ public class MessengerIntegrationClientFactory {
   private final IntegrationRepository repository;
   private final IntegrationSecretCipher cipher;
   private final JsonMapper json;
+  private final ru.quietclinic.tenancy.TenantDirectory directory;
 
   MessengerIntegrationClientFactory(
-      IntegrationRepository repository, IntegrationSecretCipher cipher, JsonMapper json) {
+      IntegrationRepository repository,
+      IntegrationSecretCipher cipher,
+      JsonMapper json,
+      ru.quietclinic.tenancy.TenantDirectory directory) {
     this.repository = repository;
     this.cipher = cipher;
     this.json = json;
+    this.directory = directory;
   }
 
   public Optional<MessengerIntegration> forClinic(UUID clinicId, String type) {
@@ -28,8 +33,15 @@ public class MessengerIntegrationClientFactory {
     return repository.find(clinicId, type).map(this::load);
   }
 
-  /** Активная интеграция с отдельным секретом webhook; legacy webhook здесь не создаётся. */
+  /** Сначала управляющий каталог выбирает базу, затем секрет ищется только внутри неё. */
   public Optional<MessengerWebhook> webhook(UUID publicKey, String type) {
+    UUID tenantId = directory.clinicForWebhook(publicKey, type).orElse(null);
+    if (tenantId == null) return webhookInTenant(publicKey, type);
+    return ru.quietclinic.tenancy.TenantScope.call(
+        tenantId, () -> webhookInTenant(publicKey, type));
+  }
+
+  private Optional<MessengerWebhook> webhookInTenant(UUID publicKey, String type) {
     return repository
         .findByPublicKey(publicKey, type)
         .filter(integration -> "ACTIVE".equals(integration.status()))

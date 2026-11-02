@@ -13,12 +13,17 @@ public class MangoIntegrationClientFactory {
   private final IntegrationRepository repository;
   private final IntegrationSecretCipher cipher;
   private final JsonMapper json;
+  private final ru.quietclinic.tenancy.TenantDirectory directory;
 
   MangoIntegrationClientFactory(
-      IntegrationRepository repository, IntegrationSecretCipher cipher, JsonMapper json) {
+      IntegrationRepository repository,
+      IntegrationSecretCipher cipher,
+      JsonMapper json,
+      ru.quietclinic.tenancy.TenantDirectory directory) {
     this.repository = repository;
     this.cipher = cipher;
     this.json = json;
+    this.directory = directory;
   }
 
   /** Запись в реестре всегда важнее env: PENDING/DISABLED не проваливаются в legacy. */
@@ -26,8 +31,14 @@ public class MangoIntegrationClientFactory {
     return repository.find(clinicId, IntegrationService.MANGO).map(this::client);
   }
 
-  /** Публичный ключ выбирает только активную полностью настроенную интеграцию. */
+  /** Публичный ключ выбирает только активную полностью настроенную интеграцию в её базе. */
   public Optional<MangoWebhook> webhook(UUID publicKey) {
+    UUID tenantId = directory.clinicForWebhook(publicKey, IntegrationService.MANGO).orElse(null);
+    if (tenantId == null) return webhookInTenant(publicKey);
+    return ru.quietclinic.tenancy.TenantScope.call(tenantId, () -> webhookInTenant(publicKey));
+  }
+
+  private Optional<MangoWebhook> webhookInTenant(UUID publicKey) {
     return repository
         .findByPublicKey(publicKey, IntegrationService.MANGO)
         .filter(integration -> "ACTIVE".equals(integration.status()))

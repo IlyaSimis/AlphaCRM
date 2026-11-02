@@ -12,15 +12,17 @@ import org.springframework.scheduling.annotation.Scheduled;
 @ConditionalOnProperty(name = "clinic.events.enabled", havingValue = "true", matchIfMissing = true)
 class DomainEventScheduler {
   private final DomainEventRelay relay;
+  private final TenantRunner tenants;
 
-  DomainEventScheduler(DomainEventRelay relay) {
+  DomainEventScheduler(DomainEventRelay relay, TenantRunner tenants) {
     this.relay = relay;
+    this.tenants = tenants;
   }
 
   @Scheduled(
       initialDelayString = "${clinic.events.poll-interval:PT30S}",
       fixedDelayString = "${clinic.events.poll-interval:PT30S}")
   void retry() {
-    relay.runOnce(Instant.now());
+    tenants.forEachTenant(() -> relay.runOnce(Instant.now()));
   }
 }

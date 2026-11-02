@@ -31,6 +31,7 @@ class IntegrationService {
   private final MessengerWebhookRegistrationService webhookRegistration;
   private final AuditService audit;
   private final JsonMapper json;
+  private final ru.quietclinic.tenancy.TenantDirectory directory;
 
   IntegrationService(
       IntegrationRepository repository,
@@ -39,7 +40,8 @@ class IntegrationService {
       MessengerIntegrationClientFactory messengerClients,
       MessengerWebhookRegistrationService webhookRegistration,
       AuditService audit,
-      JsonMapper json) {
+      JsonMapper json,
+      ru.quietclinic.tenancy.TenantDirectory directory) {
     this.repository = repository;
     this.cipher = cipher;
     this.mangoClients = mangoClients;
@@ -47,6 +49,7 @@ class IntegrationService {
     this.webhookRegistration = webhookRegistration;
     this.audit = audit;
     this.json = json;
+    this.directory = directory;
   }
 
   @Transactional(readOnly = true)
@@ -160,7 +163,13 @@ class IntegrationService {
   private IntegrationRecord getOrCreate(String type) {
     return repository
         .find(clinicId(), type)
-        .orElseGet(() -> repository.create(clinicId(), type, write(defaultSettings(type))));
+        .orElseGet(
+            () -> {
+              IntegrationRecord integration =
+                  repository.create(clinicId(), type, write(defaultSettings(type)));
+              directory.registerWebhook(clinicId(), integration.publicKey(), type);
+              return integration;
+            });
   }
 
   private IntegrationRecord find(String rawType) {

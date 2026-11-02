@@ -19,9 +19,13 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import ru.quietclinic.audit.AuditService;
 import ru.quietclinic.platform.ClinicTime;
+import ru.quietclinic.tenancy.TenantDirectory;
+import ru.quietclinic.tenancy.TenantScope;
 
 /** Вход, текущий сотрудник и смена собственного пароля. Пароли не логируются. */
 @Service
@@ -34,6 +38,8 @@ class AuthService {
   private final AuditService audit;
   private final LoginThrottle throttle;
   private final ClinicTime time;
+  private final TenantDirectory directory;
+  private final TransactionTemplate transactions;
   private final SecurityContextRepository contexts = new HttpSessionSecurityContextRepository();
 
   /** Хеш случайной строки: с ним сверяется пароль неизвестного логина, чтобы уравнять время. */
@@ -45,21 +51,48 @@ class AuthService {
       PasswordEncoder encoder,
       AuditService audit,
       LoginThrottle throttle,
-      ClinicTime time) {
+      ClinicTime time,
+      TenantDirectory directory,
+      PlatformTransactionManager transactionManager) {
     this.staff = staff;
     this.clinics = clinics;
     this.encoder = encoder;
     this.audit = audit;
     this.throttle = throttle;
     this.time = time;
+    this.directory = directory;
+    transactions = new TransactionTemplate(transactionManager);
     unknownUserHash = encoder.encode(UUID.randomUUID().toString());
   }
 
-  /** Один и тот же ответ на неизвестный логин, неверный пароль и выключенную учётную запись. */
-  @Transactional
+  /**
+   * До входа tenant известен только управляющему каталогу; транзакция открывается уже в его scope.
+   */
   StaffView login(LoginRequest request, HttpServletRequest http, HttpServletResponse response) {
-    String address = http.getRemoteAddr();
     String username = request.username().trim().toLowerCase(Locale.ROOT);
+    UUID tenantId = directory.enabled() ? directory.clinicForLogin(username).orElse(null) : null;
+    if (tenantId != null) {
+      return TenantScope.call(
+          tenantId, () -> loginInTransaction(request, http, response, username));
+    }
+    return loginInTransaction(request, http, response, username);
+  }
+
+  private StaffView loginInTransaction(
+      LoginRequest request,
+      HttpServletRequest http,
+      HttpServletResponse response,
+      String username) {
+    return transactions.execute(status -> doLogin(request, http, response, username));
+  }
+
+  /** Один и тот же ответ на неизвестный логин, неверный пароль и выключенную учётную запись. */
+  private StaffView doLogin(
+      LoginRequest request,
+      HttpServletRequest http,
+      HttpServletResponse response,
+      String username) {
+    String address = http.getRemoteAddr();
     Instant now = time.now();
     // Подбор пароля: после серии неудач вход с этого адреса закрыт на время окна.
     if (throttle.blocked(address, username, now)) {

@@ -17,15 +17,20 @@ import org.springframework.scheduling.annotation.Scheduled;
     matchIfMissing = true)
 class DriveTrashPurge {
   private final DriveService drive;
+  private final ru.quietclinic.tenancy.TenantExecutor tenants;
   private final int trashDays;
 
-  DriveTrashPurge(DriveService drive, @Value("${clinic.drive.trash-days:30}") int trashDays) {
+  DriveTrashPurge(
+      DriveService drive,
+      ru.quietclinic.tenancy.TenantExecutor tenants,
+      @Value("${clinic.drive.trash-days:30}") int trashDays) {
     this.drive = drive;
+    this.tenants = tenants;
     this.trashDays = trashDays;
   }
 
   @Scheduled(initialDelayString = "PT5M", fixedDelayString = "PT1H")
   void purge() {
-    drive.purge(Instant.now().minus(Duration.ofDays(trashDays)));
+    tenants.forEachTenant(() -> drive.purge(Instant.now().minus(Duration.ofDays(trashDays))));
   }
 }

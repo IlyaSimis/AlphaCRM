@@ -22,6 +22,7 @@ import ru.quietclinic.audit.AuditService;
 import ru.quietclinic.platform.DomainEvents;
 import ru.quietclinic.platform.Permission;
 import ru.quietclinic.platform.RolePermissions;
+import ru.quietclinic.tenancy.TenantDirectory;
 
 /**
  * Сотрудники клиники: заводят, выключают и задают временный пароль владелец, старший администратор,
@@ -39,6 +40,7 @@ class StaffService {
   private final AuditService audit;
   private final DomainEvents events;
   private final PractitionerCards practitionerCards;
+  private final TenantDirectory directory;
 
   StaffService(
       StaffRepository staff,
@@ -47,7 +49,8 @@ class StaffService {
       JdbcTemplate jdbc,
       AuditService audit,
       PractitionerCards practitionerCards,
-      DomainEvents events) {
+      DomainEvents events,
+      TenantDirectory directory) {
     this.staff = staff;
     this.encoder = encoder;
     this.auth = auth;
@@ -55,6 +58,7 @@ class StaffService {
     this.audit = audit;
     this.practitionerCards = practitionerCards;
     this.events = events;
+    this.directory = directory;
   }
 
   @Transactional(readOnly = true)
@@ -75,6 +79,7 @@ class StaffService {
     if (staff.existsByUsername(username)) {
       throw conflict("USERNAME_TAKEN", "Username is already taken");
     }
+    directory.requireLoginAvailable(username);
     UUID id = UUID.randomUUID();
     UUID practitionerId = null;
     if (StaffRoles.DOCTOR.equals(role)) {
@@ -115,6 +120,7 @@ class StaffService {
                 role,
                 practitionerId,
                 true));
+    directory.registerLogin(clinicId(), username);
     audit.record(actorId(), "STAFF_CREATED", "STAFF", user.id, "ALLOWED", "role:" + role);
     return auth.view(user);
   }

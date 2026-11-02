@@ -12,15 +12,17 @@ import org.springframework.scheduling.annotation.Scheduled;
 @ConditionalOnProperty(name = "clinic.outbox.enabled", havingValue = "true", matchIfMissing = true)
 class OutboxScheduler {
   private final OutboxDispatcher dispatcher;
+  private final ru.quietclinic.tenancy.TenantExecutor tenants;
 
-  OutboxScheduler(OutboxDispatcher dispatcher) {
+  OutboxScheduler(OutboxDispatcher dispatcher, ru.quietclinic.tenancy.TenantExecutor tenants) {
     this.dispatcher = dispatcher;
+    this.tenants = tenants;
   }
 
   @Scheduled(
       initialDelayString = "${clinic.outbox.poll-interval:PT30S}",
       fixedDelayString = "${clinic.outbox.poll-interval:PT30S}")
   void deliver() {
-    dispatcher.runOnce(Instant.now());
+    tenants.forEachTenant(() -> dispatcher.runOnce(Instant.now()));
   }
 }

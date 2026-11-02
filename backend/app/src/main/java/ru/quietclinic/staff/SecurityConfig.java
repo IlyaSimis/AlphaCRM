@@ -35,18 +35,27 @@ class SecurityConfig {
 
   /** Отключает автоконфигурацию пользователя в памяти; вход идёт через {@link AuthService}. */
   @Bean
-  UserDetailsService staffUserDetails(StaffRepository staff) {
-    return username ->
-        staff
-            .findByUsername(username)
-            .map(
-                user ->
-                    User.withUsername(user.username)
-                        .password(user.passwordHash)
-                        .roles(user.role)
-                        .disabled(!user.active)
-                        .build())
-            .orElseThrow(() -> new UsernameNotFoundException("not found"));
+  UserDetailsService staffUserDetails(
+      StaffRepository staff, ru.quietclinic.tenancy.TenantDirectory directory) {
+    return username -> {
+      java.util.UUID tenantId = directory.clinicForLogin(username).orElse(null);
+      if (tenantId == null) return loadUser(staff, username);
+      return ru.quietclinic.tenancy.TenantScope.call(tenantId, () -> loadUser(staff, username));
+    };
+  }
+
+  private static org.springframework.security.core.userdetails.UserDetails loadUser(
+      StaffRepository staff, String username) {
+    return staff
+        .findByUsername(username)
+        .map(
+            user ->
+                User.withUsername(user.username)
+                    .password(user.passwordHash)
+                    .roles(user.role)
+                    .disabled(!user.active)
+                    .build())
+        .orElseThrow(() -> new UsernameNotFoundException("not found"));
   }
 
   @Bean

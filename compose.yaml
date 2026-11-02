@@ -43,6 +43,10 @@ services:
       CLINIC_NAME: ${CLINIC_NAME:-AlphaCRM}
       CLINIC_ADMIN_NAME: ${CLINIC_ADMIN_NAME:-Администратор}
       CLINIC_ADMIN_PASSWORD: ${CLINIC_ADMIN_PASSWORD:?Задайте CLINIC_ADMIN_PASSWORD в .env (scripts/init-env.sh)}
+      # Отдельная база на клинику; управляющий PostgreSQL-пользователь должен иметь CREATEDB/CREATEROLE.
+      CLINIC_TENANCY_ENABLED: ${CLINIC_TENANCY_ENABLED:-false}
+      CLINIC_TENANCY_POOL_SIZE: ${CLINIC_TENANCY_POOL_SIZE:-5}
+      CLINIC_TENANCY_PROVISIONING_TOKEN: ${CLINIC_TENANCY_PROVISIONING_TOKEN:-}
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
       # Внешние выводы: секреты только из .env. Пусто — канал выключен, сообщения ждут в outbox.
       CLINIC_OUTBOUND_WEBHOOK_URL: ${CLINIC_OUTBOUND_WEBHOOK_URL:-}
