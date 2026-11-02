@@ -61,7 +61,7 @@ export const serviceSections: Record<Service, Array<{ label: string; pages: Page
     { label: 'ОБЗОР', pages: ['today', 'workspace', 'analytics', 'hr-me'] },
   ],
   management: [
-    { label: 'УПРАВЛЕНИЕ', pages: ['staff', 'hours', 'hr', 'audit', 'break-glass', 'outbox', 'integrations'] },
+    { label: 'УПРАВЛЕНИЕ', pages: ['staff', 'hours', 'hr', 'audit', 'break-glass', 'integrations'] },
   ],
   patients: [
     { label: 'РАБОТА С ПАЦИЕНТАМИ', pages: ['schedule', 'patients', 'registry', 'documents'] },

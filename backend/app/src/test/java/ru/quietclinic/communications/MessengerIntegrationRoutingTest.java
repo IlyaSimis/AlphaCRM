@@ -81,7 +81,10 @@ class MessengerIntegrationRoutingTest {
     String apiUrl =
         type.equals("MAX") ? "https://platform-api2.max.ru" : "https://api.telegram.org";
     return new MessengerIntegration(
-        new MessengerSettings(apiUrl, "", "", true), new MessengerSecrets(token, "", ""), active);
+        UUID.randomUUID(),
+        new MessengerSettings(apiUrl, "", "", "", true),
+        new MessengerSecrets(token, "", ""),
+        active);
   }
 
   private static PatientMessage message(String preferred) {

@@ -1,9 +1,10 @@
-import { screen } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import type { OutboxItem } from '../../api/types'
-import { anna, enterDemo, goOffline, jsonResponse, renderApp, withAuth, openPage, menuHas } from '../../test/helpers'
+import { anna, enterDemo, goOffline, jsonResponse, renderApp, withAuth, menuHas } from '../../test/helpers'
 import { reasonText } from './outboxLabels'
+import { OutboxPage } from './OutboxPage'
 
 const row = (patch: Partial<OutboxItem>): OutboxItem => ({
   id: '00000000-0000-0000-0000-0000000b0001', topic: 'NOTIFICATION', template: 'appointment-confirmed', aggregateType: 'APPOINTMENT',
@@ -25,10 +26,7 @@ describe('outbound deliveries', () => {
       row({ id: '00000000-0000-0000-0000-0000000b0002', template: 'appointment-reminder', channel: 'MOCK', status: 'PENDING', reason: 'CHANNEL_NOT_CONFIGURED', sentAt: null, nextAttemptAt: '2026-11-02T09:00:00Z' }),
       row({ id: '00000000-0000-0000-0000-0000000b0003', topic: 'FISCALIZATION', template: 'receipt', aggregateType: 'PAYMENT', aggregateId: '00000000-0000-0000-0000-000000000003', appointmentStartsAt: null, channel: 'CASHBOX', status: 'PENDING', reason: 'FISCAL_NOT_CONFIGURED', sentAt: null }),
     ]), 'admin')
-    const user = userEvent.setup()
-    renderApp()
-    expect(await screen.findByText('API подключён')).toBeInTheDocument()
-    await openPage(user, 'Внешние выводы')
+    render(<OutboxPage apiOnline />)
     expect(await screen.findByText('Подтверждение записи')).toBeInTheDocument()
     expect(screen.getAllByText('03.11.2026 09:00 · 0301').length).toBeGreaterThan(0)
     expect(screen.getByText('Telegram')).toBeInTheDocument()

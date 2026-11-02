@@ -51,4 +51,14 @@ public class IntegrationController {
   IntegrationView disable(@PathVariable String type) {
     return integrations.disable(type);
   }
+
+  @PostMapping("/{type}/webhook/connect")
+  IntegrationWebhookStatusView connectWebhook(@PathVariable String type) {
+    return integrations.connectWebhook(type);
+  }
+
+  @GetMapping("/{type}/webhook/status")
+  IntegrationWebhookStatusView webhookStatus(@PathVariable String type) {
+    return integrations.webhookStatus(type);
+  }
 }

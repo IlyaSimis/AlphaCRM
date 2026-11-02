@@ -77,6 +77,7 @@ public class MessengerIntegrationClientFactory {
               cipher.decrypt(integration.clinicId(), integration.id(), version, sealed),
               MessengerSecrets.class);
     }
-    return new MessengerIntegration(settings, secrets, "ACTIVE".equals(integration.status()));
+    return new MessengerIntegration(
+        integration.publicKey(), settings, secrets, "ACTIVE".equals(integration.status()));
   }
 }

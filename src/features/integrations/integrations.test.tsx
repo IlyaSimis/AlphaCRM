@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import type { IntegrationType } from '../../api/integrations'
@@ -63,17 +63,55 @@ describe('clinic integrations', () => {
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
     await openPage(user, 'Интеграции')
     await user.type(await screen.findByLabelText('Telegram Bot Token'), 'telegram-token')
+    await user.type(screen.getAllByLabelText('Публичный HTTPS-адрес CRM')[0], 'https://crm.example.test')
     await user.type(screen.getByLabelText('Telegram webhook secret'), 'telegram-webhook-secret')
     await user.click(screen.getByRole('button', { name: 'Сохранить Telegram' }))
     await user.type(screen.getByLabelText('MAX Bot Token'), 'max-token')
     await user.type(screen.getByLabelText('MAX webhook secret'), 'max-webhook-secret')
     await user.click(screen.getByRole('button', { name: 'Сохранить MAX' }))
     await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/integrations/max/secret'))).toBe(true))
+    const telegramSettings = fetchMock.mock.calls.find(([url]) => String(url).includes('/integrations/telegram/settings'))
     const telegram = fetchMock.mock.calls.find(([url]) => String(url).includes('/integrations/telegram/secret'))
     const max = fetchMock.mock.calls.find(([url]) => String(url).includes('/integrations/max/secret'))
+    expect(JSON.parse(String(telegramSettings?.[1]?.body))).toMatchObject({ webhookBaseUrl: 'https://crm.example.test' })
     expect(JSON.parse(String(telegram?.[1]?.body))).toEqual({ botToken: 'telegram-token', relaySecret: '', webhookSecret: 'telegram-webhook-secret' })
     expect(JSON.parse(String(max?.[1]?.body))).toEqual({ botToken: 'max-token', relaySecret: '', webhookSecret: 'max-webhook-secret' })
     expect(screen.getAllByRole('button', { name: 'Копировать webhook' })).toHaveLength(2)
+  })
+
+  it('connects a provider webhook only on demand and displays its current status', async () => {
+    const active = (type: IntegrationType) => ({
+      ...integration(type, { webhookBaseUrl: 'https://crm.example.test' }, true),
+      status: 'ACTIVE',
+    })
+    const fetchMock = withAuth((address, init) => {
+      const method = init?.method ?? 'GET'
+      if (address.endsWith('/integrations') && method === 'GET') return jsonResponse([active('TELEGRAM'), active('MAX')])
+      if (address.includes('/integrations/telegram/webhook/connect') && method === 'POST') {
+        return jsonResponse({ state: 'CONNECTED', url: 'https://crm.example.test/api/v1/integrations/telegram/events/key', detail: null, pendingUpdates: 2 })
+      }
+      if (address.includes('/integrations/telegram/webhook/status') && method === 'GET') {
+        return jsonResponse({ state: 'ERROR', url: 'https://crm.example.test/api/v1/integrations/telegram/events/key', detail: 'Connection refused', pendingUpdates: 4 })
+      }
+      if (address.includes('/patients')) return jsonResponse([])
+      if (address.includes('/appointments')) return jsonResponse([])
+      return jsonResponse({}, 404)
+    }, 'admin')
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByText('API подключён')).toBeInTheDocument()
+    await openPage(user, 'Интеграции')
+    const telegram = await screen.findByRole('region', { name: 'Интеграция Telegram' })
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/webhook/'))).toBe(false)
+
+    await user.click(within(telegram).getByRole('button', { name: 'Подключить webhook' }))
+    expect(await within(telegram).findByText('Webhook: подключён')).toBeInTheDocument()
+    expect(within(telegram).getByText('Ожидают доставки: 2')).toBeInTheDocument()
+    await user.click(within(telegram).getByRole('button', { name: 'Проверить' }))
+    expect(await within(telegram).findByText('Webhook: ошибка')).toBeInTheDocument()
+    expect(within(telegram).getByText('Connection refused')).toBeInTheDocument()
+    expect(within(telegram).getByText('Ожидают доставки: 4')).toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Интеграция MAX' })).getByRole('button', { name: 'Подключить webhook' })).toBeEnabled()
   })
 
   it('does not expose integrations to roles without permission', async () => {

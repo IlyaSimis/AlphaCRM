@@ -8,4 +8,5 @@ record IntegrationSettingsRequest(
     @Size(max = 32) String lineNumber,
     @Size(max = 500) String publicUrl,
     @Size(max = 500) String relayUrl,
+    @Size(max = 500) String webhookBaseUrl,
     Boolean reminderButtons) {}

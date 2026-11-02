@@ -28,6 +28,7 @@ class IntegrationService {
   private final IntegrationSecretCipher cipher;
   private final MangoIntegrationClientFactory mangoClients;
   private final MessengerIntegrationClientFactory messengerClients;
+  private final MessengerWebhookRegistrationService webhookRegistration;
   private final AuditService audit;
   private final JsonMapper json;
 
@@ -36,12 +37,14 @@ class IntegrationService {
       IntegrationSecretCipher cipher,
       MangoIntegrationClientFactory mangoClients,
       MessengerIntegrationClientFactory messengerClients,
+      MessengerWebhookRegistrationService webhookRegistration,
       AuditService audit,
       JsonMapper json) {
     this.repository = repository;
     this.cipher = cipher;
     this.mangoClients = mangoClients;
     this.messengerClients = messengerClients;
+    this.webhookRegistration = webhookRegistration;
     this.audit = audit;
     this.json = json;
   }
@@ -135,6 +138,25 @@ class IntegrationService {
     return view(find(integration.type()));
   }
 
+  IntegrationWebhookStatusView connectWebhook(String rawType) {
+    requirePermission(Permission.INTEGRATION_MANAGE);
+    var status = webhookRegistration.connect(rawType);
+    var integration = find(rawType);
+    audit.record(
+        actorId(),
+        "INTEGRATION_WEBHOOK_CONNECTED",
+        "INTEGRATION",
+        integration.id(),
+        "ALLOWED",
+        integration.type());
+    return status;
+  }
+
+  IntegrationWebhookStatusView webhookStatus(String rawType) {
+    requirePermission(Permission.INTEGRATION_READ);
+    return webhookRegistration.status(rawType);
+  }
+
   private IntegrationRecord getOrCreate(String type) {
     return repository
         .find(clinicId(), type)
@@ -171,12 +193,15 @@ class IntegrationService {
     }
     String publicUrl = text(request.publicUrl()).replaceAll("/$", "");
     String relayUrl = text(request.relayUrl()).replaceAll("/$", "");
+    String webhookBaseUrl = text(request.webhookBaseUrl()).replaceAll("/+$", "");
     requireUrl(publicUrl, false, "INTEGRATION_PUBLIC_URL_INVALID");
     requireUrl(relayUrl, false, "INTEGRATION_RELAY_URL_INVALID");
+    requireUrl(webhookBaseUrl, false, "INTEGRATION_WEBHOOK_BASE_INVALID");
     return new MessengerSettings(
         apiUrl,
         publicUrl,
         relayUrl,
+        webhookBaseUrl,
         request.reminderButtons() == null || request.reminderButtons());
   }
 
@@ -212,8 +237,8 @@ class IntegrationService {
   private static Object defaultSettings(String type) {
     return switch (type) {
       case MANGO -> new MangoSettings(DEFAULT_MANGO_API_URL, "", "");
-      case TELEGRAM -> new MessengerSettings(DEFAULT_TELEGRAM_API_URL, "", "", true);
-      case MAX -> new MessengerSettings(DEFAULT_MAX_API_URL, "", "", true);
+      case TELEGRAM -> new MessengerSettings(DEFAULT_TELEGRAM_API_URL, "", "", "", true);
+      case MAX -> new MessengerSettings(DEFAULT_MAX_API_URL, "", "", "", true);
       default -> throw new IllegalArgumentException("Unsupported integration");
     };
   }

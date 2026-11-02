@@ -9,7 +9,15 @@ export type IntegrationSettings = {
   lineNumber?: string
   publicUrl?: string
   relayUrl?: string
+  webhookBaseUrl?: string
   reminderButtons?: boolean
+}
+
+export type IntegrationWebhookStatus = {
+  state: 'CONNECTED' | 'NOT_CONFIGURED' | 'ERROR'
+  url: string
+  detail: string | null
+  pendingUpdates: number | null
 }
 
 export type IntegrationView = {
@@ -30,7 +38,7 @@ export type IntegrationSecretInput = {
   webhookSecret?: string
 }
 
-async function request(path: string, method = 'GET', body?: unknown): Promise<IntegrationView> {
+async function request<T = IntegrationView>(path: string, method = 'GET', body?: unknown): Promise<T> {
   const response = await apiFetch(path, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) })
   if (!response.ok) throw await failure(response, 'Не удалось изменить интеграцию')
   return response.json()
@@ -52,4 +60,12 @@ export function saveIntegrationSecret(type: IntegrationType, secret: Integration
 
 export function changeIntegrationStatus(type: IntegrationType, action: 'activate' | 'disable') {
   return request(`/integrations/${type.toLowerCase()}/${action}`, 'POST')
+}
+
+export function connectIntegrationWebhook(type: IntegrationType) {
+  return request<IntegrationWebhookStatus>(`/integrations/${type.toLowerCase()}/webhook/connect`, 'POST')
+}
+
+export function checkIntegrationWebhookStatus(type: IntegrationType) {
+  return request<IntegrationWebhookStatus>(`/integrations/${type.toLowerCase()}/webhook/status`)
 }

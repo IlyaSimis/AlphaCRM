@@ -142,7 +142,7 @@ describe('«Сегодня» — домашняя страница', () => {
     expect(within(tabs()).getByRole('tab', { name: 'Сегодня' })).toHaveAttribute('aria-selected', 'true')
 
     await user.click(within(services()).getByRole('button', { name: 'Управление' }))
-    expect(within(tabs()).getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Сотрудники', 'График врачей', 'Журнал аудита', 'Внешние выводы', 'Интеграции'])
+    expect(within(tabs()).getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Сотрудники', 'График врачей', 'Журнал аудита', 'Интеграции'])
 
     // Сервис слева открывает первый раздел; сверху остаются только его собственные вкладки.
     await user.click(within(services()).getByRole('button', { name: 'База данных пациентов' }))

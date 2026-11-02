@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Alert, Box, Button, Chip, CircularProgress, Divider, FormControlLabel, Switch, TextField, Typography } from '@mui/material'
 import type { StaffItem } from '../../api/types'
-import { changeIntegrationStatus, loadIntegrations, saveIntegrationSecret, saveIntegrationSettings, type IntegrationType, type IntegrationView } from '../../api/integrations'
+import { changeIntegrationStatus, checkIntegrationWebhookStatus, connectIntegrationWebhook, loadIntegrations, saveIntegrationSecret, saveIntegrationSettings, type IntegrationType, type IntegrationView, type IntegrationWebhookStatus } from '../../api/integrations'
 import { can, rolesOf } from '../../shared/permissions'
 
 type IntegrationsPageProps = {
@@ -69,21 +69,23 @@ function IntegrationCard({ type, integration, editable, notify, onChange }: { ty
   const [lineNumber, setLineNumber] = useState(integration?.settings.lineNumber ?? '')
   const [publicUrl, setPublicUrl] = useState(integration?.settings.publicUrl ?? '')
   const [relayUrl, setRelayUrl] = useState(integration?.settings.relayUrl ?? '')
+  const [webhookBaseUrl, setWebhookBaseUrl] = useState(integration?.settings.webhookBaseUrl ?? '')
   const [reminderButtons, setReminderButtons] = useState(integration?.settings.reminderButtons ?? true)
   const [firstSecret, setFirstSecret] = useState('')
   const [secondSecret, setSecondSecret] = useState('')
   const [webhookSecret, setWebhookSecret] = useState('')
-  const [busy, setBusy] = useState(false)
+  const [providerStatus, setProviderStatus] = useState<IntegrationWebhookStatus>()
+  const [busy, setBusy] = useState<'save' | 'activate' | 'disable' | 'connect' | 'check' | ''>('')
   const [error, setError] = useState('')
   const title = type === 'MANGO' ? 'Mango' : type === 'TELEGRAM' ? 'Telegram' : 'MAX'
   const status = integration?.status ?? 'PENDING'
   const hasSecret = integration?.hasSecret ?? false
 
   const save = async () => {
-    setBusy(true)
+    setBusy('save')
     setError('')
     try {
-      let saved = await saveIntegrationSettings(type, { apiUrl, ...(type === 'MANGO' ? { defaultExtension: extension, lineNumber } : { publicUrl, relayUrl, reminderButtons }) })
+      let saved = await saveIntegrationSettings(type, { apiUrl, ...(type === 'MANGO' ? { defaultExtension: extension, lineNumber } : { publicUrl, relayUrl, webhookBaseUrl, reminderButtons }) })
       if (firstSecret.trim() || secondSecret.trim() || webhookSecret.trim()) {
         saved = await saveIntegrationSecret(type, type === 'MANGO' ? { apiKey: firstSecret, apiSalt: secondSecret } : { botToken: firstSecret, relaySecret: secondSecret, webhookSecret })
       }
@@ -95,12 +97,12 @@ function IntegrationCard({ type, integration, editable, notify, onChange }: { ty
     } catch (reason) {
       setError((reason as Error).message)
     } finally {
-      setBusy(false)
+      setBusy('')
     }
   }
 
   const changeStatus = async (action: 'activate' | 'disable') => {
-    setBusy(true)
+    setBusy(action)
     setError('')
     try {
       onChange(await changeIntegrationStatus(type, action))
@@ -108,7 +110,21 @@ function IntegrationCard({ type, integration, editable, notify, onChange }: { ty
     } catch (reason) {
       setError((reason as Error).message)
     } finally {
-      setBusy(false)
+      setBusy('')
+    }
+  }
+
+  const updateWebhook = async (action: 'connect' | 'check') => {
+    setBusy(action)
+    setError('')
+    try {
+      const result = action === 'connect' ? await connectIntegrationWebhook(type) : await checkIntegrationWebhookStatus(type)
+      setProviderStatus(result)
+      notify(action === 'connect' && result.state === 'CONNECTED' ? `Webhook ${title} подключён` : `Статус webhook ${title} обновлён`)
+    } catch (reason) {
+      setError((reason as Error).message)
+    } finally {
+      setBusy('')
     }
   }
 
@@ -117,7 +133,8 @@ function IntegrationCard({ type, integration, editable, notify, onChange }: { ty
     const path = type === 'MANGO'
       ? `/api/v1/integrations/mango/events/${integration.publicKey}/${event}`
       : `/api/v1/integrations/${type.toLowerCase()}/events/${integration.publicKey}`
-    const url = `${window.location.origin}${path}`
+    const baseUrl = webhookBaseUrl.trim().replace(/\/+$/, '') || window.location.origin
+    const url = `${baseUrl}${path}`
     try {
       await navigator.clipboard.writeText(url)
       notify('Webhook-ссылка скопирована')
@@ -134,35 +151,47 @@ function IntegrationCard({ type, integration, editable, notify, onChange }: { ty
       </Box>
       <Divider sx={{ my: 2 }} />
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
-        <TextField label={`API URL ${title}`} value={apiUrl} onChange={(event) => setApiUrl(event.target.value)} disabled={!editable || busy} fullWidth />
+        <TextField label={`API URL ${title}`} value={apiUrl} onChange={(event) => setApiUrl(event.target.value)} disabled={!editable || !!busy} fullWidth />
         {type === 'MANGO' ? <>
-          <TextField label="Внутренний номер по умолчанию" value={extension} onChange={(event) => setExtension(event.target.value)} disabled={!editable || busy} />
-          <TextField label="Номер линии Mango" value={lineNumber} onChange={(event) => setLineNumber(event.target.value)} disabled={!editable || busy} />
-          <TextField label="Mango API key" type="password" value={firstSecret} onChange={(event) => setFirstSecret(event.target.value)} disabled={!editable || busy} placeholder={hasSecret ? 'Задан — введите новый для замены' : ''} autoComplete="off" />
-          <TextField label="Mango API salt" type="password" value={secondSecret} onChange={(event) => setSecondSecret(event.target.value)} disabled={!editable || busy} placeholder={hasSecret ? 'Задан — введите новый для замены' : ''} autoComplete="off" />
+          <TextField label="Внутренний номер по умолчанию" value={extension} onChange={(event) => setExtension(event.target.value)} disabled={!editable || !!busy} />
+          <TextField label="Номер линии Mango" value={lineNumber} onChange={(event) => setLineNumber(event.target.value)} disabled={!editable || !!busy} />
+          <TextField label="Mango API key" type="password" value={firstSecret} onChange={(event) => setFirstSecret(event.target.value)} disabled={!editable || !!busy} placeholder={hasSecret ? 'Задан — введите новый для замены' : ''} autoComplete="off" />
+          <TextField label="Mango API salt" type="password" value={secondSecret} onChange={(event) => setSecondSecret(event.target.value)} disabled={!editable || !!busy} placeholder={hasSecret ? 'Задан — введите новый для замены' : ''} autoComplete="off" />
         </> : <>
-          <TextField label={`Ссылка на бота ${title}`} value={publicUrl} onChange={(event) => setPublicUrl(event.target.value)} disabled={!editable || busy} placeholder={type === 'TELEGRAM' ? 'https://t.me/your_clinic_bot' : 'https://max.ru/your_clinic_bot'} />
-          <TextField label={`${title} Bot Token`} type="password" value={firstSecret} onChange={(event) => setFirstSecret(event.target.value)} disabled={!editable || busy} placeholder={hasSecret ? 'Задан — введите новый для замены' : ''} autoComplete="off" fullWidth />
+          <TextField label={`Ссылка на бота ${title}`} value={publicUrl} onChange={(event) => setPublicUrl(event.target.value)} disabled={!editable || !!busy} placeholder={type === 'TELEGRAM' ? 'https://t.me/your_clinic_bot' : 'https://max.ru/your_clinic_bot'} />
+          <TextField label="Публичный HTTPS-адрес CRM" value={webhookBaseUrl} onChange={(event) => setWebhookBaseUrl(event.target.value)} disabled={!editable || !!busy} placeholder="https://crm.example.ru" helperText="Адрес без /api, доступный провайдеру из интернета." />
+          <TextField label={`${title} Bot Token`} type="password" value={firstSecret} onChange={(event) => setFirstSecret(event.target.value)} disabled={!editable || !!busy} placeholder={hasSecret ? 'Задан — введите новый для замены' : ''} autoComplete="off" fullWidth />
           {type === 'TELEGRAM' && <>
-            <TextField label="Telegram relay URL" value={relayUrl} onChange={(event) => setRelayUrl(event.target.value)} disabled={!editable || busy} helperText="Необязательно. Если задан, отправка идёт через relay." />
-            <TextField label="Telegram relay secret" type="password" value={secondSecret} onChange={(event) => setSecondSecret(event.target.value)} disabled={!editable || busy} autoComplete="off" />
+            <TextField label="Telegram relay URL" value={relayUrl} onChange={(event) => setRelayUrl(event.target.value)} disabled={!editable || !!busy} helperText="Необязательно. Если задан, отправка идёт через relay." />
+            <TextField label="Telegram relay secret" type="password" value={secondSecret} onChange={(event) => setSecondSecret(event.target.value)} disabled={!editable || !!busy} autoComplete="off" />
           </>}
-          <TextField label={`${title} webhook secret`} type="password" value={webhookSecret} onChange={(event) => setWebhookSecret(event.target.value)} disabled={!editable || busy} autoComplete="off" helperText="5–256 латинских букв, цифр, дефисов или подчёркиваний. Пустое поле сохраняет текущий секрет." />
-          <FormControlLabel control={<Switch checked={reminderButtons} onChange={(event) => setReminderButtons(event.target.checked)} disabled={!editable || busy} />} label="Кнопки подтверждения под напоминаниями" />
+          <TextField label={`${title} webhook secret`} type="password" value={webhookSecret} onChange={(event) => setWebhookSecret(event.target.value)} disabled={!editable || !!busy} autoComplete="off" helperText="5–256 латинских букв, цифр, дефисов или подчёркиваний. Пустое поле сохраняет текущий секрет." />
+          <FormControlLabel control={<Switch checked={reminderButtons} onChange={(event) => setReminderButtons(event.target.checked)} disabled={!editable || !!busy} />} label="Кнопки подтверждения под напоминаниями" />
         </>}
       </Box>
       <Typography sx={{ color: 'text.secondary', fontSize: 13, mt: 2 }}>{hasSecret ? `Секрет задан · версия ${integration?.secretVersion}` : 'Секрет ещё не задан'}</Typography>
       {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
       {editable && <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 2 }}>
-        <Button variant="contained" onClick={() => void save()} disabled={busy}>{busy ? 'Сохранение…' : `Сохранить ${title}`}</Button>
-        {status !== 'ACTIVE' ? <Button variant="outlined" onClick={() => void changeStatus('activate')} disabled={busy || !integration || !hasSecret}>Активировать</Button> : <Button variant="outlined" color="warning" onClick={() => void changeStatus('disable')} disabled={busy}>Отключить</Button>}
+        <Button variant="contained" onClick={() => void save()} disabled={!!busy}>{busy === 'save' ? 'Сохранение…' : `Сохранить ${title}`}</Button>
+        {status !== 'ACTIVE' ? <Button variant="outlined" onClick={() => void changeStatus('activate')} disabled={!!busy || !integration || !hasSecret}>Активировать</Button> : <Button variant="outlined" color="warning" onClick={() => void changeStatus('disable')} disabled={!!busy}>Отключить</Button>}
       </Box>}
       {integration?.publicKey && <Box sx={{ mt: 2, p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
         <Typography sx={{ fontWeight: 650, fontSize: 14, mb: 1 }}>Webhook для кабинета {title}</Typography>
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-          {type === 'MANGO' ? <><Button size="small" onClick={() => void copyWebhook('call')}>Копировать call webhook</Button><Button size="small" onClick={() => void copyWebhook('recording')}>Копировать recording webhook</Button></> : <Button size="small" onClick={() => void copyWebhook()}>Копировать webhook</Button>}
+          {type === 'MANGO' ? <><Button size="small" onClick={() => void copyWebhook('call')}>Копировать call webhook</Button><Button size="small" onClick={() => void copyWebhook('recording')}>Копировать recording webhook</Button></> : <>
+            <Button size="small" onClick={() => void copyWebhook()}>Копировать webhook</Button>
+            {editable && <Button size="small" variant="contained" onClick={() => void updateWebhook('connect')} disabled={!!busy || status !== 'ACTIVE'}>{busy === 'connect' ? 'Подключение…' : 'Подключить webhook'}</Button>}
+            <Button size="small" onClick={() => void updateWebhook('check')} disabled={!!busy}>{busy === 'check' ? 'Проверка…' : 'Проверить'}</Button>
+          </>}
         </Box>
-        {type !== 'MANGO' && <Typography sx={{ color: 'text.secondary', fontSize: 13, mt: 1 }}>Укажите этот URL и webhook secret в настройках подписки бота. Webhook начнёт принимать события после активации интеграции.</Typography>}
+        {type !== 'MANGO' && <>
+          <Typography sx={{ color: 'text.secondary', fontSize: 13, mt: 1 }}>Сохраните публичный адрес, токен и webhook secret, активируйте интеграцию, затем подключите webhook. Проверка запрашивает актуальную подписку у {title}.</Typography>
+          {providerStatus && <Box sx={{ mt: 1.5 }}>
+            <Chip size="small" color={providerStatus.state === 'CONNECTED' ? 'success' : providerStatus.state === 'ERROR' ? 'error' : 'default'} label={`Webhook: ${providerStatus.state === 'CONNECTED' ? 'подключён' : providerStatus.state === 'ERROR' ? 'ошибка' : 'не настроен'}`} />
+            {providerStatus.detail && <Typography color="error" sx={{ fontSize: 13, mt: 1 }}>{providerStatus.detail}</Typography>}
+            {providerStatus.pendingUpdates !== null && <Typography sx={{ color: 'text.secondary', fontSize: 13, mt: 1 }}>Ожидают доставки: {providerStatus.pendingUpdates}</Typography>}
+          </Box>}
+        </>}
       </Box>}
     </Box>
   )
