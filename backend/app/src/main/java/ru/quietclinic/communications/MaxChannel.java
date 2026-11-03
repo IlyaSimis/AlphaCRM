@@ -49,7 +49,7 @@ class MaxChannel {
     if (!configured()) return DeliveryResult.notConfigured(NAME, "CHANNEL_NOT_CONFIGURED");
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("text", message.text());
-    if (reminderButtons && NoticeTemplates.REMINDER.equals(message.template())) {
+    if (reminderButtons && NoticeTemplates.isReminder(message.template())) {
       body.put("attachments", new RawJson(keyboard(message.appointmentId().toString())));
     }
     try {

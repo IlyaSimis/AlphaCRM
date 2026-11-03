@@ -68,6 +68,35 @@ class NoticeSource {
         now.atOffset(ZoneOffset.UTC));
   }
 
+  /**
+   * Будущие активные записи без напоминания на текущее время. Восстанавливает очередь для записей,
+   * созданных миграцией или до появления outbox; уже отправленное напоминание тоже учитывается.
+   */
+  List<MissingReminder> missingReminders(Instant now) {
+    return jdbc.query(
+        "select a.id, p.clinic_id, a.starts_at from appointment a"
+            + " join practitioner p on p.id = a.practitioner_id"
+            + " left join clinic_notification_settings s on s.clinic_id = p.clinic_id"
+            + " where a.status in ('BOOKED', 'CONFIRMED') and a.starts_at > ?"
+            + " and ((coalesce(s.reminder_24h_enabled, true) and not exists"
+            + " (select 1 from outbox_message m where m.aggregate_id = a.id"
+            + " and m.template = 'appointment-reminder'"
+            + " and m.appointment_starts_at = a.starts_at))"
+            + " or (coalesce(s.reminder_3h_enabled, false) and not exists"
+            + " (select 1 from outbox_message m where m.aggregate_id = a.id"
+            + " and m.template = 'appointment-reminder-3h'"
+            + " and m.appointment_starts_at = a.starts_at)))"
+            + " order by a.starts_at limit 200",
+        (row, index) ->
+            new MissingReminder(
+                row.getObject("id", UUID.class),
+                row.getObject("clinic_id", UUID.class),
+                row.getObject("starts_at", OffsetDateTime.class).toInstant()),
+        now.atOffset(ZoneOffset.UTC));
+  }
+
+  record MissingReminder(UUID appointmentId, UUID clinicId, Instant startsAt) {}
+
   private boolean hasActiveConsent(UUID patientId) {
     Long count =
         jdbc.queryForObject(

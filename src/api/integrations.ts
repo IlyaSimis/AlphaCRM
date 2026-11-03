@@ -1,6 +1,6 @@
 import { apiFetch, failure } from './client'
 
-export type IntegrationType = 'MANGO' | 'TELEGRAM' | 'MAX'
+export type IntegrationType = 'MANGO' | 'TELEGRAM' | 'MAX' | 'YANDEX_METRICA'
 export type IntegrationStatus = 'PENDING' | 'ACTIVE' | 'DISABLED' | 'ERROR'
 
 export type IntegrationSettings = {
@@ -11,6 +11,7 @@ export type IntegrationSettings = {
   relayUrl?: string
   webhookBaseUrl?: string
   reminderButtons?: boolean
+  counterId?: string
 }
 
 export type IntegrationWebhookStatus = {
@@ -36,6 +37,7 @@ export type IntegrationSecretInput = {
   botToken?: string
   relaySecret?: string
   webhookSecret?: string
+  oauthToken?: string
 }
 
 async function request<T = IntegrationView>(path: string, method = 'GET', body?: unknown): Promise<T> {

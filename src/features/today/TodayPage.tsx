@@ -61,7 +61,7 @@ export function TodayPage(props: TodayPageProps) {
           </Stack>}
         </Box>
       </Box>
-      {canManageRegistry(role) && <AdminWorkQueue apiOnline={apiOnline} appointments={props.appointments} practitioners={props.practitioners} revision={props.revision} onOpenPatient={props.onOpenPatient} onOpenCashier={() => props.onOpen('cashier')} onRebook={props.onRebook} onChanged={() => setQueueRevision((value) => value + 1)} />}
+      {canManageRegistry(role) && <AdminWorkQueue key={props.selfId} selfId={props.selfId} apiOnline={apiOnline} appointments={props.appointments} practitioners={props.practitioners} revision={props.revision} onOpenPatient={props.onOpenPatient} onOpenCashier={() => props.onOpen('cashier')} onRebook={props.onRebook} onChanged={() => setQueueRevision((value) => value + 1)} />}
       <Box className="today-grid">
         <Box className="today-column">
           <TodayNotes apiOnline={apiOnline} selfId={props.selfId} onOpen={() => props.onOpen('workspace')} />

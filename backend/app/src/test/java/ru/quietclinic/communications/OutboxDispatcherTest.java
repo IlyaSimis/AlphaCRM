@@ -19,6 +19,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import ru.quietclinic.StaffSessions;
 import ru.quietclinic.audit.AuditService;
@@ -30,6 +31,7 @@ import ru.quietclinic.audit.AuditService;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("local")
+@Transactional
 class OutboxDispatcherTest {
   static final String DMITRY = "00000000-0000-0000-0000-000000000102";
 
@@ -126,6 +128,46 @@ class OutboxDispatcherTest {
   }
 
   @Test
+  void sendsReminderAtDueTimeOnlyOnce() throws Exception {
+    String appointment = book(DMITRY, "2027-02-04T16:30:00Z", "2027-02-04T17:00:00Z");
+
+    drain(Instant.parse("2027-02-03T16:29:00Z"));
+    assertThat(port.sentFor(appointment, NoticeTemplates.REMINDER)).isEmpty();
+
+    drain(Instant.parse("2027-02-03T16:30:00Z"));
+    drain(Instant.parse("2027-02-03T16:31:00Z"));
+
+    assertThat(port.sentFor(appointment, NoticeTemplates.REMINDER)).hasSize(1);
+    assertThat(row(appointment, NoticeTemplates.REMINDER).status).isEqualTo("SENT");
+  }
+
+  @Test
+  void sendsShortReminderWhenEnabledAndStopsSchedulingItWhenDisabled() throws Exception {
+    jdbc.update(
+        "insert into clinic_notification_settings(clinic_id, reminder_24h_enabled,"
+            + " reminder_3h_enabled, updated_at) values"
+            + " ('00000000-0000-0000-0000-00000000c001', true, true, CURRENT_TIMESTAMP)");
+    String appointment = book(DMITRY, "2027-02-11T16:30:00Z", "2027-02-11T17:00:00Z");
+    assertThat(row(appointment, NoticeTemplates.REMINDER_3H).nextAttemptAt)
+        .isEqualTo(Instant.parse("2027-02-11T13:30:00Z"));
+
+    drain(Instant.parse("2027-02-11T13:29:00Z"));
+    assertThat(port.sentFor(appointment, NoticeTemplates.REMINDER_3H)).isEmpty();
+    drain(Instant.parse("2027-02-11T13:30:00Z"));
+    drain(Instant.parse("2027-02-11T13:31:00Z"));
+    assertThat(port.sentFor(appointment, NoticeTemplates.REMINDER_3H)).hasSize(1);
+
+    jdbc.update(
+        "update clinic_notification_settings set reminder_3h_enabled = false"
+            + " where clinic_id = '00000000-0000-0000-0000-00000000c001'");
+    String withoutShortReminder =
+        book(DMITRY, "2027-02-16T16:30:00Z", "2027-02-16T17:00:00Z");
+    assertThat(outbox.findByAggregateIdOrderByCreatedAt(UUID.fromString(withoutShortReminder)))
+        .filteredOn(message -> NoticeTemplates.REMINDER_3H.equals(message.template))
+        .isEmpty();
+  }
+
+  @Test
   void cancelledAppointmentIsNotReminded() throws Exception {
     String appointment = book(DMITRY, "2027-02-09T09:00:00Z", "2027-02-09T09:30:00Z");
     assertThat(row(appointment, NoticeTemplates.REMINDER).nextAttemptAt)
@@ -177,6 +219,41 @@ class OutboxDispatcherTest {
               assertThat(m.status).isEqualTo("CANCELLED");
               assertThat(m.lastError).isEqualTo("RESCHEDULED");
             });
+  }
+
+  @Test
+  void restoresOneReminderForAnExistingFutureAppointment() {
+    UUID existing = UUID.randomUUID();
+    UUID cancelled = UUID.randomUUID();
+    jdbc.update(
+        "insert into appointment(id, patient_id, practitioner_id, starts_at, ends_at, service_name,"
+            + " status, created_at, version) values (?, ?, ?,"
+            + " timestamp with time zone '2027-02-10 09:00:00+00',"
+            + " timestamp with time zone '2027-02-10 09:30:00+00',"
+            + " 'Повторный приём', 'BOOKED', CURRENT_TIMESTAMP, 0)",
+        existing,
+        UUID.fromString(DMITRY),
+        UUID.fromString(StaffSessions.PETROV));
+    jdbc.update(
+        "insert into appointment(id, patient_id, practitioner_id, starts_at, ends_at, service_name,"
+            + " status, created_at, version) values (?, ?, ?,"
+            + " timestamp with time zone '2027-02-10 11:00:00+00',"
+            + " timestamp with time zone '2027-02-10 11:30:00+00',"
+            + " 'Повторный приём', 'CANCELLED', CURRENT_TIMESTAMP, 0)",
+        cancelled,
+        UUID.fromString(DMITRY),
+        UUID.fromString(StaffSessions.PETROV));
+
+    dispatcher.reconcileMissingReminders(Instant.parse("2027-02-01T09:00:00Z"));
+    dispatcher.reconcileMissingReminders(Instant.parse("2027-02-01T09:00:00Z"));
+
+    List<OutboxMessage> reminders =
+        outbox.findByAggregateIdOrderByCreatedAt(existing).stream()
+            .filter(message -> NoticeTemplates.REMINDER.equals(message.template))
+            .toList();
+    assertThat(reminders).hasSize(1);
+    assertThat(reminders.get(0).nextAttemptAt).isEqualTo(Instant.parse("2027-02-09T09:00:00Z"));
+    assertThat(outbox.findByAggregateIdOrderByCreatedAt(cancelled)).isEmpty();
   }
 
   @Test

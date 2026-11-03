@@ -3,6 +3,7 @@ import { Alert, Box, Button, Chip, CircularProgress, Divider, FormControlLabel, 
 import type { StaffItem } from '../../api/types'
 import { changeIntegrationStatus, checkIntegrationWebhookStatus, connectIntegrationWebhook, loadIntegrations, saveIntegrationSecret, saveIntegrationSettings, type IntegrationType, type IntegrationView, type IntegrationWebhookStatus } from '../../api/integrations'
 import { can, rolesOf } from '../../shared/permissions'
+import { NotificationSettingsPanel } from './NotificationSettingsPanel'
 
 type IntegrationsPageProps = {
   staff: StaffItem
@@ -10,15 +11,17 @@ type IntegrationsPageProps = {
   notify: (message: string) => void
 }
 
-const TYPES: IntegrationType[] = ['MANGO', 'TELEGRAM', 'MAX']
+const TYPES: IntegrationType[] = ['MANGO', 'TELEGRAM', 'MAX', 'YANDEX_METRICA']
 const DESCRIPTIONS: Record<IntegrationType, string> = {
   MANGO: 'Исходящие звонки из карточки пациента и входящие события ВАТС.',
   TELEGRAM: 'Уведомления пациентам через бота клиники напрямую или через relay.',
   MAX: 'Уведомления пациентам через MAX Bot API клиники.',
+  YANDEX_METRICA: 'Посещаемость сайта, источники трафика и достижения целей в аналитике клиники.',
 }
 
 function defaultApiUrl(type: IntegrationType) {
   if (type === 'MANGO') return 'https://app.mango-office.ru'
+  if (type === 'YANDEX_METRICA') return 'https://api-metrika.yandex.net'
   return type === 'TELEGRAM' ? 'https://api.telegram.org' : 'https://platform-api2.max.ru'
 }
 
@@ -56,6 +59,7 @@ export function IntegrationsPage({ staff, apiOnline, notify }: IntegrationsPageP
       {!apiOnline && <Alert severity="info">Настройка интеграций доступна только при подключённом API.</Alert>}
       {apiOnline && loading && <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress aria-label="Загрузка интеграций" /></Box>}
       {apiOnline && error && <Alert severity="error" action={<Button onClick={() => void reload()}>Повторить</Button>}>{error}</Alert>}
+      <NotificationSettingsPanel apiOnline={apiOnline} editable={editable} notify={notify} />
       {apiOnline && !loading && !error && <Box sx={{ display: 'grid', gap: 2 }}>
         {TYPES.map((type) => <IntegrationCard key={`${type}-${items.find((item) => item.type === type)?.secretVersion ?? 0}`} type={type} integration={items.find((item) => item.type === type)} editable={editable} notify={notify} onChange={updated} />)}
       </Box>}
@@ -70,6 +74,7 @@ function IntegrationCard({ type, integration, editable, notify, onChange }: { ty
   const [publicUrl, setPublicUrl] = useState(integration?.settings.publicUrl ?? '')
   const [relayUrl, setRelayUrl] = useState(integration?.settings.relayUrl ?? '')
   const [webhookBaseUrl, setWebhookBaseUrl] = useState(integration?.settings.webhookBaseUrl ?? '')
+  const [counterId, setCounterId] = useState(integration?.settings.counterId ?? '')
   const [reminderButtons, setReminderButtons] = useState(integration?.settings.reminderButtons ?? true)
   const [firstSecret, setFirstSecret] = useState('')
   const [secondSecret, setSecondSecret] = useState('')
@@ -77,7 +82,7 @@ function IntegrationCard({ type, integration, editable, notify, onChange }: { ty
   const [providerStatus, setProviderStatus] = useState<IntegrationWebhookStatus>()
   const [busy, setBusy] = useState<'save' | 'activate' | 'disable' | 'connect' | 'check' | ''>('')
   const [error, setError] = useState('')
-  const title = type === 'MANGO' ? 'Mango' : type === 'TELEGRAM' ? 'Telegram' : 'MAX'
+  const title = type === 'MANGO' ? 'Mango' : type === 'TELEGRAM' ? 'Telegram' : type === 'MAX' ? 'MAX' : 'Яндекс Метрика'
   const status = integration?.status ?? 'PENDING'
   const hasSecret = integration?.hasSecret ?? false
 
@@ -85,9 +90,19 @@ function IntegrationCard({ type, integration, editable, notify, onChange }: { ty
     setBusy('save')
     setError('')
     try {
-      let saved = await saveIntegrationSettings(type, { apiUrl, ...(type === 'MANGO' ? { defaultExtension: extension, lineNumber } : { publicUrl, relayUrl, webhookBaseUrl, reminderButtons }) })
+      const settings = type === 'MANGO'
+        ? { apiUrl, defaultExtension: extension, lineNumber }
+        : type === 'YANDEX_METRICA'
+          ? { apiUrl, counterId }
+          : { apiUrl, publicUrl, relayUrl, webhookBaseUrl, reminderButtons }
+      let saved = await saveIntegrationSettings(type, settings)
       if (firstSecret.trim() || secondSecret.trim() || webhookSecret.trim()) {
-        saved = await saveIntegrationSecret(type, type === 'MANGO' ? { apiKey: firstSecret, apiSalt: secondSecret } : { botToken: firstSecret, relaySecret: secondSecret, webhookSecret })
+        const secret = type === 'MANGO'
+          ? { apiKey: firstSecret, apiSalt: secondSecret }
+          : type === 'YANDEX_METRICA'
+            ? { oauthToken: firstSecret }
+            : { botToken: firstSecret, relaySecret: secondSecret, webhookSecret }
+        saved = await saveIntegrationSecret(type, secret)
       }
       onChange(saved)
       setFirstSecret('')
@@ -157,6 +172,9 @@ function IntegrationCard({ type, integration, editable, notify, onChange }: { ty
           <TextField label="Номер линии Mango" value={lineNumber} onChange={(event) => setLineNumber(event.target.value)} disabled={!editable || !!busy} />
           <TextField label="Mango API key" type="password" value={firstSecret} onChange={(event) => setFirstSecret(event.target.value)} disabled={!editable || !!busy} placeholder={hasSecret ? 'Задан — введите новый для замены' : ''} autoComplete="off" />
           <TextField label="Mango API salt" type="password" value={secondSecret} onChange={(event) => setSecondSecret(event.target.value)} disabled={!editable || !!busy} placeholder={hasSecret ? 'Задан — введите новый для замены' : ''} autoComplete="off" />
+        </> : type === 'YANDEX_METRICA' ? <>
+          <TextField label="ID счётчика" value={counterId} onChange={(event) => setCounterId(event.target.value)} disabled={!editable || !!busy} inputMode="numeric" />
+          <TextField label="Яндекс OAuth-токен" type="password" value={firstSecret} onChange={(event) => setFirstSecret(event.target.value)} disabled={!editable || !!busy} placeholder={hasSecret ? 'Задан — введите новый для замены' : ''} autoComplete="off" helperText="Токен сохраняется зашифрованным и больше не показывается." />
         </> : <>
           <TextField label={`Ссылка на бота ${title}`} value={publicUrl} onChange={(event) => setPublicUrl(event.target.value)} disabled={!editable || !!busy} placeholder={type === 'TELEGRAM' ? 'https://t.me/your_clinic_bot' : 'https://max.ru/your_clinic_bot'} />
           <TextField label="Публичный HTTPS-адрес CRM" value={webhookBaseUrl} onChange={(event) => setWebhookBaseUrl(event.target.value)} disabled={!editable || !!busy} placeholder="https://crm.example.ru" helperText="Адрес без /api, доступный провайдеру из интернета." />
@@ -175,7 +193,7 @@ function IntegrationCard({ type, integration, editable, notify, onChange }: { ty
         <Button variant="contained" onClick={() => void save()} disabled={!!busy}>{busy === 'save' ? 'Сохранение…' : `Сохранить ${title}`}</Button>
         {status !== 'ACTIVE' ? <Button variant="outlined" onClick={() => void changeStatus('activate')} disabled={!!busy || !integration || !hasSecret}>Активировать</Button> : <Button variant="outlined" color="warning" onClick={() => void changeStatus('disable')} disabled={!!busy}>Отключить</Button>}
       </Box>}
-      {integration?.publicKey && <Box sx={{ mt: 2, p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
+      {integration?.publicKey && type !== 'YANDEX_METRICA' && <Box sx={{ mt: 2, p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
         <Typography sx={{ fontWeight: 650, fontSize: 14, mb: 1 }}>Webhook для кабинета {title}</Typography>
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
           {type === 'MANGO' ? <><Button size="small" onClick={() => void copyWebhook('call')}>Копировать call webhook</Button><Button size="small" onClick={() => void copyWebhook('recording')}>Копировать recording webhook</Button></> : <>

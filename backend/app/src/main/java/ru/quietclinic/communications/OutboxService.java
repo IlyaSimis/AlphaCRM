@@ -18,20 +18,24 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class OutboxService {
   static final Duration REMINDER_LEAD = Duration.ofHours(24);
+  static final Duration SHORT_REMINDER_LEAD = Duration.ofHours(3);
 
   /** Причина SKIPPED у подтверждения записи, сделанной в боте: пациент уже видел ответ бота. */
   static final String SHOWN_IN_BOT = "SHOWN_IN_BOT";
 
   private final OutboxRepository repository;
   private final JdbcTemplate jdbc;
+  private final NotificationSettingsService notificationSettings;
   private final ZoneId zone;
 
   OutboxService(
       OutboxRepository repository,
       JdbcTemplate jdbc,
+      NotificationSettingsService notificationSettings,
       @Value("${clinic.time-zone:UTC}") String zone) {
     this.repository = repository;
     this.jdbc = jdbc;
+    this.notificationSettings = notificationSettings;
     this.zone = ZoneId.of(zone);
   }
 
@@ -118,19 +122,46 @@ public class OutboxService {
         key(NoticeTemplates.CONFIRMED, appointmentId, startsAt),
         startsAt,
         now);
+    scheduleReminder(appointmentId, startsAt, clinicId, now);
+  }
+
+  /** Ставит включённые напоминания; просроченное по расписанию уходит на ближайшем проходе. */
+  void scheduleReminder(UUID appointmentId, Instant startsAt, UUID clinicId, Instant now) {
+    NotificationSettings settings = notificationSettings.forClinic(clinicId);
     LocalDate today = now.atZone(zone).toLocalDate();
-    if (startsAt.atZone(zone).toLocalDate().isAfter(today)) {
-      Instant due = startsAt.minus(REMINDER_LEAD);
-      enqueue(
-          NoticeTemplates.NOTIFICATION,
-          "APPOINTMENT",
-          appointmentId,
-          clinicId,
-          NoticeTemplates.REMINDER,
-          key(NoticeTemplates.REMINDER, appointmentId, startsAt),
-          startsAt,
-          due.isAfter(now) ? due : now);
+    if (settings.reminder24hEnabled() && startsAt.atZone(zone).toLocalDate().isAfter(today)) {
+      scheduleReminder(
+          appointmentId, startsAt, clinicId, now, NoticeTemplates.REMINDER, REMINDER_LEAD);
     }
+    if (settings.reminder3hEnabled()) {
+      scheduleReminder(
+          appointmentId, startsAt, clinicId, now, NoticeTemplates.REMINDER_3H, SHORT_REMINDER_LEAD);
+    }
+  }
+
+  boolean reminderEnabled(UUID clinicId, String template) {
+    NotificationSettings settings = notificationSettings.forClinic(clinicId);
+    return (NoticeTemplates.REMINDER.equals(template) && settings.reminder24hEnabled())
+        || (NoticeTemplates.REMINDER_3H.equals(template) && settings.reminder3hEnabled());
+  }
+
+  private void scheduleReminder(
+      UUID appointmentId,
+      Instant startsAt,
+      UUID clinicId,
+      Instant now,
+      String template,
+      Duration lead) {
+    Instant due = startsAt.minus(lead);
+    enqueue(
+        NoticeTemplates.NOTIFICATION,
+        "APPOINTMENT",
+        appointmentId,
+        clinicId,
+        template,
+        key(template, appointmentId, startsAt),
+        startsAt,
+        due.isAfter(now) ? due : now);
   }
 
   private void enqueue(

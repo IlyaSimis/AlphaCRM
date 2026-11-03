@@ -8,4 +8,5 @@ record IntegrationSecretRequest(
     @Size(max = 512) String apiSalt,
     @Size(max = 512) String botToken,
     @Size(max = 512) String relaySecret,
-    @Size(max = 256) String webhookSecret) {}
+    @Size(max = 256) String webhookSecret,
+    @Size(max = 2048) String oauthToken) {}

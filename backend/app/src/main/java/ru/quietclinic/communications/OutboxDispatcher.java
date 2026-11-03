@@ -66,10 +66,11 @@ class OutboxDispatcher {
   }
 
   /**
-   * Один проход: переносы, зависшие попытки, затем до 50 очередных сообщений. Возвращает, сколько
-   * сообщений взято в работу (не только доставленных).
+   * Один проход: восстановление напоминаний, переносы, зависшие попытки, затем до 50 очередных
+   * сообщений. Возвращает, сколько сообщений взято в работу (не только доставленных).
    */
   int runOnce(Instant now) {
+    reconcileMissingReminders(now);
     reconcileRescheduled(now);
     recoverStuck(now);
     int taken = 0;
@@ -86,6 +87,16 @@ class OutboxDispatcher {
       }
     }
     return taken;
+  }
+
+  /** Доукомплектовывает напоминания для существующих записей; ключ не даёт создать дубликат. */
+  void reconcileMissingReminders(Instant now) {
+    for (NoticeSource.MissingReminder missing : notices.missingReminders(now)) {
+      tx.executeWithoutResult(
+          status ->
+              service.scheduleReminder(
+                  missing.appointmentId(), missing.startsAt(), missing.clinicId(), now));
+    }
   }
 
   /** Подтверждение и напоминание на старое время отменяются, ставятся новые — на новое. */
@@ -174,6 +185,11 @@ class OutboxDispatcher {
       return new Prepared(message.topic, message.template, message.clinicId, message, null);
     }
     AppointmentNotice notice = notices.load(message.aggregateId).orElse(null);
+    if (NoticeTemplates.isReminder(message.template)
+        && !service.reminderEnabled(message.clinicId, message.template)) {
+      close(message, "CANCELLED", "REMINDER_DISABLED", now);
+      return null;
+    }
     String skip = skipReason(message, notice, now);
     if (skip != null) {
       close(message, "NO_CONSENT".equals(skip) ? "SKIPPED" : "CANCELLED", skip, now);

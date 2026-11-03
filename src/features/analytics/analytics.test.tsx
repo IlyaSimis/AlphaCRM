@@ -96,4 +96,44 @@ describe('analytics', () => {
     expect(await screen.findByRole('heading', { name: 'Анна Михайлова' })).toBeInTheDocument()
     expect(details).not.toBeVisible()
   })
+
+  it('shows CRM acquisition cohorts and Yandex Metrica aggregates without patient identities', async () => {
+    const fetchMock = withAuth((address: string) => {
+      if (address.includes('/analytics/acquisition')) return jsonResponse({
+        from: '2026-09-23', to: '2026-10-20', currency: 'RUB',
+        referralSources: [
+          { source: 'WEBSITE', contacts: 10, booked: 7, visited: 5, paid: 4, revenueMinor: 1800000 },
+          { source: 'RECOMMENDATION', contacts: 4, booked: 3, visited: 2, paid: 2, revenueMinor: 900000 },
+        ],
+        web: {
+          state: 'READY', detail: null,
+          traffic: { visits: 1200, users: 900, pageviews: 2800, newVisitorsPercent: 62.5, bounceRate: 31.2, pageDepth: 2.3, averageVisitDurationSeconds: 185, goalReaches: 84, goalConversionRate: 7 },
+          daily: [{ date: '2026-10-20', visits: 50, users: 42, goalReaches: 4 }],
+          sources: [{ source: 'Переходы из поисковых систем', visits: 700, users: 520, goalReaches: 45 }],
+        },
+      })
+      if (address.includes('/analytics/appointments')) return jsonResponse({ rows: [] })
+      if (address.includes('/analytics/overview')) return jsonResponse(overview)
+      if (address.includes('/practitioners')) return jsonResponse([])
+      if (address.includes('/patients')) return jsonResponse([])
+      if (address.includes('/registry/') || address.includes('/workspace/') || address.includes('/appointments')) return jsonResponse([])
+      return jsonResponse({}, 404)
+    }, 't.manager')
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByText('API подключён')).toBeInTheDocument()
+    await openPage(user, 'Аналитика')
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/analytics/acquisition'))).toBe(false)
+
+    await user.click(screen.getByRole('button', { name: 'Привлечение' }))
+    expect(await screen.findByText('Источники пациентов в CRM')).toBeInTheDocument()
+    const website = screen.getByText('Сайт клиники').closest('tr') as HTMLElement
+    expect(website).toHaveTextContent('70%')
+    expect(website.textContent).toMatch(/18\s000/)
+    expect(screen.getByText('конверсия в цель').closest('.metric')).toHaveTextContent('7%')
+    expect(screen.getByText('Переходы из поисковых систем')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Врач')).not.toBeInTheDocument()
+    expect(screen.queryByText('Анна Михайлова')).not.toBeInTheDocument()
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/analytics/acquisition?from=2026-09-23&to=2026-10-20'))).toBe(true)
+  })
 })

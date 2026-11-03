@@ -5,6 +5,7 @@ import { changeAppointmentStatus } from '../../api/schedule'
 import type { Practitioner, ScheduleItem, WorkQueueItem, WorkQueueKind } from '../../api/types'
 import { clinicParts } from '../../shared/clinicTime'
 import { localToday } from '../../shared/dates'
+import { readQueueFilter, writeQueueFilter, type QueueFilter } from './workQueueFilters'
 
 const kindLabels: Record<WorkQueueKind, string> = {
   CONFIRMATION: 'Подтверждения',
@@ -16,9 +17,8 @@ const kindLabels: Record<WorkQueueKind, string> = {
 
 const kindOrder: WorkQueueKind[] = ['CONFIRMATION', 'PAYMENT', 'REBOOK', 'NO_SHOW', 'DELIVERY']
 
-type QueueFilter = 'ALL' | WorkQueueKind
-
 type AdminWorkQueueProps = {
+  selfId: string
   apiOnline: boolean
   appointments: ScheduleItem[]
   practitioners: Practitioner[]
@@ -55,11 +55,11 @@ export function demoWorkQueue(appointments: ScheduleItem[], practitioners: Pract
     })
 }
 
-export function AdminWorkQueue({ apiOnline, appointments, practitioners, revision, onOpenPatient, onOpenCashier, onRebook, onChanged }: AdminWorkQueueProps) {
+export function AdminWorkQueue({ selfId, apiOnline, appointments, practitioners, revision, onOpenPatient, onOpenCashier, onRebook, onChanged }: AdminWorkQueueProps) {
   const today = localToday()
   const [remote, setRemote] = useState<WorkQueueItem[] | null>(null)
   const [error, setError] = useState('')
-  const [filter, setFilter] = useState<QueueFilter>('ALL')
+  const [filter, setFilter] = useState<QueueFilter>(() => readQueueFilter(selfId))
   const [busy, setBusy] = useState('')
   const [localRevision, setLocalRevision] = useState(0)
   const [dismissed, setDismissed] = useState<string[]>([])
@@ -77,6 +77,10 @@ export function AdminWorkQueue({ apiOnline, appointments, practitioners, revisio
   const loaded = apiOnline ? remote : demoItems
   const items = (loaded ?? []).filter((item) => !dismissed.includes(item.id))
   const visible = filter === 'ALL' ? items : items.filter((item) => item.kind === filter)
+  const selectFilter = (next: QueueFilter) => {
+    setFilter(next)
+    writeQueueFilter(selfId, next)
+  }
 
   const confirm = async (item: WorkQueueItem) => {
     setBusy(item.id)
@@ -106,10 +110,11 @@ export function AdminWorkQueue({ apiOnline, appointments, practitioners, revisio
       <Chip size="small" label={items.length} color={items.length > 0 ? 'primary' : 'default'} variant="outlined" />
     </Box>
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ my: 1.5, alignItems: { sm: 'center' } }}>
-      <TextField select size="small" label="Очередь" value={filter} onChange={(event) => setFilter(event.target.value as QueueFilter)} sx={{ minWidth: 210 }}>
+      <TextField select size="small" label="Очередь" value={filter} onChange={(event) => selectFilter(event.target.value as QueueFilter)} sx={{ minWidth: 210 }}>
         <MenuItem value="ALL">Все действия · {items.length}</MenuItem>
         {kindOrder.map((kind) => <MenuItem key={kind} value={kind}>{kindLabels[kind]} · {items.filter((item) => item.kind === kind).length}</MenuItem>)}
       </TextField>
+      {filter !== 'ALL' && <Button size="small" onClick={() => selectFilter('ALL')}>Сбросить фильтр</Button>}
       {apiOnline && <Button size="small" onClick={() => setLocalRevision((value) => value + 1)}>Обновить</Button>}
     </Stack>
     {error && <Alert severity="warning" sx={{ mb: 1 }}>{error}</Alert>}

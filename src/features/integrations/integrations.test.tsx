@@ -20,6 +20,7 @@ describe('clinic integrations', () => {
   it('saves Mango settings and write-only secrets from the administration page', async () => {
     const fetchMock = withAuth((address, init) => {
       const method = init?.method ?? 'GET'
+      if (address.endsWith('/clinic/notification-settings') && method === 'GET') return jsonResponse({ reminder24hEnabled: true, reminder3hEnabled: false })
       if (address.endsWith('/integrations') && method === 'GET') return jsonResponse([])
       if (address.includes('/integrations/mango/settings') && method === 'PUT') return jsonResponse(integration('MANGO', JSON.parse(String(init?.body))))
       if (address.includes('/integrations/mango/secret') && method === 'PUT') return jsonResponse(integration('MANGO', { apiUrl: 'https://app.mango-office.ru' }, true))
@@ -49,6 +50,7 @@ describe('clinic integrations', () => {
   it('saves Telegram and MAX bot tokens independently', async () => {
     const fetchMock = withAuth((address, init) => {
       const method = init?.method ?? 'GET'
+      if (address.endsWith('/clinic/notification-settings') && method === 'GET') return jsonResponse({ reminder24hEnabled: true, reminder3hEnabled: false })
       if (address.endsWith('/integrations') && method === 'GET') return jsonResponse([])
       for (const [path, type] of [['telegram', 'TELEGRAM'], ['max', 'MAX']] as const) {
         if (address.includes(`/integrations/${path}/settings`) && method === 'PUT') return jsonResponse(integration(type, JSON.parse(String(init?.body))))
@@ -86,6 +88,7 @@ describe('clinic integrations', () => {
     })
     const fetchMock = withAuth((address, init) => {
       const method = init?.method ?? 'GET'
+      if (address.endsWith('/clinic/notification-settings') && method === 'GET') return jsonResponse({ reminder24hEnabled: true, reminder3hEnabled: false })
       if (address.endsWith('/integrations') && method === 'GET') return jsonResponse([active('TELEGRAM'), active('MAX')])
       if (address.includes('/integrations/telegram/webhook/connect') && method === 'POST') {
         return jsonResponse({ state: 'CONNECTED', url: 'https://crm.example.test/api/v1/integrations/telegram/events/key', detail: null, pendingUpdates: 2 })
@@ -112,6 +115,63 @@ describe('clinic integrations', () => {
     expect(within(telegram).getByText('Connection refused')).toBeInTheDocument()
     expect(within(telegram).getByText('Ожидают доставки: 4')).toBeInTheDocument()
     expect(within(screen.getByRole('region', { name: 'Интеграция MAX' })).getByRole('button', { name: 'Подключить webhook' })).toBeEnabled()
+  })
+
+  it('saves both automatic reminder switches', async () => {
+    const fetchMock = withAuth((address, init) => {
+      const method = init?.method ?? 'GET'
+      if (address.endsWith('/clinic/notification-settings') && method === 'GET') return jsonResponse({ reminder24hEnabled: true, reminder3hEnabled: false })
+      if (address.endsWith('/clinic/notification-settings') && method === 'PUT') return jsonResponse(JSON.parse(String(init?.body)))
+      if (address.endsWith('/integrations') && method === 'GET') return jsonResponse([])
+      if (address.includes('/patients')) return jsonResponse([])
+      if (address.includes('/appointments')) return jsonResponse([])
+      return jsonResponse({}, 404)
+    }, 'admin')
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByText('API подключён')).toBeInTheDocument()
+    await openPage(user, 'Интеграции')
+    const panel = await screen.findByRole('region', { name: 'Напоминания пациентам' })
+    const daily = within(panel).getByRole('switch', { name: 'За 24 часа' })
+    const short = within(panel).getByRole('switch', { name: 'За 3 часа' })
+    expect(daily).toBeChecked()
+    expect(short).not.toBeChecked()
+
+    await user.click(daily)
+    await user.click(short)
+    await user.click(within(panel).getByRole('button', { name: 'Сохранить напоминания' }))
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => String(url).endsWith('/clinic/notification-settings') && init?.method === 'PUT')).toBe(true))
+    const saved = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith('/clinic/notification-settings') && init?.method === 'PUT')
+    expect(JSON.parse(String(saved?.[1]?.body))).toEqual({ reminder24hEnabled: false, reminder3hEnabled: true })
+  })
+
+  it('saves Yandex Metrica counter and OAuth token without messenger webhook fields', async () => {
+    const fetchMock = withAuth((address, init) => {
+      const method = init?.method ?? 'GET'
+      if (address.endsWith('/clinic/notification-settings') && method === 'GET') return jsonResponse({ reminder24hEnabled: true, reminder3hEnabled: false })
+      if (address.endsWith('/integrations') && method === 'GET') return jsonResponse([])
+      if (address.includes('/integrations/yandex_metrica/settings') && method === 'PUT') return jsonResponse(integration('YANDEX_METRICA', JSON.parse(String(init?.body))))
+      if (address.includes('/integrations/yandex_metrica/secret') && method === 'PUT') return jsonResponse(integration('YANDEX_METRICA', { apiUrl: 'https://api-metrika.yandex.net' }, true))
+      if (address.includes('/patients')) return jsonResponse([])
+      if (address.includes('/appointments')) return jsonResponse([])
+      return jsonResponse({}, 404)
+    }, 'admin')
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByText('API подключён')).toBeInTheDocument()
+    await openPage(user, 'Интеграции')
+    const metrica = await screen.findByRole('region', { name: 'Интеграция Яндекс Метрика' })
+    await user.type(within(metrica).getByLabelText('ID счётчика'), '12345678')
+    await user.type(within(metrica).getByLabelText('Яндекс OAuth-токен'), 'metrica-secret')
+    expect(within(metrica).queryByLabelText('Публичный HTTPS-адрес CRM')).not.toBeInTheDocument()
+    expect(within(metrica).queryByText(/Webhook для кабинета/)).not.toBeInTheDocument()
+    await user.click(within(metrica).getByRole('button', { name: 'Сохранить Яндекс Метрика' }))
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/integrations/yandex_metrica/secret'))).toBe(true))
+    const settings = fetchMock.mock.calls.find(([url]) => String(url).includes('/integrations/yandex_metrica/settings'))
+    const secret = fetchMock.mock.calls.find(([url]) => String(url).includes('/integrations/yandex_metrica/secret'))
+    expect(JSON.parse(String(settings?.[1]?.body))).toEqual({ apiUrl: 'https://api-metrika.yandex.net', counterId: '12345678' })
+    expect(JSON.parse(String(secret?.[1]?.body))).toEqual({ oauthToken: 'metrica-secret' })
   })
 
   it('does not expose integrations to roles without permission', async () => {

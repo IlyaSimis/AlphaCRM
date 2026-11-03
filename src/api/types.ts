@@ -312,6 +312,37 @@ export type AnalyticsOverview = {
   queues: { unclosedEncounters: number; unsignedDocuments: number; unpaidCharges: number }
 }
 
+export type AcquisitionAnalytics = {
+  from: string
+  to: string
+  currency: string
+  referralSources: Array<{
+    source: string
+    contacts: number
+    booked: number
+    visited: number
+    paid: number
+    revenueMinor: number
+  }>
+  web: {
+    state: 'NOT_CONFIGURED' | 'DISABLED' | 'READY' | 'ERROR' | string
+    detail: string | null
+    traffic: {
+      visits: number
+      users: number
+      pageviews: number
+      newVisitorsPercent: number
+      bounceRate: number
+      pageDepth: number
+      averageVisitDurationSeconds: number
+      goalReaches: number
+      goalConversionRate: number
+    } | null
+    daily: Array<{ date: string; visits: number; users: number; goalReaches: number }>
+    sources: Array<{ source: string; visits: number; users: number; goalReaches: number }>
+  }
+}
+
 export type WorkQueueKind = 'CONFIRMATION' | 'PAYMENT' | 'REBOOK' | 'NO_SHOW' | 'DELIVERY'
 export type WorkQueueItem = {
   id: string

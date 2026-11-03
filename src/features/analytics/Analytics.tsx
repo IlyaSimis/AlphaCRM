@@ -8,7 +8,10 @@ import { Metric } from '../../shared/ui'
 import { formatMoney } from '../schedule/booking'
 import { demoOccupancy, demoWeeks, loadRate, waitlistConversion } from './overview'
 import { ServiceAnalytics } from './ServiceAnalytics'
+import { AcquisitionAnalytics } from './AcquisitionAnalytics'
 import { buckets, rate, rowsFromSchedule, summarize, type Bucket, type Counts, type DayStats } from './stats'
+
+type AnalyticsSection = 'overview' | 'services' | 'acquisition'
 
 const periods = [
   { days: 28, label: '4 недели' },
@@ -31,7 +34,7 @@ function money(value: number | undefined, currency: string) {
 }
 
 export function Analytics({ apiOnline, anchor, practitioners, scheduleItems, onOpenPatient }: { apiOnline: boolean; anchor: string; practitioners: Practitioner[]; scheduleItems: ScheduleItem[]; onOpenPatient: (patientId: string) => void }) {
-  const [section, setSection] = useState<'overview' | 'services'>('overview')
+  const [section, setSection] = useState<AnalyticsSection>('overview')
   const [periodDays, setPeriodDays] = useState(28)
   const [to, setTo] = useState(anchor)
   const [doctor, setDoctor] = useState('all')
@@ -44,7 +47,7 @@ export function Analytics({ apiOnline, anchor, practitioners, scheduleItems, onO
   const practitionerId = doctor === 'all' ? undefined : doctor
 
   useEffect(() => {
-    if (!apiOnline) return
+    if (!apiOnline || section === 'acquisition') return
     let cancelled = false
     setLoading(true)
     setError('')
@@ -53,7 +56,7 @@ export function Analytics({ apiOnline, anchor, practitioners, scheduleItems, onO
       .catch((reason: Error) => { if (!cancelled) { setRemoteRows(null); setOverview(null); setError(reason.message) } })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [apiOnline, from, to, practitionerId])
+  }, [apiOnline, from, to, practitionerId, section])
 
   const rows = apiOnline && remoteRows ? remoteRows : rowsFromSchedule(scheduleItems)
   const stats = useMemo(() => summarize(rows, from, to, practitionerId), [rows, from, to, practitionerId])
@@ -76,26 +79,27 @@ export function Analytics({ apiOnline, anchor, practitioners, scheduleItems, onO
   return (
     <>
       <Box className="section-intro">
-        <Box><Typography variant="h4" sx={{ fontWeight: 750 }}>Показатели клиники</Typography><Typography sx={{ color: 'text.secondary' }}>Общие тренды, посещаемость и выручка по услугам с переходом к исходным записям</Typography></Box>
+        <Box><Typography variant="h4" sx={{ fontWeight: 750 }}>Показатели клиники</Typography><Typography sx={{ color: 'text.secondary' }}>Общие тренды, посещаемость, источники пациентов и выручка по услугам</Typography></Box>
         <Chip size="small" label={apiOnline ? 'Данные API' : 'Демо-данные из расписания'} color={apiOnline ? 'success' : 'default'} variant="outlined" />
       </Box>
-      <ToggleButtonGroup exclusive size="small" value={section} onChange={(_, next: 'overview' | 'services' | null) => { if (next) setSection(next) }} aria-label="Раздел аналитики" sx={{ mb: 2 }}>
+      <ToggleButtonGroup exclusive size="small" value={section} onChange={(_, next: AnalyticsSection | null) => { if (next) setSection(next) }} aria-label="Раздел аналитики" sx={{ mb: 2 }}>
         <ToggleButton value="overview">Обзор</ToggleButton>
         <ToggleButton value="services">Услуги</ToggleButton>
+        <ToggleButton value="acquisition">Привлечение</ToggleButton>
       </ToggleButtonGroup>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} className="analytics-filters">
         <TextField select size="small" label="Период" value={periodDays} onChange={(event) => setPeriodDays(Number(event.target.value))}>
           {periods.map((period) => <MenuItem key={period.days} value={period.days}>{period.label}</MenuItem>)}
         </TextField>
         <TextField size="small" type="date" label="По дату" value={to} onChange={(event) => { if (event.target.value) setTo(event.target.value) }} slotProps={{ inputLabel: { shrink: true } }} />
-        <TextField select size="small" label="Врач" value={doctor} onChange={(event) => setDoctor(event.target.value)} sx={{ minWidth: 200 }}>
+        {section !== 'acquisition' && <TextField select size="small" label="Врач" value={doctor} onChange={(event) => setDoctor(event.target.value)} sx={{ minWidth: 200 }}>
           <MenuItem value="all">Все врачи</MenuItem>
           {practitioners.map((item) => <MenuItem key={item.id} value={item.id}>{item.fullName}</MenuItem>)}
-        </TextField>
-        {loading && <CircularProgress size={22} sx={{ alignSelf: 'center' }} aria-label="Загрузка аналитики" />}
+        </TextField>}
+        {loading && section !== 'acquisition' && <CircularProgress size={22} sx={{ alignSelf: 'center' }} aria-label="Загрузка аналитики" />}
       </Stack>
       {section === 'overview' && error && <Alert severity="warning" sx={{ mb: 2 }}>{error}. Показаны данные из расписания.</Alert>}
-      {section === 'services' ? <ServiceAnalytics apiOnline={apiOnline} from={from} to={to} practitionerId={practitionerId} onOpenPatient={onOpenPatient} /> : <>
+      {section === 'acquisition' ? <AcquisitionAnalytics apiOnline={apiOnline} from={from} to={to} /> : section === 'services' ? <ServiceAnalytics apiOnline={apiOnline} from={from} to={to} practitionerId={practitionerId} onOpenPatient={onOpenPatient} /> : <>
       <Box className="summary-grid analytics-kpis">
         <Metric value={String(stats.totals.total)} label="записей за период" note={`${shortDate(from)}–${shortDate(to)}`} />
         <Metric value={percent(stats.attendanceRate)} label="явка" note={`пришли ${stats.totals.attended} из ${stats.totals.attended + stats.totals.noShow}`} />

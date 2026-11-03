@@ -135,7 +135,7 @@ class TelegramChannel {
    */
   String replyMarkup(PatientMessage message) {
     if (reminderButtons == null
-        || !NoticeTemplates.REMINDER.equals(message.template())
+        || !NoticeTemplates.isReminder(message.template())
         || message.appointmentId() == null) {
       return null;
     }

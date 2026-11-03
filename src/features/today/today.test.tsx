@@ -60,7 +60,7 @@ describe('«Сегодня»', () => {
     expect(await screen.findByRole('heading', { name: 'Дашборды', level: 4 })).toBeInTheDocument()
   })
 
-  it('confirms a queue item and rebooks through the standard booking dialog', async () => {
+  it('confirms, rebooks and keeps the selected queue filter between pages', async () => {
     const doctorId = '00000000-0000-0000-0000-000000000201'
     const base = server()
     const fetchMock = withAuth((address: string, init?: RequestInit) => {
@@ -84,6 +84,21 @@ describe('«Сегодня»', () => {
     expect(booking).toHaveTextContent('Новая запись')
     expect(within(booking).getByLabelText('Пациент')).toHaveTextContent('Анна Михайлова')
     expect(within(booking).getByLabelText('Врач')).toHaveTextContent('Александр Петров')
+    await user.click(within(booking).getByRole('button', { name: 'Отмена' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+
+    await user.click(within(queue).getByLabelText('Очередь'))
+    await user.click(await screen.findByRole('option', { name: 'Повторная запись · 1' }))
+    await waitFor(() => expect(screen.queryByRole('option', { name: 'Повторная запись · 1' })).not.toBeInTheDocument())
+    expect(localStorage.getItem('alphacrm.work-queue-filter.00000000-0000-0000-0000-0000000a0001')).toBe('REBOOK')
+    await openPage(user, 'Расписание')
+    await openPage(user, 'Сегодня')
+    const restored = await screen.findByRole('region', { name: 'Требуют действия' })
+    expect(await within(restored).findByRole('button', { name: 'Записать снова Анна Михайлова' })).toBeInTheDocument()
+    expect(within(restored).queryByRole('button', { name: 'Подтвердить запись Анна Михайлова' })).not.toBeInTheDocument()
+    await user.click(within(restored).getByRole('button', { name: 'Сбросить фильтр' }))
+    expect(await within(restored).findByRole('button', { name: 'Подтвердить запись Анна Михайлова' })).toBeInTheDocument()
+    expect(localStorage.getItem('alphacrm.work-queue-filter.00000000-0000-0000-0000-0000000a0001')).toBe('ALL')
   })
 
   it('opens salary details and the schedule from analytical widgets', async () => {

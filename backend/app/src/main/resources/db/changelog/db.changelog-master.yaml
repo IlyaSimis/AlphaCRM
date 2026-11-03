@@ -59,3 +59,5 @@ databaseChangeLog:
       file: db/changelog/029-integrations.sql
   - include:
       file: db/changelog/030-tenant-catalog.sql
+  - include:
+      file: db/changelog/031-reminders-and-product-analytics.sql

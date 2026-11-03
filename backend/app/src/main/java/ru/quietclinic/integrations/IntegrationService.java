@@ -20,14 +20,17 @@ class IntegrationService {
   static final String MANGO = "MANGO";
   static final String TELEGRAM = "TELEGRAM";
   static final String MAX = "MAX";
+  static final String YANDEX_METRICA = "YANDEX_METRICA";
   private static final String DEFAULT_MANGO_API_URL = "https://app.mango-office.ru";
   private static final String DEFAULT_TELEGRAM_API_URL = "https://api.telegram.org";
   private static final String DEFAULT_MAX_API_URL = "https://platform-api2.max.ru";
+  private static final String DEFAULT_YANDEX_METRICA_API_URL = "https://api-metrika.yandex.net";
 
   private final IntegrationRepository repository;
   private final IntegrationSecretCipher cipher;
   private final MangoIntegrationClientFactory mangoClients;
   private final MessengerIntegrationClientFactory messengerClients;
+  private final YandexMetricaGateway metrica;
   private final MessengerWebhookRegistrationService webhookRegistration;
   private final AuditService audit;
   private final JsonMapper json;
@@ -38,6 +41,7 @@ class IntegrationService {
       IntegrationSecretCipher cipher,
       MangoIntegrationClientFactory mangoClients,
       MessengerIntegrationClientFactory messengerClients,
+      YandexMetricaGateway metrica,
       MessengerWebhookRegistrationService webhookRegistration,
       AuditService audit,
       JsonMapper json,
@@ -46,6 +50,7 @@ class IntegrationService {
     this.cipher = cipher;
     this.mangoClients = mangoClients;
     this.messengerClients = messengerClients;
+    this.metrica = metrica;
     this.webhookRegistration = webhookRegistration;
     this.audit = audit;
     this.json = json;
@@ -87,12 +92,12 @@ class IntegrationService {
     String type = type(rawType);
     IntegrationRecord integration = getOrCreate(type);
     MessengerSecrets previous =
-        MANGO.equals(type)
-            ? null
-            : messengerClients
+        List.of(TELEGRAM, MAX).contains(type)
+            ? messengerClients
                 .forClinic(clinicId(), type)
                 .map(MessengerIntegration::secrets)
-                .orElse(null);
+                .orElse(null)
+            : null;
     Object secrets = secrets(type, request, previous);
     int version =
         integration.activeSecretVersion() == null ? 1 : integration.activeSecretVersion() + 1;
@@ -114,6 +119,7 @@ class IntegrationService {
     requirePermission(Permission.INTEGRATION_MANAGE);
     IntegrationRecord integration = find(rawType);
     if (MANGO.equals(integration.type())) mangoClients.requireValid(integration);
+    else if (YANDEX_METRICA.equals(integration.type())) metrica.requireValid(integration);
     else messengerClients.requireValid(integration);
     repository.updateStatus(integration.id(), "ACTIVE");
     audit.record(
@@ -167,7 +173,9 @@ class IntegrationService {
             () -> {
               IntegrationRecord integration =
                   repository.create(clinicId(), type, write(defaultSettings(type)));
-              directory.registerWebhook(clinicId(), integration.publicKey(), type);
+              if (!YANDEX_METRICA.equals(type)) {
+                directory.registerWebhook(clinicId(), integration.publicKey(), type);
+              }
               return integration;
             });
   }
@@ -181,9 +189,10 @@ class IntegrationService {
 
   private static String type(String rawType) {
     String type = rawType == null ? "" : rawType.trim().toUpperCase(Locale.ROOT);
-    if (!List.of(MANGO, TELEGRAM, MAX).contains(type)) {
+    if (!List.of(MANGO, TELEGRAM, MAX, YANDEX_METRICA).contains(type)) {
       throw badRequest(
-          "INTEGRATION_TYPE_UNSUPPORTED", "Only Mango, Telegram and MAX are supported");
+          "INTEGRATION_TYPE_UNSUPPORTED",
+          "Only Mango, Telegram, MAX and Yandex Metrica are supported");
     }
     return type;
   }
@@ -199,6 +208,13 @@ class IntegrationService {
             "MANGO_SETTINGS_INVALID", "Mango extension and line number must contain digits only");
       }
       return new MangoSettings(apiUrl, extension, line);
+    }
+    if (YANDEX_METRICA.equals(type)) {
+      String counterId = text(request.counterId());
+      if (!counterId.matches("^[0-9]{1,20}$")) {
+        throw badRequest("YANDEX_METRICA_COUNTER_INVALID", "Counter ID must contain digits only");
+      }
+      return new YandexMetricaSettings(apiUrl, counterId);
     }
     String publicUrl = text(request.publicUrl()).replaceAll("/$", "");
     String relayUrl = text(request.relayUrl()).replaceAll("/$", "");
@@ -224,6 +240,13 @@ class IntegrationService {
       }
       return new MangoSecrets(key, salt);
     }
+    if (YANDEX_METRICA.equals(type)) {
+      String oauthToken = text(request.oauthToken());
+      if (oauthToken.isEmpty()) {
+        throw badRequest("INTEGRATION_SECRET_INVALID", "Yandex OAuth token is required");
+      }
+      return new YandexMetricaSecrets(oauthToken);
+    }
     String token = text(request.botToken());
     String relaySecret = text(request.relaySecret());
     String webhookSecret = text(request.webhookSecret());
@@ -248,6 +271,7 @@ class IntegrationService {
       case MANGO -> new MangoSettings(DEFAULT_MANGO_API_URL, "", "");
       case TELEGRAM -> new MessengerSettings(DEFAULT_TELEGRAM_API_URL, "", "", "", true);
       case MAX -> new MessengerSettings(DEFAULT_MAX_API_URL, "", "", "", true);
+      case YANDEX_METRICA -> new YandexMetricaSettings(DEFAULT_YANDEX_METRICA_API_URL, "");
       default -> throw new IllegalArgumentException("Unsupported integration");
     };
   }

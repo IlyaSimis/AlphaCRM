@@ -1,5 +1,5 @@
 import { failure, apiFetch } from './client'
-import type { AnalyticsOverview, ServiceAnalyticsReport, ServiceAppointmentDetails, StatRow } from './types'
+import type { AcquisitionAnalytics, AnalyticsOverview, ServiceAnalyticsReport, ServiceAppointmentDetails, StatRow } from './types'
 
 export async function loadAppointmentStats(from: string, to: string): Promise<StatRow[]> {
   const query = new URLSearchParams({ from, to })
@@ -15,6 +15,14 @@ export async function loadAnalyticsOverview(from: string, to: string, practition
   if (practitionerId) query.set('practitionerId', practitionerId)
   const response = await apiFetch(`/analytics/overview?${query}`)
   if (!response.ok) throw await failure(response, 'Сводная аналитика недоступна')
+  return response.json()
+}
+
+/** Источники пациентов в CRM и агрегированная веб-аналитика без идентификаторов посетителей. */
+export async function loadAcquisition(from: string, to: string): Promise<AcquisitionAnalytics> {
+  const query = new URLSearchParams({ from, to })
+  const response = await apiFetch(`/analytics/acquisition?${query}`)
+  if (!response.ok) throw await failure(response, 'Аналитика привлечения недоступна')
   return response.json()
 }
 

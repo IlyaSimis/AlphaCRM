@@ -13,10 +13,21 @@ import org.springframework.web.bind.annotation.RestController;
 public class AnalyticsOverviewController {
   private final AnalyticsOverviewService analytics;
   private final ServiceAnalyticsService services;
+  private final AcquisitionAnalyticsService acquisition;
 
-  AnalyticsOverviewController(AnalyticsOverviewService analytics, ServiceAnalyticsService services) {
+  AnalyticsOverviewController(
+      AnalyticsOverviewService analytics,
+      ServiceAnalyticsService services,
+      AcquisitionAnalyticsService acquisition) {
     this.analytics = analytics;
     this.services = services;
+    this.acquisition = acquisition;
+  }
+
+  @GetMapping("/acquisition")
+  AcquisitionAnalyticsView acquisition(
+      @RequestParam LocalDate from, @RequestParam LocalDate to) {
+    return acquisition.report(from, to);
   }
 
   @GetMapping("/overview")
