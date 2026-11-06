@@ -7,6 +7,7 @@ import { dashboardCodes } from '../features/today/dashboardCodes'
 import { TodayPage } from '../features/today/TodayPage'
 import { Schedule } from '../features/schedule/Schedule'
 import type { Registry } from '../features/registry/useRegistry'
+import type { StaffChatState } from '../features/messages/useStaffChat'
 import type { VisitTarget } from '../features/visit/visitRules'
 import { localToday } from '../shared/dates'
 import { greeting } from '../shared/greeting'
@@ -16,7 +17,7 @@ import { driveView, stockSection, type Page } from './pages'
 import {
   Analytics, AuditLog, BreakGlassLog, Cashier, ContractsPage, ContractTemplatesPage, DrivePage, InventoryPage, MyContractPage,
   OutboxPage, PatientCard, PatientContracts, PatientFiles, PatientsList, RegistryPage, RegistryPanel, SalesPage,
-  SettingsPage, SignedDocuments, StaffPage, Visit, WorkspacePage, IntegrationsPage,
+  SettingsPage, SignedDocuments, StaffPage, StaffMessagesPage, Visit, WorkspacePage, IntegrationsPage,
 } from './lazyPages'
 
 type WorkspaceContentProps = {
@@ -27,6 +28,7 @@ type WorkspaceContentProps = {
   live: boolean
   clinic: ClinicData
   registry: Registry
+  staffChat: StaffChatState
   query: string
   visiblePatients: PatientItem[]
   selectedPatient?: PatientItem
@@ -57,7 +59,7 @@ type WorkspaceContentProps = {
 /** Текущий раздел рабочего места. Нестартовые страницы подключаются через React.lazy. */
 export function WorkspaceContent(props: WorkspaceContentProps) {
   const {
-    page, staff, role, doctorId, live, clinic, registry, query, visiblePatients, selectedPatient,
+    page, staff, role, doctorId, live, clinic, registry, staffChat, query, visiblePatients, selectedPatient,
     doctorFilter, workspaceIntent, visit, visitKey, visitAppointment, doctorName, sharedPhone,
     onQuery, onDoctorFilter, onNavigate, onOpenBooking, onNewPatient, onCreatePatient,
     onImportPatients, onEditPatient, onOpenPatient, onOpenPatientById, onOpenPatientOf,
@@ -71,6 +73,7 @@ export function WorkspaceContent(props: WorkspaceContentProps) {
     <Suspense fallback={<Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress aria-label="Загрузка раздела" /></Box>}>
       {page === 'today' && <TodayPage role={role} selfId={staff.id} selfName={staff.fullName} onNewAppointment={() => onOpenBooking(localToday())} onNewPatient={onNewPatient} apiOnline={clinic.apiOnline} patients={patientItems} appointments={scheduleItems} practitioners={practitioners} revision={clinic.revision} dueTasks={registry.todayTasks} tasksError={registry.error} staffName={registry.staffName} onOpen={onNavigate} onOpenPatient={onOpenPatientById} onRebook={(item) => onOpenBooking(localToday(), item.practitionerId, undefined, item.patientId)} />}
       {page === 'workspace' && <WorkspacePage key={staff.id} apiOnline={clinic.apiOnline} selfId={staff.id} staff={registry.staffList} patients={canSeePatients(role) ? patientItems : []} appointments={scheduleItems} notify={clinic.notify} navigationIntent={workspaceIntent} />}
+      {page === 'messages' && <StaffMessagesPage self={staff} apiOnline={clinic.apiOnline} chat={staffChat} />}
       {/* Врача встречают на расписании; остальных — на «Сегодня». */}
       {page === 'schedule' && canWriteClinical(role) && <Typography className="greeting" sx={{ mb: 1.5 }}>{greeting(staff.fullName)}</Typography>}
       {page === 'schedule' && canWriteClinical(role) && <DashboardWidgets apiOnline={clinic.apiOnline} role={role} codes={dashboardCodes(role)} onOpen={onNavigate} />}

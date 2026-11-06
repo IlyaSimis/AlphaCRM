@@ -48,6 +48,10 @@ class Appointment {
 
   String currency;
 
+  /** ClientID сайта пациента для offline conversions; в обычный ответ записи не входит. */
+  @Column(length = 64)
+  String metricaClientId;
+
   @Version long version;
 
   protected Appointment() {}

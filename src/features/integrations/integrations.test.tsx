@@ -145,13 +145,21 @@ describe('clinic integrations', () => {
     expect(JSON.parse(String(saved?.[1]?.body))).toEqual({ reminder24hEnabled: false, reminder3hEnabled: true })
   })
 
-  it('saves Yandex Metrica counter and OAuth token without messenger webhook fields', async () => {
+  it('saves an offline goal and uploads attributed conversions without messenger webhook fields', async () => {
+    let pending = 1
+    let uploaded = 0
     const fetchMock = withAuth((address, init) => {
       const method = init?.method ?? 'GET'
       if (address.endsWith('/clinic/notification-settings') && method === 'GET') return jsonResponse({ reminder24hEnabled: true, reminder3hEnabled: false })
       if (address.endsWith('/integrations') && method === 'GET') return jsonResponse([])
+      if (address.includes('/integrations/yandex_metrica/offline-conversions/upload') && method === 'POST') {
+        uploaded += pending
+        pending = 0
+        return jsonResponse({ uploaded, uploadingId: 'upload-1' })
+      }
+      if (address.includes('/integrations/yandex_metrica/offline-conversions') && method === 'GET') return jsonResponse({ configured: true, attributed: 1, pending, uploading: 0, uploaded, failed: 0, lastUploadedAt: null, lastError: null })
       if (address.includes('/integrations/yandex_metrica/settings') && method === 'PUT') return jsonResponse(integration('YANDEX_METRICA', JSON.parse(String(init?.body))))
-      if (address.includes('/integrations/yandex_metrica/secret') && method === 'PUT') return jsonResponse(integration('YANDEX_METRICA', { apiUrl: 'https://api-metrika.yandex.net' }, true))
+      if (address.includes('/integrations/yandex_metrica/secret') && method === 'PUT') return jsonResponse(integration('YANDEX_METRICA', { apiUrl: 'https://api-metrika.yandex.net', counterId: '12345678', offlineGoalId: '987654' }, true))
       if (address.includes('/patients')) return jsonResponse([])
       if (address.includes('/appointments')) return jsonResponse([])
       return jsonResponse({}, 404)
@@ -162,6 +170,7 @@ describe('clinic integrations', () => {
     await openPage(user, 'Интеграции')
     const metrica = await screen.findByRole('region', { name: 'Интеграция Яндекс Метрика' })
     await user.type(within(metrica).getByLabelText('ID счётчика'), '12345678')
+    await user.type(within(metrica).getByLabelText('ID offline-цели'), '987654')
     await user.type(within(metrica).getByLabelText('Яндекс OAuth-токен'), 'metrica-secret')
     expect(within(metrica).queryByLabelText('Публичный HTTPS-адрес CRM')).not.toBeInTheDocument()
     expect(within(metrica).queryByText(/Webhook для кабинета/)).not.toBeInTheDocument()
@@ -170,8 +179,14 @@ describe('clinic integrations', () => {
     await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/integrations/yandex_metrica/secret'))).toBe(true))
     const settings = fetchMock.mock.calls.find(([url]) => String(url).includes('/integrations/yandex_metrica/settings'))
     const secret = fetchMock.mock.calls.find(([url]) => String(url).includes('/integrations/yandex_metrica/secret'))
-    expect(JSON.parse(String(settings?.[1]?.body))).toEqual({ apiUrl: 'https://api-metrika.yandex.net', counterId: '12345678' })
+    expect(JSON.parse(String(settings?.[1]?.body))).toEqual({ apiUrl: 'https://api-metrika.yandex.net', counterId: '12345678', offlineGoalId: '987654' })
     expect(JSON.parse(String(secret?.[1]?.body))).toEqual({ oauthToken: 'metrica-secret' })
+
+    const savedMetrica = await screen.findByRole('region', { name: 'Интеграция Яндекс Метрика' })
+    expect(await within(savedMetrica).findByText('К выгрузке: 1')).toBeInTheDocument()
+    await user.click(within(savedMetrica).getByRole('button', { name: 'Выгрузить конверсии' }))
+    expect(await within(savedMetrica).findByText('Принято Метрикой: 1')).toBeInTheDocument()
+    expect(within(savedMetrica).getByText('К выгрузке: 0')).toBeInTheDocument()
   })
 
   it('does not expose integrations to roles without permission', async () => {

@@ -157,6 +157,7 @@ class AppointmentService {
         request.endsAt(),
         service,
         estimate,
+        request.metricaClientId(),
         "booking",
         false);
   }
@@ -171,7 +172,7 @@ class AppointmentService {
     ClinicService service = activeService(serviceName);
     if (!clinic.hasPatient(patientId)) throw notFound("PATIENT_NOT_FOUND", "Patient not found");
     Instant endsAt = startsAt.plus(Duration.ofMinutes(service.durationMinutes));
-    return book(patientId, practitionerId, startsAt, endsAt, service, null, ONLINE, true);
+    return book(patientId, practitionerId, startsAt, endsAt, service, null, null, ONLINE, true);
   }
 
   /** Пациент подтвердил запись кнопкой в Telegram. Уже подтверждённая остаётся как есть. */
@@ -243,6 +244,7 @@ class AppointmentService {
       Instant endsAt,
       ClinicService service,
       Long estimateMinor,
+      String metricaClientId,
       String reason,
       boolean online) {
     checkSlot(practitionerId, startsAt, endsAt, null);
@@ -260,6 +262,7 @@ class AppointmentService {
       draft.serviceId = service.id;
       draft.priceMode = service.priceMode;
       draft.estimateMinor = service.open() ? estimateMinor : null;
+      draft.metricaClientId = metricaClientId;
       Appointment appointment = appointments.saveAndFlush(draft);
       careRelationships.ensureCareRelationship(appointment.practitionerId, appointment.patientId);
       audit.record(

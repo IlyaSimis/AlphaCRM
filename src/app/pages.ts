@@ -2,7 +2,7 @@ import { canManagePrices, canManageSchedule, canSeeAnalytics, canSeeAudit, canSe
 import { can } from '../shared/permissions'
 
 export type Page =
-  | 'today' | 'workspace' | 'analytics' | 'hr-me' | 'staff' | 'hr' | 'audit' | 'break-glass' | 'outbox' | 'integrations'
+  | 'today' | 'workspace' | 'messages' | 'analytics' | 'hr-me' | 'staff' | 'hr' | 'audit' | 'break-glass' | 'outbox' | 'integrations'
   | 'schedule' | 'patients' | 'patient' | 'visit' | 'registry' | 'documents' | 'contract-templates' | 'hours'
   | 'stock-balances' | 'stock-items' | 'stock-documents' | 'stock-marking' | 'stock-norms'
   | 'cashier' | 'sales' | 'prices'
@@ -26,6 +26,7 @@ export const services: Service[] = ['dashboards', 'management', 'patients', 'doc
 export const pageTitles: Record<Page, string> = {
   today: 'Сегодня',
   workspace: 'Дашборды',
+  messages: 'Сообщения',
   analytics: 'Аналитика',
   staff: 'Сотрудники',
   hr: 'Ставки и условия',
@@ -84,6 +85,7 @@ export const serviceSections: Record<Service, Array<{ label: string; pages: Page
 /** Сервис страницы: по нему подсвечивается вкладка сверху и строится боковое меню. */
 export function serviceOf(page: Page): Service {
   if (page === 'patient' || page === 'visit') return 'patients'
+  if (page === 'messages') return 'dashboards'
   return services.find((service) => serviceSections[service].some((section) => section.pages.includes(page))) ?? 'patients'
 }
 
@@ -92,6 +94,7 @@ function allowed(page: Page, role: Role): boolean {
   switch (page) {
     case 'today': return hasTodayPage(role)
     case 'workspace': return can(role, 'workspace.item.use')
+    case 'messages': return true
     case 'analytics': return canSeeAnalytics(role)
     case 'staff': return canSeeStaff(role)
     case 'hr': return can(role, 'identity.hr.manage')
@@ -134,9 +137,10 @@ export function servicesFor(role: Role): Service[] {
   return services.filter((service) => sectionsFor(service, role).length > 0)
 }
 
-/** Все страницы меню роли — в порядке сервисов и их разделов. */
+/** Все страницы меню роли: разделы сервисов и отдельный пункт сообщений. */
 export function navigationFor(role: Role): Page[] {
-  return servicesFor(role).flatMap((service) => sectionsFor(service, role).flatMap((section) => section.pages))
+  const servicePages = servicesFor(role).flatMap((service) => sectionsFor(service, role).flatMap((section) => section.pages))
+  return [...servicePages, 'messages']
 }
 
 /** Первая страница сервиса для роли: на неё ведёт вкладка верхней панели. */

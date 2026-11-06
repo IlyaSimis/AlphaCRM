@@ -61,3 +61,7 @@ databaseChangeLog:
       file: db/changelog/030-tenant-catalog.sql
   - include:
       file: db/changelog/031-reminders-and-product-analytics.sql
+  - include:
+      file: db/changelog/032-metrica-offline-conversions.sql
+  - include:
+      file: db/changelog/033-staff-chat.sql

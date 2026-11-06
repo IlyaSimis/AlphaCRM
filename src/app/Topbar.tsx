@@ -30,7 +30,7 @@ type TopbarProps = {
 
 /** Шапка: разделы текущего сервиса, ИИ-навигатор и выход. */
 export function Topbar({ eyebrow, title, pages, page, onNavigate, live, clinicName, onAssistant, onSignOut, onMenu }: TopbarProps) {
-  const current = page === 'patient' ? 'patients' : page === 'visit' ? 'schedule' : page
+  const current = page === 'messages' ? false : page === 'patient' ? 'patients' : page === 'visit' ? 'schedule' : page
   return (
     <Box className="topbar">
       <Box className="topbar-row">

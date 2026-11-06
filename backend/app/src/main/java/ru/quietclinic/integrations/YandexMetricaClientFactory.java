@@ -51,8 +51,13 @@ class YandexMetricaClientFactory {
               .oauthToken();
     }
     return new Connection(
-        settings.apiUrl(), settings.counterId(), token, integration.status());
+        settings.apiUrl(),
+        settings.counterId(),
+        settings.offlineGoalId() == null ? "" : settings.offlineGoalId(),
+        token,
+        integration.status());
   }
 
-  record Connection(String apiUrl, String counterId, String oauthToken, String status) {}
+  record Connection(
+      String apiUrl, String counterId, String offlineGoalId, String oauthToken, String status) {}
 }

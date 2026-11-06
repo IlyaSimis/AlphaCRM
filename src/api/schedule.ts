@@ -133,6 +133,8 @@ export type NewAppointment = {
   serviceName: string
   /** Оценка суммы для услуги со свободной ценой, в копейках; необязательна. */
   estimateMinor?: number | null
+  /** ClientID посетителя сайта пациента; CRM не подставляет идентификатор браузера сотрудника. */
+  metricaClientId?: string
 }
 
 export async function createAppointment(input: NewAppointment) {
@@ -147,6 +149,7 @@ export async function createAppointment(input: NewAppointment) {
       endsAt,
       serviceName: input.serviceName,
       ...(input.estimateMinor != null ? { estimateMinor: input.estimateMinor } : {}),
+      ...(input.metricaClientId ? { metricaClientId: input.metricaClientId } : {}),
     }),
   })
   if (!response.ok) throw await failure(response, 'Не удалось создать запись', { 409: 'Интервал врача уже занят' })

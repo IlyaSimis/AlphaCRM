@@ -4,6 +4,7 @@ import type { StaffItem } from '../../api/types'
 import { changeIntegrationStatus, checkIntegrationWebhookStatus, connectIntegrationWebhook, loadIntegrations, saveIntegrationSecret, saveIntegrationSettings, type IntegrationType, type IntegrationView, type IntegrationWebhookStatus } from '../../api/integrations'
 import { can, rolesOf } from '../../shared/permissions'
 import { NotificationSettingsPanel } from './NotificationSettingsPanel'
+import { MetricaOfflineConversionsPanel } from './MetricaOfflineConversionsPanel'
 
 type IntegrationsPageProps = {
   staff: StaffItem
@@ -75,6 +76,7 @@ function IntegrationCard({ type, integration, editable, notify, onChange }: { ty
   const [relayUrl, setRelayUrl] = useState(integration?.settings.relayUrl ?? '')
   const [webhookBaseUrl, setWebhookBaseUrl] = useState(integration?.settings.webhookBaseUrl ?? '')
   const [counterId, setCounterId] = useState(integration?.settings.counterId ?? '')
+  const [offlineGoalId, setOfflineGoalId] = useState(integration?.settings.offlineGoalId ?? '')
   const [reminderButtons, setReminderButtons] = useState(integration?.settings.reminderButtons ?? true)
   const [firstSecret, setFirstSecret] = useState('')
   const [secondSecret, setSecondSecret] = useState('')
@@ -93,7 +95,7 @@ function IntegrationCard({ type, integration, editable, notify, onChange }: { ty
       const settings = type === 'MANGO'
         ? { apiUrl, defaultExtension: extension, lineNumber }
         : type === 'YANDEX_METRICA'
-          ? { apiUrl, counterId }
+          ? { apiUrl, counterId, offlineGoalId }
           : { apiUrl, publicUrl, relayUrl, webhookBaseUrl, reminderButtons }
       let saved = await saveIntegrationSettings(type, settings)
       if (firstSecret.trim() || secondSecret.trim() || webhookSecret.trim()) {
@@ -174,6 +176,7 @@ function IntegrationCard({ type, integration, editable, notify, onChange }: { ty
           <TextField label="Mango API salt" type="password" value={secondSecret} onChange={(event) => setSecondSecret(event.target.value)} disabled={!editable || !!busy} placeholder={hasSecret ? 'Задан — введите новый для замены' : ''} autoComplete="off" />
         </> : type === 'YANDEX_METRICA' ? <>
           <TextField label="ID счётчика" value={counterId} onChange={(event) => setCounterId(event.target.value)} disabled={!editable || !!busy} inputMode="numeric" />
+          <TextField label="ID offline-цели" value={offlineGoalId} onChange={(event) => setOfflineGoalId(event.target.value)} disabled={!editable || !!busy} inputMode="numeric" helperText="Числовой ID цели «JavaScript-событие» для записи в CRM. Пусто — выгрузка отключена." />
           <TextField label="Яндекс OAuth-токен" type="password" value={firstSecret} onChange={(event) => setFirstSecret(event.target.value)} disabled={!editable || !!busy} placeholder={hasSecret ? 'Задан — введите новый для замены' : ''} autoComplete="off" helperText="Токен сохраняется зашифрованным и больше не показывается." />
         </> : <>
           <TextField label={`Ссылка на бота ${title}`} value={publicUrl} onChange={(event) => setPublicUrl(event.target.value)} disabled={!editable || !!busy} placeholder={type === 'TELEGRAM' ? 'https://t.me/your_clinic_bot' : 'https://max.ru/your_clinic_bot'} />
@@ -193,6 +196,7 @@ function IntegrationCard({ type, integration, editable, notify, onChange }: { ty
         <Button variant="contained" onClick={() => void save()} disabled={!!busy}>{busy === 'save' ? 'Сохранение…' : `Сохранить ${title}`}</Button>
         {status !== 'ACTIVE' ? <Button variant="outlined" onClick={() => void changeStatus('activate')} disabled={!!busy || !integration || !hasSecret}>Активировать</Button> : <Button variant="outlined" color="warning" onClick={() => void changeStatus('disable')} disabled={!!busy}>Отключить</Button>}
       </Box>}
+      {type === 'YANDEX_METRICA' && integration && <MetricaOfflineConversionsPanel editable={editable} goalConfigured={Boolean(offlineGoalId.trim())} notify={notify} />}
       {integration?.publicKey && type !== 'YANDEX_METRICA' && <Box sx={{ mt: 2, p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
         <Typography sx={{ fontWeight: 650, fontSize: 14, mb: 1 }}>Webhook для кабинета {title}</Typography>
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>

@@ -22,5 +22,6 @@ export const StaffPage = lazy(() => import('../features/staff/StaffPage').then((
 export const WorkspacePage = lazy(() => import('../features/workspace/WorkspacePage').then((module) => ({ default: module.WorkspacePage })))
 export const InventoryPage = lazy(() => import('../features/inventory/InventoryPage').then((module) => ({ default: module.InventoryPage })))
 export const IntegrationsPage = lazy(() => import('../features/integrations/IntegrationsPage').then((module) => ({ default: module.IntegrationsPage })))
+export const StaffMessagesPage = lazy(() => import('../features/messages/StaffMessagesPage').then((module) => ({ default: module.StaffMessagesPage })))
 export const DrivePage = lazy(() => import('../features/drive/DrivePage').then((module) => ({ default: module.DrivePage })))
 export const Visit = lazy(() => import('../features/visit/Visit').then((module) => ({ default: module.Visit })))

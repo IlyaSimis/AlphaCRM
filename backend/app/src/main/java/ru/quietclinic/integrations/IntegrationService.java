@@ -214,7 +214,11 @@ class IntegrationService {
       if (!counterId.matches("^[0-9]{1,20}$")) {
         throw badRequest("YANDEX_METRICA_COUNTER_INVALID", "Counter ID must contain digits only");
       }
-      return new YandexMetricaSettings(apiUrl, counterId);
+      String offlineGoalId = text(request.offlineGoalId());
+      if (!offlineGoalId.matches("^$|^[0-9]{1,20}$")) {
+        throw badRequest("YANDEX_METRICA_GOAL_INVALID", "Offline goal ID must contain digits only");
+      }
+      return new YandexMetricaSettings(apiUrl, counterId, offlineGoalId);
     }
     String publicUrl = text(request.publicUrl()).replaceAll("/$", "");
     String relayUrl = text(request.relayUrl()).replaceAll("/$", "");
@@ -271,7 +275,7 @@ class IntegrationService {
       case MANGO -> new MangoSettings(DEFAULT_MANGO_API_URL, "", "");
       case TELEGRAM -> new MessengerSettings(DEFAULT_TELEGRAM_API_URL, "", "", "", true);
       case MAX -> new MessengerSettings(DEFAULT_MAX_API_URL, "", "", "", true);
-      case YANDEX_METRICA -> new YandexMetricaSettings(DEFAULT_YANDEX_METRICA_API_URL, "");
+      case YANDEX_METRICA -> new YandexMetricaSettings(DEFAULT_YANDEX_METRICA_API_URL, "", "");
       default -> throw new IllegalArgumentException("Unsupported integration");
     };
   }

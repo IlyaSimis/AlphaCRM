@@ -15,6 +15,8 @@ describe('services and pages by role', () => {
     expect(serviceOf('stock-items')).toBe('inventory')
     expect(serviceOf('drive-trash')).toBe('drive')
     expect(serviceOf('staff')).toBe('management')
+    expect(serviceOf('messages')).toBe('dashboards')
+    expect(canOpen('messages', 'DOCTOR')).toBe(true)
   })
 
   it('the administrator sees everything operational, grouped by service', () => {
@@ -23,7 +25,7 @@ describe('services and pages by role', () => {
       'schedule', 'patients', 'registry', 'contract-templates',
       'stock-balances', 'stock-items', 'stock-documents', 'stock-marking', 'stock-norms',
       'cashier', 'sales', 'prices',
-      'drive', 'drive-shared', 'drive-trash',
+      'drive', 'drive-shared', 'drive-trash', 'messages',
     ])
     // Владелец и старший администратор вдобавок видят журнал экстренных доступов (K1), владелец — ставки.
     const withLog = navigationFor('ADMINISTRATOR').flatMap((page) => (page === 'audit' ? ['audit', 'break-glass'] : [page]))
@@ -37,7 +39,7 @@ describe('services and pages by role', () => {
 
   it('a cashier and a doctor have documents but no inventory; every role has a personal workspace', () => {
     expect(servicesFor('CASHIER')).toEqual(['dashboards', 'patients', 'documents', 'finance', 'drive'])
-    expect(navigationFor('CASHIER')).toEqual(['today', 'workspace', 'hr-me', 'schedule', 'patients', 'registry', 'contract-templates', 'cashier', 'drive', 'drive-shared', 'drive-trash'])
+    expect(navigationFor('CASHIER')).toEqual(['today', 'workspace', 'hr-me', 'schedule', 'patients', 'registry', 'contract-templates', 'cashier', 'drive', 'drive-shared', 'drive-trash', 'messages'])
     expect(servicesFor('DOCTOR')).toEqual(['dashboards', 'patients', 'documents', 'drive'])
     expect(sectionsFor('dashboards', 'DOCTOR').flatMap((section) => section.pages)).toEqual(['workspace', 'hr-me'])
     expect(sectionsFor('documents', 'DOCTOR').flatMap((section) => section.pages)).toEqual(['contract-templates'])

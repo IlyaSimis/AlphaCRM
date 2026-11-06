@@ -10,4 +10,5 @@ record IntegrationSettingsRequest(
     @Size(max = 500) String relayUrl,
     @Size(max = 500) String webhookBaseUrl,
     Boolean reminderButtons,
-    @Size(max = 32) String counterId) {}
+    @Size(max = 32) String counterId,
+    @Size(max = 20) String offlineGoalId) {}

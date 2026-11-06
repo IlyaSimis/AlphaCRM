@@ -15,9 +15,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/integrations")
 public class IntegrationController {
   private final IntegrationService integrations;
+  private final MetricaOfflineConversionService offlineConversions;
 
-  IntegrationController(IntegrationService integrations) {
+  IntegrationController(
+      IntegrationService integrations, MetricaOfflineConversionService offlineConversions) {
     this.integrations = integrations;
+    this.offlineConversions = offlineConversions;
   }
 
   @GetMapping
@@ -60,5 +63,15 @@ public class IntegrationController {
   @GetMapping("/{type}/webhook/status")
   IntegrationWebhookStatusView webhookStatus(@PathVariable String type) {
     return integrations.webhookStatus(type);
+  }
+
+  @GetMapping("/yandex_metrica/offline-conversions")
+  MetricaOfflineConversionService.OfflineConversionsView offlineConversions() {
+    return offlineConversions.status();
+  }
+
+  @PostMapping("/yandex_metrica/offline-conversions/upload")
+  MetricaOfflineConversionService.OfflineConversionUploadView uploadOfflineConversions() {
+    return offlineConversions.upload();
   }
 }

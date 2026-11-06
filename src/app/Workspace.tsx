@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Box, Drawer, Snackbar } from '@mui/material'
+import { CloseRounded } from '@mui/icons-material'
+import { Alert, Box, Button, Drawer, IconButton, Snackbar, Typography } from '@mui/material'
 import { changePassword } from '../api/auth'
 import type { AssignedStaff, EncounterView, PatientItem, ScheduleItem, StaffItem, WaitlistItem } from '../api/types'
 import type { NavigationDestination, WorkspaceNavigationIntent } from '../features/assistant/navigationCatalog'
@@ -7,6 +8,7 @@ import type { BookingDraft } from '../features/schedule/booking'
 import { filterPatients } from '../features/patients/search'
 import { phoneSharedWith } from '../features/registry/registry'
 import { useRegistry } from '../features/registry/useRegistry'
+import { useStaffChat } from '../features/messages/useStaffChat'
 import type { VisitTarget } from '../features/visit/visitRules'
 import { formatDay, localToday } from '../shared/dates'
 import { administratorRoles, staffRolesOf } from '../shared/roles'
@@ -35,6 +37,7 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
   const registry = useRegistry(staff, live, clinic.apiOnline, clinic.notify)
   // Ссылка на файл диска (…?drive-link=…) открывает диск сразу после входа.
   const [page, setPage] = useState<Page>(() => (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('drive-link') && canOpen('drive', role) ? 'drive' : startPage(role)))
+  const staffChat = useStaffChat(clinic.apiOnline, page === 'messages')
   // Последняя открытая страница каждого сервиса: вкладка сверху возвращает туда, где остановились.
   const [lastPages, setLastPages] = useState<Partial<Record<Service, Page>>>({})
   const [query, setQuery] = useState('')
@@ -70,6 +73,7 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
 
   const navigate = (next: Page) => {
     const target = canOpen(next, role) ? next : startPage(role)
+    if (target !== 'messages') staffChat.clearConversation()
     setPage(target)
     setLastPages((pages) => ({ ...pages, [serviceOf(target)]: target }))
     setDrawer(false)
@@ -264,6 +268,14 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
     }
   }
 
+  const openChatNotification = () => {
+    const target = staffChat.notification
+    if (!target) return
+    staffChat.dismissNotification()
+    navigate('messages')
+    void staffChat.openConversation(target.conversationId)
+  }
+
   const eyebrow = page === 'today'
     ? `РАБОЧИЙ ДЕНЬ · ${formatDay(localToday()).toLocaleUpperCase('ru-RU')}`
     : page === 'visit'
@@ -278,14 +290,14 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
 
   return (
     <Box className="app-shell">
-      <Box className={`desktop-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}><Sidebar className="sidebar" page={page} service={service} services={servicesFor(role)} staff={staff} live={live} visits={visits} activeVisit={page === 'visit' ? visit : null} collapsed={sidebarCollapsed} onService={openService} onNavigate={navigate} onVisit={openVisit} onSettings={() => setSettings(true)} onToggleCollapse={() => setSidebarCollapsed((value) => !value)} /></Box>
-      <Drawer open={drawer} onClose={() => setDrawer(false)}><Sidebar className="sidebar sidebar-in-drawer" page={page} service={service} services={servicesFor(role)} staff={staff} live={live} visits={visits} activeVisit={page === 'visit' ? visit : null} onService={openService} onNavigate={navigate} onVisit={(target) => { openVisit(target); setDrawer(false) }} onSettings={() => { setDrawer(false); setSettings(true) }} /></Drawer>
+      <Box className={`desktop-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}><Sidebar className="sidebar" page={page} service={service} services={servicesFor(role)} staff={staff} live={live} visits={visits} activeVisit={page === 'visit' ? visit : null} unreadMessages={staffChat.unreadCount} collapsed={sidebarCollapsed} onService={openService} onNavigate={navigate} onVisit={openVisit} onSettings={() => setSettings(true)} onToggleCollapse={() => setSidebarCollapsed((value) => !value)} /></Box>
+      <Drawer open={drawer} onClose={() => setDrawer(false)}><Sidebar className="sidebar sidebar-in-drawer" page={page} service={service} services={servicesFor(role)} staff={staff} live={live} visits={visits} activeVisit={page === 'visit' ? visit : null} unreadMessages={staffChat.unreadCount} onService={openService} onNavigate={navigate} onVisit={(target) => { openVisit(target); setDrawer(false) }} onSettings={() => { setDrawer(false); setSettings(true) }} /></Drawer>
       <Box component="main" className="main">
         <Landscape />
         <Topbar eyebrow={eyebrow} title={page === 'today' ? '' : pageTitles[page]} pages={sectionsFor(service, role).flatMap((section) => section.pages)} page={page} onNavigate={navigate} live={live} clinicName={staff.clinicName} onAssistant={() => setAssistant(true)} onSignOut={onSignOut} onMenu={() => setDrawer(true)} />
         <Box className="content">
           <WorkspaceContent
-            page={page} staff={staff} role={role} doctorId={doctorId} live={live} clinic={clinic} registry={registry}
+            page={page} staff={staff} role={role} doctorId={doctorId} live={live} clinic={clinic} registry={registry} staffChat={staffChat}
             query={query} visiblePatients={visiblePatients} selectedPatient={selectedPatient} doctorFilter={doctorFilter}
             workspaceIntent={workspaceIntent} visit={visit} visitKey={visitKey} visitAppointment={visitAppointment} doctorName={doctorName}
             sharedPhone={sharedPhone} onQuery={setQuery} onDoctorFilter={setDoctorFilter} onNavigate={navigate} onOpenBooking={openBooking}
@@ -317,6 +329,26 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
         onPasswordClose={() => setPassword(false)} onPasswordSave={savePassword}
         onAssistantClose={() => setAssistant(false)} onAssistantNavigate={navigateFromAssistant}
       />
+      <Snackbar
+        key={staffChat.notification?.key ?? 0}
+        open={staffChat.notification !== null}
+        autoHideDuration={7000}
+        onClose={(_event, reason) => { if (reason !== 'clickaway') staffChat.dismissNotification() }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert
+          severity="info"
+          variant="filled"
+          sx={{ maxWidth: 420 }}
+          action={<>
+            <Button color="inherit" size="small" onClick={openChatNotification}>Открыть</Button>
+            <IconButton color="inherit" size="small" aria-label="Закрыть уведомление" onClick={staffChat.dismissNotification}><CloseRounded fontSize="small" /></IconButton>
+          </>}
+        >
+          <Typography component="span" sx={{ display: 'block', fontWeight: 750 }}>{staffChat.notification?.message.senderName} · {staffChat.notification?.conversationTitle}</Typography>
+          <Typography component="span" noWrap sx={{ display: 'block', maxWidth: 300, fontSize: 13 }}>{staffChat.notification?.message.body}</Typography>
+        </Alert>
+      </Snackbar>
       <Snackbar open={clinic.notice.open} autoHideDuration={2500} onClose={clinic.closeNotice} message={clinic.notice.message} />
     </Box>
   )

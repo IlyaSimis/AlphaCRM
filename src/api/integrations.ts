@@ -12,6 +12,7 @@ export type IntegrationSettings = {
   webhookBaseUrl?: string
   reminderButtons?: boolean
   counterId?: string
+  offlineGoalId?: string
 }
 
 export type IntegrationWebhookStatus = {
@@ -38,6 +39,17 @@ export type IntegrationSecretInput = {
   relaySecret?: string
   webhookSecret?: string
   oauthToken?: string
+}
+
+export type MetricaOfflineConversionsStatus = {
+  configured: boolean
+  attributed: number
+  pending: number
+  uploading: number
+  uploaded: number
+  failed: number
+  lastUploadedAt: string | null
+  lastError: string | null
 }
 
 async function request<T = IntegrationView>(path: string, method = 'GET', body?: unknown): Promise<T> {
@@ -70,4 +82,12 @@ export function connectIntegrationWebhook(type: IntegrationType) {
 
 export function checkIntegrationWebhookStatus(type: IntegrationType) {
   return request<IntegrationWebhookStatus>(`/integrations/${type.toLowerCase()}/webhook/status`)
+}
+
+export function loadMetricaOfflineConversions() {
+  return request<MetricaOfflineConversionsStatus>('/integrations/yandex_metrica/offline-conversions')
+}
+
+export function uploadMetricaOfflineConversions() {
+  return request<{ uploaded: number; uploadingId: string | null }>('/integrations/yandex_metrica/offline-conversions/upload', 'POST')
 }

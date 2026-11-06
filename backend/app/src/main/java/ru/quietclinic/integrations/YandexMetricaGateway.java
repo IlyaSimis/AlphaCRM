@@ -26,8 +26,7 @@ class YandexMetricaGateway implements WebAnalyticsPort {
       "ym:s:visits,ym:s:users,ym:s:pageviews,ym:s:percentNewVisitors,ym:s:bounceRate,"
           + "ym:s:pageDepth,ym:s:avgVisitDurationSeconds,ym:s:anyGoalReaches,"
           + "ym:s:anyGoalConversionRate";
-  private static final String SOURCE_METRICS =
-      "ym:s:visits,ym:s:users,ym:s:anyGoalReaches";
+  private static final String SOURCE_METRICS = "ym:s:visits,ym:s:users,ym:s:anyGoalReaches";
 
   private final YandexMetricaClientFactory connections;
   private final JsonMapper json;
@@ -64,7 +63,8 @@ class YandexMetricaGateway implements WebAnalyticsPort {
                   .build()
                   .toUri(),
               connection.oauthToken());
-      return new Report("READY", null, traffic(daily.path("totals")), days(daily), sources(sources));
+      return new Report(
+          "READY", null, traffic(daily.path("totals")), days(daily), sources(sources));
     } catch (ProviderException ex) {
       return Report.error(ex.getMessage());
     } catch (IOException | RuntimeException ex) {
@@ -88,11 +88,54 @@ class YandexMetricaGateway implements WebAnalyticsPort {
     try {
       Response response = get(uri, connection.oauthToken());
       if (response.status() < 200 || response.status() >= 300) {
-        throw conflict(
-            "YANDEX_METRICA_ACCESS_FAILED", "Yandex Metrica rejected counter access");
+        throw conflict("YANDEX_METRICA_ACCESS_FAILED", "Yandex Metrica rejected counter access");
       }
     } catch (IOException ex) {
       throw conflict("YANDEX_METRICA_UNAVAILABLE", "Yandex Metrica is unavailable");
+    }
+  }
+
+  /** Принимает один CSV-пакет и возвращает технический id загрузки Метрики. */
+  String uploadOfflineConversions(YandexMetricaClientFactory.Connection connection, String csv) {
+    URI uri =
+        UriComponentsBuilder.fromUriString(connection.apiUrl())
+            .path("/management/v1/counter/{counterId}/offline_conversions/upload")
+            .buildAndExpand(connection.counterId())
+            .encode()
+            .toUri();
+    String boundary = "----AlphaCRM" + UUID.randomUUID().toString().replace("-", "");
+    String multipart =
+        "--"
+            + boundary
+            + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\"conversions.csv\"\r\n"
+            + "Content-Type: text/csv; charset=utf-8\r\n\r\n"
+            + csv
+            + "\r\n--"
+            + boundary
+            + "--\r\n";
+    HttpRequest request =
+        HttpRequest.newBuilder(uri)
+            .timeout(Duration.ofSeconds(20))
+            .header("Authorization", "OAuth " + connection.oauthToken())
+            .header("Accept", "application/json")
+            .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+            .POST(
+                HttpRequest.BodyPublishers.ofString(
+                    multipart, java.nio.charset.StandardCharsets.UTF_8))
+            .build();
+    try {
+      HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
+      if (response.statusCode() < 200 || response.statusCode() >= 300) {
+        throw new ProviderException("HTTP_" + response.statusCode());
+      }
+      String uploadingId = json.readTree(response.body()).path("uploading").path("id").asText("");
+      if (uploadingId.isBlank()) throw new ProviderException("UPLOADING_ID_MISSING");
+      return uploadingId;
+    } catch (InterruptedException ex) {
+      Thread.currentThread().interrupt();
+      throw new ProviderException("YANDEX_METRICA_UNAVAILABLE");
+    } catch (IOException ex) {
+      throw new ProviderException("YANDEX_METRICA_UNAVAILABLE");
     }
   }
 
@@ -123,8 +166,7 @@ class YandexMetricaGateway implements WebAnalyticsPort {
             .GET()
             .build();
     try {
-      HttpResponse<String> response =
-          http.send(request, HttpResponse.BodyHandlers.ofString());
+      HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
       return new Response(response.statusCode(), response.body());
     } catch (InterruptedException ex) {
       Thread.currentThread().interrupt();
@@ -188,7 +230,7 @@ class YandexMetricaGateway implements WebAnalyticsPort {
 
   private record Response(int status, String body) {}
 
-  private static final class ProviderException extends RuntimeException {
+  static final class ProviderException extends RuntimeException {
     private ProviderException(String message) {
       super(message);
     }
