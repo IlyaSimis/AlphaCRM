@@ -67,3 +67,5 @@ databaseChangeLog:
       file: db/changelog/033-staff-chat.sql
   - include:
       file: db/changelog/034-staff-chat-preferences-mentions.sql
+  - include:
+      file: db/changelog/035-staff-chat-message-actions.sql

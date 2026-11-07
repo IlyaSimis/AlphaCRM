@@ -26,7 +26,7 @@ export const services: Service[] = ['dashboards', 'management', 'patients', 'doc
 export const pageTitles: Record<Page, string> = {
   today: 'Сегодня',
   workspace: 'Дашборды',
-  messages: 'Сообщения',
+  messages: 'StaffChat',
   analytics: 'Аналитика',
   staff: 'Сотрудники',
   hr: 'Ставки и условия',
@@ -59,7 +59,7 @@ export const pageTitles: Record<Page, string> = {
 /** Разделы сервиса в боковом меню, по группам. Карточка пациента и приём в меню не стоят. */
 export const serviceSections: Record<Service, Array<{ label: string; pages: Page[] }>> = {
   dashboards: [
-    { label: 'ОБЗОР', pages: ['today', 'workspace', 'analytics', 'hr-me'] },
+    { label: 'ОБЗОР', pages: ['today', 'workspace', 'messages', 'analytics', 'hr-me'] },
   ],
   management: [
     { label: 'УПРАВЛЕНИЕ', pages: ['staff', 'hours', 'hr', 'audit', 'break-glass', 'integrations'] },
@@ -137,10 +137,9 @@ export function servicesFor(role: Role): Service[] {
   return services.filter((service) => sectionsFor(service, role).length > 0)
 }
 
-/** Все страницы меню роли: разделы сервисов и отдельный пункт сообщений. */
+/** Все страницы меню роли: StaffChat находится в общем сервисе «Мое пространство». */
 export function navigationFor(role: Role): Page[] {
-  const servicePages = servicesFor(role).flatMap((service) => sectionsFor(service, role).flatMap((section) => section.pages))
-  return [...servicePages, 'messages']
+  return servicesFor(role).flatMap((service) => sectionsFor(service, role).flatMap((section) => section.pages))
 }
 
 /** Первая страница сервиса для роли: на неё ведёт вкладка верхней панели. */

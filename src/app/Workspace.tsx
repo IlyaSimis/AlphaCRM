@@ -290,11 +290,11 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
 
   return (
     <Box className="app-shell">
-      <Box className={`desktop-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}><Sidebar className="sidebar" page={page} service={service} services={servicesFor(role)} staff={staff} live={live} visits={visits} activeVisit={page === 'visit' ? visit : null} unreadMessages={staffChat.unreadCount} collapsed={sidebarCollapsed} onService={openService} onNavigate={navigate} onVisit={openVisit} onSettings={() => setSettings(true)} onToggleCollapse={() => setSidebarCollapsed((value) => !value)} /></Box>
-      <Drawer open={drawer} onClose={() => setDrawer(false)}><Sidebar className="sidebar sidebar-in-drawer" page={page} service={service} services={servicesFor(role)} staff={staff} live={live} visits={visits} activeVisit={page === 'visit' ? visit : null} unreadMessages={staffChat.unreadCount} onService={openService} onNavigate={navigate} onVisit={(target) => { openVisit(target); setDrawer(false) }} onSettings={() => { setDrawer(false); setSettings(true) }} /></Drawer>
+      <Box className={`desktop-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}><Sidebar className="sidebar" service={service} services={servicesFor(role)} staff={staff} live={live} visits={visits} activeVisit={page === 'visit' ? visit : null} collapsed={sidebarCollapsed} onService={openService} onNavigate={navigate} onVisit={openVisit} onSettings={() => setSettings(true)} onToggleCollapse={() => setSidebarCollapsed((value) => !value)} /></Box>
+      <Drawer open={drawer} onClose={() => setDrawer(false)}><Sidebar className="sidebar sidebar-in-drawer" service={service} services={servicesFor(role)} staff={staff} live={live} visits={visits} activeVisit={page === 'visit' ? visit : null} onService={openService} onNavigate={navigate} onVisit={(target) => { openVisit(target); setDrawer(false) }} onSettings={() => { setDrawer(false); setSettings(true) }} /></Drawer>
       <Box component="main" className="main">
         <Landscape />
-        <Topbar eyebrow={eyebrow} title={page === 'today' ? '' : pageTitles[page]} pages={sectionsFor(service, role).flatMap((section) => section.pages)} page={page} onNavigate={navigate} live={live} clinicName={staff.clinicName} onAssistant={() => setAssistant(true)} onSignOut={onSignOut} onMenu={() => setDrawer(true)} />
+        <Topbar eyebrow={eyebrow} title={page === 'today' ? '' : pageTitles[page]} pages={sectionsFor(service, role).flatMap((section) => section.pages)} page={page} unreadMessages={staffChat.unreadCount} onNavigate={navigate} live={live} clinicName={staff.clinicName} onAssistant={() => setAssistant(true)} onSignOut={onSignOut} onMenu={() => setDrawer(true)} />
         <Box className="content">
           <WorkspaceContent
             page={page} staff={staff} role={role} doctorId={doctorId} live={live} clinic={clinic} registry={registry} staffChat={staffChat}

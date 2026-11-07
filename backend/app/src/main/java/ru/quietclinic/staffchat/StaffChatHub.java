@@ -58,11 +58,25 @@ class StaffChatHub extends TextWebSocketHandler {
   }
 
   void messageCreated(MessageView message) {
+    publish(message, false);
+  }
+
+  void messageUpdated(MessageView message) {
+    publish(message, true);
+  }
+
+  private void publish(MessageView message, boolean updated) {
     for (Map.Entry<UUID, Set<WebSocketSession>> entry : sessions.entrySet()) {
       for (WebSocketSession session : entry.getValue()) {
         UUID clinic = (UUID) session.getAttributes().get(CLINIC_ATTRIBUTE);
         chat.messageForRecipient(message.id(), entry.getKey(), clinic)
-            .ifPresent(recipientMessage -> send(session, MessageEvent.created(recipientMessage)));
+            .ifPresent(
+                recipientMessage ->
+                    send(
+                        session,
+                        updated
+                            ? MessageEvent.updated(recipientMessage)
+                            : MessageEvent.created(recipientMessage)));
       }
     }
   }

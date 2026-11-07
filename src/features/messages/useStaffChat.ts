@@ -17,7 +17,9 @@ import {
 import { useStaffChatAlerts } from './useStaffChatAlerts'
 
 function mergeMessage(items: StaffChatMessage[], incoming: StaffChatMessage) {
-  if (items.some((item) => item.id === incoming.id)) return items
+  if (items.some((item) => item.id === incoming.id)) {
+    return items.map((item) => item.id === incoming.id ? incoming : item)
+  }
   return [...items, incoming].sort((left, right) => left.id - right.id)
 }
 
@@ -39,11 +41,15 @@ export function useStaffChat(apiOnline: boolean, chatOpen: boolean, onOpenChat: 
   const [messages, setMessages] = useState<StaffChatMessage[]>([])
   const [loading, setLoading] = useState(true)
   const [messagesLoading, setMessagesLoading] = useState(false)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
   const [connected, setConnected] = useState(false)
   const [error, setError] = useState('')
   const [notification, setNotification] = useState<StaffChatNotification | null>(null)
   const [preferences, setPreferences] = useState<StaffChatPreferences>({ notificationsEnabled: true, soundEnabled: true, browserEnabled: false })
   const selectedRef = useRef<string | null>(null)
+  const messagesRef = useRef<StaffChatMessage[]>([])
+  const historyLoadingRef = useRef(false)
   const chatOpenRef = useRef(chatOpen)
   const conversationsRef = useRef<StaffConversation[]>([])
   const preferencesRef = useRef(preferences)
@@ -57,6 +63,10 @@ export function useStaffChat(apiOnline: boolean, chatOpen: boolean, onOpenChat: 
     preferencesRef.current = preferences
   }, [preferences])
 
+  useEffect(() => {
+    messagesRef.current = messages
+  }, [messages])
+
   const reloadConversations = useCallback(async () => {
     const items = await loadStaffConversations()
     conversationsRef.current = items
@@ -66,7 +76,10 @@ export function useStaffChat(apiOnline: boolean, chatOpen: boolean, onOpenChat: 
   const markLatestRead = useCallback(async (conversationId: string, items: StaffChatMessage[]) => {
     const latest = items.at(-1)
     if (!latest) return
-    await markConversationRead(conversationId, latest.id)
+    const read = await markConversationRead(conversationId, latest.id)
+    if (selectedRef.current === conversationId) {
+      setMessages((current) => mergeMessage(current, read))
+    }
     setConversations((current) => current.map((item) => item.id === conversationId ? { ...item, unreadCount: 0 } : item))
   }, [])
 
@@ -74,12 +87,14 @@ export function useStaffChat(apiOnline: boolean, chatOpen: boolean, onOpenChat: 
     selectedRef.current = conversationId
     setSelectedId(conversationId)
     setMessagesLoading(true)
+    setHasMore(false)
     setError('')
     setNotification((current) => current?.conversationId === conversationId ? null : current)
     try {
       const history = await loadStaffMessages(conversationId)
       if (selectedRef.current !== conversationId) return
       setMessages(history)
+      setHasMore(history.length === 200)
       await markLatestRead(conversationId, history)
     } catch (reason) {
       setError((reason as Error).message)
@@ -93,10 +108,33 @@ export function useStaffChat(apiOnline: boolean, chatOpen: boolean, onOpenChat: 
     setSelectedId(null)
     setMessages([])
     setMessagesLoading(false)
+    setHistoryLoading(false)
+    setHasMore(false)
   }, [])
 
   const appendMessage = useCallback((incoming: StaffChatMessage) => {
     setMessages((items) => mergeMessage(items, incoming))
+  }, [])
+
+  const loadEarlier = useCallback(async (conversationId: string) => {
+    const beforeId = messagesRef.current[0]?.id
+    if (!beforeId || historyLoadingRef.current || selectedRef.current !== conversationId) return
+    historyLoadingRef.current = true
+    setHistoryLoading(true)
+    try {
+      const older = await loadStaffMessages(conversationId, beforeId)
+      if (selectedRef.current !== conversationId) return
+      setMessages((current) => {
+        const loaded = new Set(current.map((item) => item.id))
+        return [...older.filter((item) => !loaded.has(item.id)), ...current]
+      })
+      setHasMore(older.length === 200)
+    } catch (reason) {
+      if (selectedRef.current === conversationId) setError((reason as Error).message)
+    } finally {
+      historyLoadingRef.current = false
+      if (selectedRef.current === conversationId) setHistoryLoading(false)
+    }
   }, [])
 
   const dismissNotification = useCallback(() => setNotification(null), [])
@@ -150,9 +188,12 @@ export function useStaffChat(apiOnline: boolean, chatOpen: boolean, onOpenChat: 
       socket.onmessage = (event) => {
         if (disposed) return
         const incoming = JSON.parse(String(event.data)) as StaffMessageEvent
-        if (incoming.type !== 'MESSAGE_CREATED') return
         void reloadConversations().catch(() => undefined)
         const isSelected = selectedRef.current === incoming.message.conversationId
+        if (incoming.type === 'MESSAGE_UPDATED') {
+          if (isSelected) appendMessage(incoming.message)
+          return
+        }
         if (isSelected) appendMessage(incoming.message)
         if (chatOpenRef.current && isSelected) {
           if (!incoming.message.own) {
@@ -199,6 +240,8 @@ export function useStaffChat(apiOnline: boolean, chatOpen: boolean, onOpenChat: 
     messages,
     loading,
     messagesLoading,
+    historyLoading,
+    hasMore,
     connected,
     error,
     notification,
@@ -209,6 +252,7 @@ export function useStaffChat(apiOnline: boolean, chatOpen: boolean, onOpenChat: 
     openConversation,
     clearConversation,
     appendMessage,
+    loadEarlier,
     dismissNotification,
     updatePreferences,
   }

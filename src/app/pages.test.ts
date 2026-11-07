@@ -21,11 +21,11 @@ describe('services and pages by role', () => {
 
   it('the administrator sees everything operational, grouped by service', () => {
     expect(navigationFor('ADMINISTRATOR')).toEqual([
-      'today', 'workspace', 'analytics', 'hr-me', 'staff', 'hours', 'audit', 'integrations',
+      'today', 'workspace', 'messages', 'analytics', 'hr-me', 'staff', 'hours', 'audit', 'integrations',
       'schedule', 'patients', 'registry', 'contract-templates',
       'stock-balances', 'stock-items', 'stock-documents', 'stock-marking', 'stock-norms',
       'cashier', 'sales', 'prices',
-      'drive', 'drive-shared', 'drive-trash', 'messages',
+      'drive', 'drive-shared', 'drive-trash',
     ])
     // Владелец и старший администратор вдобавок видят журнал экстренных доступов (K1), владелец — ставки.
     const withLog = navigationFor('ADMINISTRATOR').flatMap((page) => (page === 'audit' ? ['audit', 'break-glass'] : [page]))
@@ -39,9 +39,9 @@ describe('services and pages by role', () => {
 
   it('a cashier and a doctor have documents but no inventory; every role has a personal workspace', () => {
     expect(servicesFor('CASHIER')).toEqual(['dashboards', 'patients', 'documents', 'finance', 'drive'])
-    expect(navigationFor('CASHIER')).toEqual(['today', 'workspace', 'hr-me', 'schedule', 'patients', 'registry', 'contract-templates', 'cashier', 'drive', 'drive-shared', 'drive-trash', 'messages'])
+    expect(navigationFor('CASHIER')).toEqual(['today', 'workspace', 'messages', 'hr-me', 'schedule', 'patients', 'registry', 'contract-templates', 'cashier', 'drive', 'drive-shared', 'drive-trash'])
     expect(servicesFor('DOCTOR')).toEqual(['dashboards', 'patients', 'documents', 'drive'])
-    expect(sectionsFor('dashboards', 'DOCTOR').flatMap((section) => section.pages)).toEqual(['workspace', 'hr-me'])
+    expect(sectionsFor('dashboards', 'DOCTOR').flatMap((section) => section.pages)).toEqual(['workspace', 'messages', 'hr-me'])
     expect(sectionsFor('documents', 'DOCTOR').flatMap((section) => section.pages)).toEqual(['contract-templates'])
     expect(sectionsFor('inventory', 'DOCTOR')).toEqual([])
     expect(canOpen('cashier', 'DOCTOR')).toBe(false)

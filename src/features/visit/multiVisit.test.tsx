@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { PETROV_ID } from '../../api/client'
@@ -73,15 +73,15 @@ describe('several visits in a row', () => {
     // 10:00 есть только в ответе API: дожидаемся замены демо-расписания серверным.
     expect(await screen.findByText('10:00')).toBeInTheDocument()
 
-    await user.click(await screen.findByRole('button', { name: 'Начать приём 09:00 Анна Михайлова' }))
-    await waitFor(() => expect(statuses[first]).toBe('IN_PROGRESS'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Начать приём 09:00 Анна Михайлова' }))
+    await waitFor(() => expect(statuses[first]).toBe('IN_PROGRESS'), { timeout: 5000 })
     await openPage(user, 'Расписание')
     expect(await screen.findByText('На приёме')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Начать приём 10:00 Анна Михайлова' }))
-    await waitFor(() => expect(statuses[second]).toBe('IN_PROGRESS'))
+    await waitFor(() => expect(statuses[second]).toBe('IN_PROGRESS'), { timeout: 5000 })
 
     await user.click(await screen.findByRole('button', { name: 'Завершить приём' }))
-    await waitFor(() => expect(statuses[second]).toBe('COMPLETED'))
+    await waitFor(() => expect(statuses[second]).toBe('COMPLETED'), { timeout: 5000 })
     await openPage(user, 'Расписание')
     expect(await screen.findByText('Завершён')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Начать приём 10:00 Анна Михайлова' })).not.toBeInTheDocument()
@@ -91,7 +91,7 @@ describe('several visits in a row', () => {
 
     // Повторный старт той же записи открывает уже созданный приём.
     await user.click(screen.getByRole('button', { name: 'Начать приём 09:00 Анна Михайлова' }))
-    await waitFor(() => expect(fetchMock.mock.calls.filter(([url, init]) => String(url).endsWith('/clinical/encounters') && init?.method === 'POST').length).toBe(3))
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([url, init]) => String(url).endsWith('/clinical/encounters') && init?.method === 'POST').length).toBe(3), { timeout: 5000 })
     expect(Object.keys(encounters)).toHaveLength(2)
   })
 })

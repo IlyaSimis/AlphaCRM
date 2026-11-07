@@ -3,39 +3,54 @@ package ru.quietclinic.staffchat;
 import static ru.quietclinic.platform.PlatformConfig.badRequest;
 import static ru.quietclinic.platform.PlatformConfig.clinicId;
 import static ru.quietclinic.platform.PlatformConfig.conflict;
+import static ru.quietclinic.platform.PlatformConfig.forbidden;
 import static ru.quietclinic.platform.PlatformConfig.notFound;
 import static ru.quietclinic.platform.PlatformConfig.staffId;
 
+import java.io.IOException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+import ru.quietclinic.staffchat.StaffChatViews.AttachmentView;
 import ru.quietclinic.staffchat.StaffChatViews.ColleagueView;
 import ru.quietclinic.staffchat.StaffChatViews.ConversationView;
 import ru.quietclinic.staffchat.StaffChatViews.MemberView;
 import ru.quietclinic.staffchat.StaffChatViews.MessageView;
 import ru.quietclinic.staffchat.StaffChatViews.PreferencesView;
+import ru.quietclinic.staffchat.StaffChatViews.ReactionView;
 
 /** Внутренний чат: каждая операция ограничена клиникой и членством учётной записи сотрудника. */
 @Service
 class StaffChatService {
+  static final int MAX_ATTACHMENTS = 5;
+  static final long MAX_ATTACHMENT_BYTES = 10L * 1024 * 1024;
   private static final int MAX_CONVERSATIONS = 200;
   private static final int MAX_MESSAGES = 200;
+  private static final String MESSAGE_FIELDS =
+      "m.id, m.conversation_id, m.sender_id, s.full_name as sender_name, m.body,"
+          + " m.created_at, m.edited_at, m.deleted_at";
+  private static final Set<String> ALLOWED_REACTIONS = Set.of("👍", "❤️", "😂", "😮", "😢", "🙏");
 
   private final JdbcTemplate jdbc;
+  private final StaffChatAttachmentStorage storage;
 
-  StaffChatService(JdbcTemplate jdbc) {
+  StaffChatService(JdbcTemplate jdbc, StaffChatAttachmentStorage storage) {
     this.jdbc = jdbc;
+    this.storage = storage;
   }
 
   @Transactional(readOnly = true)
@@ -190,21 +205,39 @@ class StaffChatService {
   }
 
   @Transactional(readOnly = true)
-  List<MessageView> messages(UUID conversationId) {
+  List<MessageView> messages(UUID conversationId, Long beforeId) {
     requireMembership(conversationId, clinicId(), staffId());
     List<MessageView> result =
-        new ArrayList<>(loadMessages(conversationId, staffId(), MAX_MESSAGES));
+        new ArrayList<>(loadMessages(conversationId, staffId(), beforeId, MAX_MESSAGES));
     Collections.reverse(result);
     return result;
   }
 
   @Transactional
   MessageView send(UUID conversationId, SendStaffMessageRequest request) {
+    try {
+      return send(conversationId, request, List.of());
+    } catch (IOException ex) {
+      throw new IllegalStateException("Text-only message does not read attachments", ex);
+    }
+  }
+
+  @Transactional
+  MessageView send(
+      UUID conversationId, SendStaffMessageRequest request, List<MultipartFile> attachments)
+      throws IOException {
     UUID clinic = clinicId();
     UUID sender = staffId();
     requireMembership(conversationId, clinic, sender);
-    String body = request.text().trim();
-    if (body.isEmpty()) throw badRequest("VALIDATION_ERROR", "Message text is required");
+    List<MultipartFile> files = attachments == null ? List.of() : attachments;
+    validateAttachments(files);
+    String body = request.text() == null ? "" : request.text().trim();
+    if (body.length() > 4000) {
+      throw badRequest("VALIDATION_ERROR", "Message text must not exceed 4000 characters");
+    }
+    if (body.isEmpty() && files.isEmpty()) {
+      throw badRequest("VALIDATION_ERROR", "Message text or attachment is required");
+    }
     Set<UUID> mentions =
         request.mentionIds() == null
             ? new LinkedHashSet<>()
@@ -229,6 +262,20 @@ class StaffChatService {
                 "insert into staff_chat_message_mention(message_id, staff_id) values (?, ?)",
                 id,
                 member));
+    for (MultipartFile file : files) {
+      UUID attachmentId = UUID.randomUUID();
+      String storageKey = UUID.randomUUID() + "/" + UUID.randomUUID();
+      storage.put(storageKey, file.getBytes());
+      jdbc.update(
+          "insert into staff_chat_attachment(id, message_id, original_name, content_type,"
+              + " size_bytes, storage_key) values (?, ?, ?, ?, ?, ?)",
+          attachmentId,
+          id,
+          fileName(file.getOriginalFilename()),
+          contentType(file.getContentType()),
+          file.getSize(),
+          storageKey);
+    }
     jdbc.update(
         "update staff_conversation set updated_at = ? where id = ? and clinic_id = ?",
         Timestamp.from(now),
@@ -245,7 +292,95 @@ class StaffChatService {
   }
 
   @Transactional
-  void markRead(UUID conversationId, long messageId) {
+  MessageView edit(long messageId, EditStaffMessageRequest request) {
+    UUID staff = staffId();
+    MessageAccess access = requireMessageAccess(messageId, staff, clinicId());
+    requireAuthor(access, staff);
+    requireNotDeleted(access);
+    jdbc.update(
+        "update staff_chat_message set body = ?, edited_at = ? where id = ?",
+        request.text().trim(),
+        Timestamp.from(Instant.now()),
+        messageId);
+    return message(messageId, access.conversationId(), staff).orElseThrow();
+  }
+
+  @Transactional
+  MessageView delete(long messageId) {
+    UUID staff = staffId();
+    MessageAccess access = requireMessageAccess(messageId, staff, clinicId());
+    requireAuthor(access, staff);
+    requireNotDeleted(access);
+    jdbc.update(
+        "update staff_chat_message set body = '', deleted_at = ?, edited_at = null where id = ?",
+        Timestamp.from(Instant.now()),
+        messageId);
+    jdbc.update("delete from staff_chat_reaction where message_id = ?", messageId);
+    return message(messageId, access.conversationId(), staff).orElseThrow();
+  }
+
+  @Transactional
+  MessageView react(long messageId, StaffChatReactionRequest request) {
+    UUID staff = staffId();
+    MessageAccess access = requireMessageAccess(messageId, staff, clinicId());
+    requireNotDeleted(access);
+    String emoji = request.emoji();
+    if (!ALLOWED_REACTIONS.contains(emoji)) {
+      throw badRequest("CHAT_REACTION_NOT_SUPPORTED", "Reaction is not supported");
+    }
+    List<String> current =
+        jdbc.query(
+            "select emoji from staff_chat_reaction where message_id = ? and staff_id = ?",
+            (row, index) -> row.getString(1),
+            messageId,
+            staff);
+    if (current.contains(emoji)) {
+      jdbc.update(
+          "delete from staff_chat_reaction where message_id = ? and staff_id = ?",
+          messageId,
+          staff);
+    } else {
+      int updated =
+          jdbc.update(
+              "update staff_chat_reaction set emoji = ?, created_at = ?"
+                  + " where message_id = ? and staff_id = ?",
+              emoji,
+              Timestamp.from(Instant.now()),
+              messageId,
+              staff);
+      if (updated == 0) {
+        jdbc.update(
+            "insert into staff_chat_reaction(message_id, staff_id, emoji, created_at)"
+                + " values (?, ?, ?, ?)",
+            messageId,
+            staff,
+            emoji,
+            Timestamp.from(Instant.now()));
+      }
+    }
+    return message(messageId, access.conversationId(), staff).orElseThrow();
+  }
+
+  @Transactional(readOnly = true)
+  StaffChatAttachmentContent attachment(UUID attachmentId) {
+    List<StaffChatAttachmentContent> found =
+        jdbc.query(
+            "select a.original_name, a.storage_key from staff_chat_attachment a"
+                + " join staff_chat_message m on m.id = a.message_id"
+                + " join staff_conversation_member member on member.conversation_id = m.conversation_id"
+                + " where a.id = ? and m.clinic_id = ? and member.staff_id = ? and m.deleted_at is null",
+            (row, index) ->
+                new StaffChatAttachmentContent(
+                    row.getString("original_name"), storage.get(row.getString("storage_key"))),
+            attachmentId,
+            clinicId(),
+            staffId());
+    if (found.isEmpty()) throw notFound("CHAT_ATTACHMENT_NOT_FOUND", "Attachment not found");
+    return found.get(0);
+  }
+
+  @Transactional
+  MessageView markRead(UUID conversationId, long messageId) {
     UUID staff = staffId();
     requireMembership(conversationId, clinicId(), staff);
     Long count =
@@ -265,6 +400,7 @@ class StaffChatService {
         Timestamp.from(Instant.now()),
         conversationId,
         staff);
+    return message(messageId, conversationId, staff).orElseThrow();
   }
 
   /**
@@ -274,8 +410,9 @@ class StaffChatService {
   Optional<MessageView> messageForRecipient(long messageId, UUID staff, UUID clinic) {
     return jdbc
         .query(
-            "select m.id, m.conversation_id, m.sender_id, s.full_name as sender_name, m.body,"
-                + " m.created_at from staff_chat_message m join staff_user s on s.id = m.sender_id"
+            "select "
+                + MESSAGE_FIELDS
+                + " from staff_chat_message m join staff_user s on s.id = m.sender_id"
                 + " join staff_conversation c on c.id = m.conversation_id"
                 + " join staff_conversation_member member on member.conversation_id = c.id"
                 + " join staff_user recipient on recipient.id = member.staff_id"
@@ -305,8 +442,9 @@ class StaffChatService {
     MessageView last =
         jdbc
             .query(
-                "select m.id, m.conversation_id, m.sender_id, s.full_name as sender_name, m.body,"
-                    + " m.created_at from staff_chat_message m join staff_user s on s.id = m.sender_id"
+                "select "
+                    + MESSAGE_FIELDS
+                    + " from staff_chat_message m join staff_user s on s.id = m.sender_id"
                     + " where m.conversation_id = ? order by m.id desc limit 1",
                 (messageRow, index) -> message(messageRow, staff),
                 id)
@@ -347,21 +485,35 @@ class StaffChatService {
         conversationId);
   }
 
-  private List<MessageView> loadMessages(UUID conversationId, UUID staff, int limit) {
+  private List<MessageView> loadMessages(
+      UUID conversationId, UUID staff, Long beforeId, int limit) {
+    if (beforeId == null) {
+      return jdbc.query(
+          "select "
+              + MESSAGE_FIELDS
+              + " from staff_chat_message m join staff_user s on s.id = m.sender_id"
+              + " where m.conversation_id = ? order by m.id desc limit "
+              + limit,
+          (row, index) -> message(row, staff),
+          conversationId);
+    }
     return jdbc.query(
-        "select m.id, m.conversation_id, m.sender_id, s.full_name as sender_name, m.body,"
-            + " m.created_at from staff_chat_message m join staff_user s on s.id = m.sender_id"
-            + " where m.conversation_id = ? order by m.id desc limit "
+        "select "
+            + MESSAGE_FIELDS
+            + " from staff_chat_message m join staff_user s on s.id = m.sender_id"
+            + " where m.conversation_id = ? and m.id < ? order by m.id desc limit "
             + limit,
         (row, index) -> message(row, staff),
-        conversationId);
+        conversationId,
+        beforeId);
   }
 
   private Optional<MessageView> message(long id, UUID conversationId, UUID staff) {
     return jdbc
         .query(
-            "select m.id, m.conversation_id, m.sender_id, s.full_name as sender_name, m.body,"
-                + " m.created_at from staff_chat_message m join staff_user s on s.id = m.sender_id"
+            "select "
+                + MESSAGE_FIELDS
+                + " from staff_chat_message m join staff_user s on s.id = m.sender_id"
                 + " where m.id = ? and m.conversation_id = ?",
             (row, index) -> message(row, staff),
             id,
@@ -374,16 +526,74 @@ class StaffChatService {
     long id = row.getLong("id");
     UUID sender = row.getObject("sender_id", UUID.class);
     List<UUID> mentions = mentionIds(id);
+    boolean deleted = row.getTimestamp("deleted_at") != null;
+    Timestamp edited = row.getTimestamp("edited_at");
     return new MessageView(
         id,
         row.getObject("conversation_id", UUID.class),
         sender,
         row.getString("sender_name"),
-        row.getString("body"),
+        deleted ? "" : row.getString("body"),
         row.getTimestamp("created_at").toInstant(),
         mentions,
         sender.equals(viewer),
-        mentions.contains(viewer));
+        mentions.contains(viewer),
+        readByAll(id, row.getObject("conversation_id", UUID.class), sender),
+        edited == null ? null : edited.toInstant(),
+        deleted,
+        deleted ? List.of() : attachments(id),
+        deleted ? List.of() : reactions(id, viewer));
+  }
+
+  private boolean readByAll(long messageId, UUID conversationId, UUID sender) {
+    Long unread =
+        jdbc.queryForObject(
+            "select count(*) from staff_conversation_member m"
+                + " join staff_user s on s.id = m.staff_id"
+                + " left join staff_chat_read_state r on r.conversation_id = m.conversation_id"
+                + " and r.staff_id = m.staff_id"
+                + " where m.conversation_id = ? and m.staff_id <> ? and s.active = true"
+                + " and coalesce(r.last_read_message_id, 0) < ?",
+            Long.class,
+            conversationId,
+            sender,
+            messageId);
+    return unread != null && unread == 0;
+  }
+
+  private List<AttachmentView> attachments(long messageId) {
+    return jdbc.query(
+        "select id, original_name, content_type, size_bytes from staff_chat_attachment"
+            + " where message_id = ? order by id",
+        (row, index) -> {
+          UUID id = row.getObject("id", UUID.class);
+          return new AttachmentView(
+              id,
+              row.getString("original_name"),
+              row.getString("content_type"),
+              row.getLong("size_bytes"),
+              "/api/v1/staff-chat/attachments/" + id);
+        },
+        messageId);
+  }
+
+  private List<ReactionView> reactions(long messageId, UUID viewer) {
+    Map<String, List<UUID>> grouped = new LinkedHashMap<>();
+    jdbc.query(
+        "select emoji, staff_id from staff_chat_reaction where message_id = ?"
+            + " order by emoji, staff_id",
+        row -> {
+          grouped
+              .computeIfAbsent(row.getString("emoji"), key -> new ArrayList<>())
+              .add(row.getObject("staff_id", UUID.class));
+        },
+        messageId);
+    return grouped.entrySet().stream()
+        .map(
+            entry ->
+                new ReactionView(
+                    entry.getKey(), entry.getValue().size(), entry.getValue().contains(viewer)))
+        .toList();
   }
 
   private List<UUID> mentionIds(long messageId) {
@@ -405,6 +615,56 @@ class StaffChatService {
             staff)
         .stream()
         .findFirst();
+  }
+
+  private void validateAttachments(List<MultipartFile> files) {
+    if (files.size() > MAX_ATTACHMENTS) {
+      throw badRequest("CHAT_TOO_MANY_ATTACHMENTS", "At most 5 files per message are allowed");
+    }
+    for (MultipartFile file : files) {
+      if (file.isEmpty() || file.getSize() > MAX_ATTACHMENT_BYTES) {
+        throw badRequest("CHAT_ATTACHMENT_TOO_LARGE", "Each file must be between 1 byte and 10 MB");
+      }
+    }
+  }
+
+  private String fileName(String original) {
+    String safe = original == null ? "file" : original.replaceAll("[\\r\\n\\\\/]", "_").trim();
+    if (safe.isEmpty()) return "file";
+    return safe.length() > 255 ? safe.substring(safe.length() - 255) : safe;
+  }
+
+  private String contentType(String original) {
+    if (original == null || original.isBlank()) return "application/octet-stream";
+    return original.length() > 255 ? original.substring(0, 255) : original;
+  }
+
+  private MessageAccess requireMessageAccess(long messageId, UUID staff, UUID clinic) {
+    List<MessageAccess> found =
+        jdbc.query(
+            "select m.conversation_id, m.sender_id, m.deleted_at from staff_chat_message m"
+                + " join staff_conversation_member member on member.conversation_id = m.conversation_id"
+                + " where m.id = ? and m.clinic_id = ? and member.staff_id = ?",
+            (row, index) ->
+                new MessageAccess(
+                    row.getObject("conversation_id", UUID.class),
+                    row.getObject("sender_id", UUID.class),
+                    row.getTimestamp("deleted_at") != null),
+            messageId,
+            clinic,
+            staff);
+    if (found.isEmpty()) throw notFound("CHAT_MESSAGE_NOT_FOUND", "Message not found");
+    return found.get(0);
+  }
+
+  private void requireAuthor(MessageAccess access, UUID staff) {
+    if (!access.senderId().equals(staff)) {
+      throw forbidden("CHAT_NOT_AUTHOR", "Only the author can change this message");
+    }
+  }
+
+  private void requireNotDeleted(MessageAccess access) {
+    if (access.deleted()) throw conflict("CHAT_MESSAGE_DELETED", "Message is already deleted");
   }
 
   private void requireActiveColleague(UUID clinic, UUID staff) {
@@ -460,4 +720,6 @@ class StaffChatService {
         staff,
         Timestamp.from(joinedAt));
   }
+
+  private record MessageAccess(UUID conversationId, UUID senderId, boolean deleted) {}
 }

@@ -22,25 +22,20 @@ function pageByTitle(title: string): Page {
   return page
 }
 
-/** Открыть страницу: отдельный чат слева либо сервис и его раздел в верхней панели. */
+/** Открыть страницу: сервис слева и его раздел в верхней панели. */
 export async function openPage(user: User, title: string) {
-  if (title === 'Сообщения') {
-    await user.click(menu().getByRole('button', { name: /^Сообщения(?:,|$)/ }))
-  } else {
-    await user.click(menu().getByRole('button', { name: serviceTitles[serviceOf(pageByTitle(title))] }))
-    await user.click(screen.getByRole('tab', { name: title }))
-  }
+  await user.click(menu().getByRole('button', { name: serviceTitles[serviceOf(pageByTitle(title))] }))
+  await user.click(screen.getByRole('tab', { name: title === 'StaffChat' ? /^StaffChat(?:,|$)/ : title }))
   // Нестартовые разделы подгружаются через React.lazy.
   await waitFor(() => expect(screen.queryByLabelText('Загрузка раздела')).not.toBeInTheDocument())
 }
 
-/** Есть ли страница у сотрудника: отдельный чат слева либо сервис и раздел сверху. */
+/** Есть ли страница у сотрудника: сервис слева и раздел сверху. */
 export async function menuHas(user: User, title: string) {
-  if (title === 'Сообщения') return menu().queryByRole('button', { name: /^Сообщения(?:,|$)/ }) !== null
   const service = menu().queryByRole('button', { name: serviceTitles[serviceOf(pageByTitle(title))] })
   if (!service) return false
   await user.click(service)
-  return screen.queryByRole('tab', { name: title }) !== null
+  return screen.queryByRole('tab', { name: title === 'StaffChat' ? /^StaffChat(?:,|$)/ : title }) !== null
 }
 
 export const renderApp = () => render(<ClinicThemeProvider><App /></ClinicThemeProvider>)

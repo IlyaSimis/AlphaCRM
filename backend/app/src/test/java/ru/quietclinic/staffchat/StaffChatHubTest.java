@@ -87,6 +87,19 @@ class StaffChatHubTest {
   private static MessageView message(
       long id, UUID conversation, UUID sender, String body, boolean own) {
     return new MessageView(
-        id, conversation, sender, "Сотрудник", body, Instant.now(), List.of(), own, false);
+        id,
+        conversation,
+        sender,
+        "Сотрудник",
+        body,
+        Instant.now(),
+        List.of(),
+        own,
+        false,
+        false,
+        null,
+        false,
+        List.of(),
+        List.of());
   }
 }

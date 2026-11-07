@@ -15,6 +15,11 @@ final class StaffChatViews {
   record PreferencesView(
       boolean notificationsEnabled, boolean soundEnabled, boolean browserEnabled) {}
 
+  record AttachmentView(
+      UUID id, String name, String contentType, long sizeBytes, String downloadUrl) {}
+
+  record ReactionView(String emoji, long count, boolean own) {}
+
   record MessageView(
       long id,
       UUID conversationId,
@@ -24,7 +29,12 @@ final class StaffChatViews {
       Instant createdAt,
       List<UUID> mentionIds,
       boolean own,
-      boolean mentioned) {}
+      boolean mentioned,
+      boolean readByAll,
+      Instant editedAt,
+      boolean deleted,
+      List<AttachmentView> attachments,
+      List<ReactionView> reactions) {}
 
   record ConversationView(
       UUID id,
@@ -38,6 +48,10 @@ final class StaffChatViews {
   record MessageEvent(String type, MessageView message) {
     static MessageEvent created(MessageView message) {
       return new MessageEvent("MESSAGE_CREATED", message);
+    }
+
+    static MessageEvent updated(MessageView message) {
+      return new MessageEvent("MESSAGE_UPDATED", message);
     }
   }
 }
