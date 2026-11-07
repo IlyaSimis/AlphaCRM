@@ -2,15 +2,19 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { API } from '../../api/client'
 import {
   loadChatColleagues,
+  loadStaffChatPreferences,
   loadStaffConversations,
   loadStaffMessages,
   markConversationRead,
+  saveStaffChatPreferences,
   staffChatSocketUrl,
   type StaffChatMessage,
+  type StaffChatPreferences,
   type StaffColleague,
   type StaffConversation,
   type StaffMessageEvent,
 } from '../../api/staffChat'
+import { useStaffChatAlerts } from './useStaffChatAlerts'
 
 function mergeMessage(items: StaffChatMessage[], incoming: StaffChatMessage) {
   if (items.some((item) => item.id === incoming.id)) return items
@@ -28,7 +32,7 @@ export type StaffChatNotification = {
  * Общее состояние внутреннего чата живёт, пока открыто рабочее место сотрудника.
  * REST остаётся источником истины, а единственный WebSocket обновляет и страницу, и шапку.
  */
-export function useStaffChat(apiOnline: boolean, chatOpen: boolean) {
+export function useStaffChat(apiOnline: boolean, chatOpen: boolean, onOpenChat: () => void) {
   const [conversations, setConversations] = useState<StaffConversation[]>([])
   const [colleagues, setColleagues] = useState<StaffColleague[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -38,14 +42,20 @@ export function useStaffChat(apiOnline: boolean, chatOpen: boolean) {
   const [connected, setConnected] = useState(false)
   const [error, setError] = useState('')
   const [notification, setNotification] = useState<StaffChatNotification | null>(null)
+  const [preferences, setPreferences] = useState<StaffChatPreferences>({ notificationsEnabled: true, soundEnabled: true, browserEnabled: false })
   const selectedRef = useRef<string | null>(null)
   const chatOpenRef = useRef(chatOpen)
   const conversationsRef = useRef<StaffConversation[]>([])
+  const preferencesRef = useRef(preferences)
   const notificationSequence = useRef(0)
 
   useEffect(() => {
     chatOpenRef.current = chatOpen
   }, [chatOpen])
+
+  useEffect(() => {
+    preferencesRef.current = preferences
+  }, [preferences])
 
   const reloadConversations = useCallback(async () => {
     const items = await loadStaffConversations()
@@ -91,15 +101,32 @@ export function useStaffChat(apiOnline: boolean, chatOpen: boolean) {
 
   const dismissNotification = useCallback(() => setNotification(null), [])
 
+  const updatePreferences = useCallback(async (next: StaffChatPreferences) => {
+    const saved = await saveStaffChatPreferences(next)
+    preferencesRef.current = saved
+    setPreferences(saved)
+    if (!saved.notificationsEnabled) setNotification(null)
+    return saved
+  }, [])
+
+  const openAlertConversation = useCallback(async (conversationId: string) => {
+    onOpenChat()
+    await openConversation(conversationId)
+  }, [onOpenChat, openConversation])
+
+  useStaffChatAlerts(notification, preferences, openAlertConversation)
+
   useEffect(() => {
     if (!apiOnline) return
     let active = true
-    Promise.all([loadStaffConversations(), loadChatColleagues()])
-      .then(([chatList, staffList]) => {
+    Promise.all([loadStaffConversations(), loadChatColleagues(), loadStaffChatPreferences()])
+      .then(([chatList, staffList, savedPreferences]) => {
         if (!active) return
         conversationsRef.current = chatList
         setConversations(chatList)
         setColleagues(staffList)
+        preferencesRef.current = savedPreferences
+        setPreferences(savedPreferences)
       })
       .catch((reason) => { if (active) setError((reason as Error).message) })
       .finally(() => { if (active) setLoading(false) })
@@ -136,12 +163,13 @@ export function useStaffChat(apiOnline: boolean, chatOpen: boolean) {
         } else if (!incoming.message.own) {
           const conversationTitle = conversationsRef.current.find((item) => item.id === incoming.message.conversationId)?.title ?? incoming.message.senderName
           notificationSequence.current += 1
-          setNotification({
+          const nextNotification = {
             key: notificationSequence.current,
             conversationId: incoming.message.conversationId,
             conversationTitle,
             message: incoming.message,
-          })
+          }
+          if (preferencesRef.current.notificationsEnabled) setNotification(nextNotification)
         }
       }
       socket.onclose = () => {
@@ -175,12 +203,14 @@ export function useStaffChat(apiOnline: boolean, chatOpen: boolean) {
     error,
     notification,
     unreadCount,
+    preferences,
     setError,
     reloadConversations,
     openConversation,
     clearConversation,
     appendMessage,
     dismissNotification,
+    updatePreferences,
   }
 }
 

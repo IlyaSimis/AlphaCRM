@@ -12,6 +12,9 @@ final class StaffChatViews {
 
   record MemberView(UUID id, String fullName, String role, boolean active) {}
 
+  record PreferencesView(
+      boolean notificationsEnabled, boolean soundEnabled, boolean browserEnabled) {}
+
   record MessageView(
       long id,
       UUID conversationId,
@@ -19,7 +22,9 @@ final class StaffChatViews {
       String senderName,
       String body,
       Instant createdAt,
-      boolean own) {}
+      List<UUID> mentionIds,
+      boolean own,
+      boolean mentioned) {}
 
   record ConversationView(
       UUID id,

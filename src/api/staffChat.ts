@@ -10,7 +10,14 @@ export type StaffChatMessage = {
   senderName: string
   body: string
   createdAt: string
+  mentionIds: string[]
   own: boolean
+  mentioned: boolean
+}
+export type StaffChatPreferences = {
+  notificationsEnabled: boolean
+  soundEnabled: boolean
+  browserEnabled: boolean
 }
 export type StaffConversation = {
   id: string
@@ -38,6 +45,14 @@ export function loadStaffConversations() {
   return request<StaffConversation[]>('/staff-chat/conversations')
 }
 
+export function loadStaffChatPreferences() {
+  return request<StaffChatPreferences>('/staff-chat/preferences')
+}
+
+export function saveStaffChatPreferences(preferences: StaffChatPreferences) {
+  return request<StaffChatPreferences>('/staff-chat/preferences', 'PUT', preferences)
+}
+
 export function createDirectConversation(staffId: string) {
   return request<StaffConversation>('/staff-chat/conversations/direct', 'POST', { staffId })
 }
@@ -50,8 +65,8 @@ export function loadStaffMessages(conversationId: string) {
   return request<StaffChatMessage[]>(`/staff-chat/conversations/${conversationId}/messages`)
 }
 
-export function sendStaffMessage(conversationId: string, text: string) {
-  return request<StaffChatMessage>(`/staff-chat/conversations/${conversationId}/messages`, 'POST', { text })
+export function sendStaffMessage(conversationId: string, text: string, mentionIds: string[] = []) {
+  return request<StaffChatMessage>(`/staff-chat/conversations/${conversationId}/messages`, 'POST', { text, mentionIds })
 }
 
 export function markConversationRead(conversationId: string, messageId: number) {

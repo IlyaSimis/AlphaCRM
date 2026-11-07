@@ -5,6 +5,7 @@ import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -142,6 +143,87 @@ class StaffChatControllerTest {
         .andExpect(status().isCreated());
     mvc.perform(get("/api/v1/staff-chat/conversations").with(staff.role("MANAGER")))
         .andExpect(jsonPath("$[?(@.id == '" + id + "')].unreadCount").value(hasItem(1)));
+  }
+
+  @Test
+  void notificationPreferencesArePersonalAndPersistent() throws Exception {
+    mvc.perform(get("/api/v1/staff-chat/preferences").with(staff.role("CASHIER")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.notificationsEnabled").value(true))
+        .andExpect(jsonPath("$.soundEnabled").value(true))
+        .andExpect(jsonPath("$.browserEnabled").value(false));
+
+    mvc.perform(
+            put("/api/v1/staff-chat/preferences")
+                .with(staff.role("CASHIER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"notificationsEnabled\":false,\"soundEnabled\":false,"
+                        + "\"browserEnabled\":true}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.notificationsEnabled").value(false))
+        .andExpect(jsonPath("$.soundEnabled").value(false))
+        .andExpect(jsonPath("$.browserEnabled").value(true));
+
+    mvc.perform(get("/api/v1/staff-chat/preferences").with(staff.role("CASHIER")))
+        .andExpect(jsonPath("$.notificationsEnabled").value(false))
+        .andExpect(jsonPath("$.browserEnabled").value(true));
+    mvc.perform(get("/api/v1/staff-chat/preferences").with(staff.role("MANAGER")))
+        .andExpect(jsonPath("$.notificationsEnabled").value(true))
+        .andExpect(jsonPath("$.soundEnabled").value(true))
+        .andExpect(jsonPath("$.browserEnabled").value(false));
+  }
+
+  @Test
+  void mentionsAreStoredForMembersAndRejectedForOutsiders() throws Exception {
+    String manager = staff.userId("t.manager");
+    String created =
+        mvc.perform(
+                post("/api/v1/staff-chat/conversations/group")
+                    .with(staff.admin())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        "{\"title\":\"Упоминания "
+                            + UUID.randomUUID()
+                            + "\",\"memberIds\":[\""
+                            + manager
+                            + "\",\""
+                            + staff.userId("t.cashier")
+                            + "\"]}"))
+            .andExpect(status().isCreated())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    String conversation = JsonPath.read(created, "$.id");
+
+    mvc.perform(
+            post("/api/v1/staff-chat/conversations/{id}/messages", conversation)
+                .with(staff.admin())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"text\":\"@Test Manager, проверьте запись\","
+                        + "\"mentionIds\":[\""
+                        + manager
+                        + "\"]}"))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.mentionIds[0]").value(manager))
+        .andExpect(jsonPath("$.mentioned").value(false));
+    mvc.perform(
+            get("/api/v1/staff-chat/conversations/{id}/messages", conversation)
+                .with(staff.role("MANAGER")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[-1].mentionIds[0]").value(manager))
+        .andExpect(jsonPath("$[-1].mentioned").value(true));
+
+    mvc.perform(
+            post("/api/v1/staff-chat/conversations/{id}/messages", conversation)
+                .with(staff.admin())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"text\":\"Недопустимое упоминание\",\"mentionIds\":[\""
+                        + staff.userId("t.support")
+                        + "\"]}"))
+        .andExpect(status().isBadRequest());
   }
 
   @Test

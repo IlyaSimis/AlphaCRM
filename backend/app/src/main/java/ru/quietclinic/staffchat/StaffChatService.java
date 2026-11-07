@@ -24,6 +24,7 @@ import ru.quietclinic.staffchat.StaffChatViews.ColleagueView;
 import ru.quietclinic.staffchat.StaffChatViews.ConversationView;
 import ru.quietclinic.staffchat.StaffChatViews.MemberView;
 import ru.quietclinic.staffchat.StaffChatViews.MessageView;
+import ru.quietclinic.staffchat.StaffChatViews.PreferencesView;
 
 /** Внутренний чат: каждая операция ограничена клиникой и членством учётной записи сотрудника. */
 @Service
@@ -47,6 +48,50 @@ class StaffChatService {
                 row.getObject("id", UUID.class), row.getString("full_name"), row.getString("role")),
         clinicId(),
         staffId());
+  }
+
+  @Transactional(readOnly = true)
+  PreferencesView preferences() {
+    return jdbc
+        .query(
+            "select notifications_enabled, sound_enabled, browser_enabled"
+                + " from staff_chat_preferences where staff_id = ?",
+            (row, index) ->
+                new PreferencesView(
+                    row.getBoolean("notifications_enabled"),
+                    row.getBoolean("sound_enabled"),
+                    row.getBoolean("browser_enabled")),
+            staffId())
+        .stream()
+        .findFirst()
+        .orElse(new PreferencesView(true, true, false));
+  }
+
+  @Transactional
+  PreferencesView updatePreferences(StaffChatPreferencesRequest request) {
+    UUID staff = staffId();
+    Instant now = Instant.now();
+    int updated =
+        jdbc.update(
+            "update staff_chat_preferences set notifications_enabled = ?, sound_enabled = ?,"
+                + " browser_enabled = ?, updated_at = ? where staff_id = ?",
+            request.notificationsEnabled(),
+            request.soundEnabled(),
+            request.browserEnabled(),
+            Timestamp.from(now),
+            staff);
+    if (updated == 0) {
+      jdbc.update(
+          "insert into staff_chat_preferences(staff_id, notifications_enabled, sound_enabled,"
+              + " browser_enabled, updated_at) values (?, ?, ?, ?, ?)",
+          staff,
+          request.notificationsEnabled(),
+          request.soundEnabled(),
+          request.browserEnabled(),
+          Timestamp.from(now));
+    }
+    return new PreferencesView(
+        request.notificationsEnabled(), request.soundEnabled(), request.browserEnabled());
   }
 
   @Transactional(readOnly = true)
@@ -160,6 +205,13 @@ class StaffChatService {
     requireMembership(conversationId, clinic, sender);
     String body = request.text().trim();
     if (body.isEmpty()) throw badRequest("VALIDATION_ERROR", "Message text is required");
+    Set<UUID> mentions =
+        request.mentionIds() == null
+            ? new LinkedHashSet<>()
+            : new LinkedHashSet<>(request.mentionIds());
+    mentions.remove(sender);
+    if (mentions.contains(null)) throw badRequest("VALIDATION_ERROR", "Mention ID is required");
+    mentions.forEach(member -> requireActiveMembership(conversationId, clinic, member));
     Long id = jdbc.queryForObject("select nextval('staff_chat_message_seq')", Long.class);
     Instant now = Instant.now();
     jdbc.update(
@@ -171,6 +223,12 @@ class StaffChatService {
         sender,
         body,
         Timestamp.from(now));
+    mentions.forEach(
+        member ->
+            jdbc.update(
+                "insert into staff_chat_message_mention(message_id, staff_id) values (?, ?)",
+                id,
+                member));
     jdbc.update(
         "update staff_conversation set updated_at = ? where id = ? and clinic_id = ?",
         Timestamp.from(now),
@@ -313,15 +371,26 @@ class StaffChatService {
   }
 
   private MessageView message(ResultSet row, UUID viewer) throws SQLException {
+    long id = row.getLong("id");
     UUID sender = row.getObject("sender_id", UUID.class);
+    List<UUID> mentions = mentionIds(id);
     return new MessageView(
-        row.getLong("id"),
+        id,
         row.getObject("conversation_id", UUID.class),
         sender,
         row.getString("sender_name"),
         row.getString("body"),
         row.getTimestamp("created_at").toInstant(),
-        sender.equals(viewer));
+        mentions,
+        sender.equals(viewer),
+        mentions.contains(viewer));
+  }
+
+  private List<UUID> mentionIds(long messageId) {
+    return jdbc.query(
+        "select staff_id from staff_chat_message_mention where message_id = ? order by staff_id",
+        (row, index) -> row.getObject("staff_id", UUID.class),
+        messageId);
   }
 
   private Optional<UUID> findDirect(UUID clinic, String directKey, UUID staff) {
@@ -361,6 +430,21 @@ class StaffChatService {
             staff);
     if (count == null || count == 0) {
       throw notFound("CHAT_NOT_FOUND", "Conversation not found");
+    }
+  }
+
+  private void requireActiveMembership(UUID conversationId, UUID clinic, UUID staff) {
+    Long count =
+        jdbc.queryForObject(
+            "select count(*) from staff_conversation c join staff_conversation_member m"
+                + " on m.conversation_id = c.id join staff_user s on s.id = m.staff_id"
+                + " where c.id = ? and c.clinic_id = ? and m.staff_id = ? and s.active = true",
+            Long.class,
+            conversationId,
+            clinic,
+            staff);
+    if (count == null || count == 0) {
+      throw badRequest("CHAT_MENTION_NOT_MEMBER", "Mentioned staff member is not in conversation");
     }
   }
 

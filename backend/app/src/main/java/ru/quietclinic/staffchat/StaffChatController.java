@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 import ru.quietclinic.staffchat.StaffChatViews.ColleagueView;
 import ru.quietclinic.staffchat.StaffChatViews.ConversationView;
 import ru.quietclinic.staffchat.StaffChatViews.MessageView;
+import ru.quietclinic.staffchat.StaffChatViews.PreferencesView;
 
 /**
  * REST остаётся источником истины: после разрыва WebSocket интерфейс заново загружает эти данные.
@@ -32,6 +34,16 @@ public class StaffChatController {
   @GetMapping("/colleagues")
   List<ColleagueView> colleagues() {
     return chat.colleagues();
+  }
+
+  @GetMapping("/preferences")
+  PreferencesView preferences() {
+    return chat.preferences();
+  }
+
+  @PutMapping("/preferences")
+  PreferencesView preferences(@Valid @RequestBody StaffChatPreferencesRequest request) {
+    return chat.updatePreferences(request);
   }
 
   @GetMapping("/conversations")

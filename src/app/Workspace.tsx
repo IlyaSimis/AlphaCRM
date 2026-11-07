@@ -37,7 +37,7 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
   const registry = useRegistry(staff, live, clinic.apiOnline, clinic.notify)
   // Ссылка на файл диска (…?drive-link=…) открывает диск сразу после входа.
   const [page, setPage] = useState<Page>(() => (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('drive-link') && canOpen('drive', role) ? 'drive' : startPage(role)))
-  const staffChat = useStaffChat(clinic.apiOnline, page === 'messages')
+  const staffChat = useStaffChat(clinic.apiOnline, page === 'messages', () => setPage('messages'))
   // Последняя открытая страница каждого сервиса: вкладка сверху возвращает туда, где остановились.
   const [lastPages, setLastPages] = useState<Partial<Record<Service, Page>>>({})
   const [query, setQuery] = useState('')

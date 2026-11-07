@@ -65,3 +65,5 @@ databaseChangeLog:
       file: db/changelog/032-metrica-offline-conversions.sql
   - include:
       file: db/changelog/033-staff-chat.sql
+  - include:
+      file: db/changelog/034-staff-chat-preferences-mentions.sql
