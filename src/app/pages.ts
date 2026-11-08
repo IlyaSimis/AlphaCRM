@@ -9,10 +9,11 @@ export type Page =
   | 'drive' | 'drive-shared' | 'drive-trash'
 
 /** Сервис — вкладка верхней панели; его разделы — в боковом меню. */
-export type Service = 'dashboards' | 'management' | 'patients' | 'documents' | 'inventory' | 'finance' | 'drive'
+export type Service = 'dashboards' | 'staff-chat' | 'management' | 'patients' | 'documents' | 'inventory' | 'finance' | 'drive'
 
 export const serviceTitles: Record<Service, string> = {
   dashboards: 'Мое пространство',
+  'staff-chat': 'StaffChat',
   management: 'Управление',
   patients: 'База данных пациентов',
   documents: 'Документы',
@@ -21,7 +22,7 @@ export const serviceTitles: Record<Service, string> = {
   drive: 'Диск',
 }
 
-export const services: Service[] = ['dashboards', 'management', 'patients', 'documents', 'inventory', 'finance', 'drive']
+export const services: Service[] = ['dashboards', 'staff-chat', 'management', 'patients', 'documents', 'inventory', 'finance', 'drive']
 
 export const pageTitles: Record<Page, string> = {
   today: 'Сегодня',
@@ -59,7 +60,10 @@ export const pageTitles: Record<Page, string> = {
 /** Разделы сервиса в боковом меню, по группам. Карточка пациента и приём в меню не стоят. */
 export const serviceSections: Record<Service, Array<{ label: string; pages: Page[] }>> = {
   dashboards: [
-    { label: 'ОБЗОР', pages: ['today', 'workspace', 'messages', 'analytics', 'hr-me'] },
+    { label: 'ОБЗОР', pages: ['today', 'workspace', 'analytics', 'hr-me'] },
+  ],
+  'staff-chat': [
+    { label: 'ВНУТРЕННИЙ ЧАТ', pages: ['messages'] },
   ],
   management: [
     { label: 'УПРАВЛЕНИЕ', pages: ['staff', 'hours', 'hr', 'audit', 'break-glass', 'integrations'] },
@@ -85,7 +89,6 @@ export const serviceSections: Record<Service, Array<{ label: string; pages: Page
 /** Сервис страницы: по нему подсвечивается вкладка сверху и строится боковое меню. */
 export function serviceOf(page: Page): Service {
   if (page === 'patient' || page === 'visit') return 'patients'
-  if (page === 'messages') return 'dashboards'
   return services.find((service) => serviceSections[service].some((section) => section.pages.includes(page))) ?? 'patients'
 }
 
@@ -132,12 +135,12 @@ export function sectionsFor(service: Service, role: Role) {
     .filter((section) => section.pages.length > 0)
 }
 
-/** Сервисы верхней панели, в которых у роли есть хотя бы один раздел. */
+/** Сервисы левого меню, в которых у роли есть хотя бы один раздел. */
 export function servicesFor(role: Role): Service[] {
   return services.filter((service) => sectionsFor(service, role).length > 0)
 }
 
-/** Все страницы меню роли: StaffChat находится в общем сервисе «Мое пространство». */
+/** Все страницы меню роли; StaffChat — самостоятельный сервис левого меню. */
 export function navigationFor(role: Role): Page[] {
   return servicesFor(role).flatMap((service) => sectionsFor(service, role).flatMap((section) => section.pages))
 }

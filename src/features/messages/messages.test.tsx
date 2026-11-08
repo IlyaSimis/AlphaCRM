@@ -185,7 +185,7 @@ describe('staff-only messenger', () => {
     const user = userEvent.setup()
     renderApp()
 
-    expect(await screen.findByRole('tab', { name: 'StaffChat, непрочитанных: 2' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'StaffChat, непрочитанных: 2' })).toBeInTheDocument()
     act(() => FakeWebSocket.instances[0].emit(message(19, existing.id, 'Моё сообщение', true)))
     expect(screen.queryByRole('button', { name: 'Закрыть уведомление' })).not.toBeInTheDocument()
 
@@ -194,7 +194,7 @@ describe('staff-only messenger', () => {
       existing.lastMessage = incoming
       FakeWebSocket.instances[0].emit(incoming)
     })
-    expect(await screen.findByRole('tab', { name: 'StaffChat, непрочитанных: 3' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'StaffChat, непрочитанных: 3' })).toBeInTheDocument()
     expect(await screen.findByText('Тестовый менеджер · Дежурная смена')).toBeInTheDocument()
     expect(screen.getByText('Пациент уже пришёл')).toBeInTheDocument()
 
@@ -306,7 +306,7 @@ describe('staff-only messenger', () => {
     vi.stubGlobal('AudioContext', audio)
     const user = userEvent.setup()
     renderApp()
-    expect(await screen.findByRole('tab', { name: 'StaffChat, непрочитанных: 2' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'StaffChat, непрочитанных: 2' })).toBeInTheDocument()
     await openPage(user, 'StaffChat')
     expect(await screen.findByText('Дежурная смена')).toBeInTheDocument()
     await waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1))

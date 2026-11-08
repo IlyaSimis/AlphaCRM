@@ -177,10 +177,10 @@ describe('«Сегодня» — домашняя страница', () => {
     await enterDemo(user, 'ADMINISTRATOR')
     const services = () => within(sidebar()).getByRole('navigation', { name: 'Сервисы' })
     const tabs = () => screen.getByRole('tablist', { name: 'Разделы сервиса' })
-    expect(within(services()).getAllByRole('button').map((button) => button.textContent)).toEqual(['Мое пространство', 'Управление', 'База данных пациентов', 'Документы', 'Склад', 'Финансы', 'Диск'])
+    expect(within(services()).getAllByRole('button').map((button) => button.textContent)).toEqual(['Мое пространство', 'StaffChat', 'Управление', 'База данных пациентов', 'Документы', 'Склад', 'Финансы', 'Диск'])
     expect(within(services()).getByRole('button', { name: 'Мое пространство' })).toHaveClass('active')
-    expect(within(tabs()).getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Сегодня', 'Дашборды', 'StaffChat', 'Аналитика', 'Мои условия работы'])
-    expect(screen.getByRole('tab', { name: 'StaffChat, непрочитанных: 0' })).toBeInTheDocument()
+    expect(within(tabs()).getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Сегодня', 'Дашборды', 'Аналитика', 'Мои условия работы'])
+    expect(within(services()).getByRole('button', { name: 'StaffChat, непрочитанных: 0' })).toBeInTheDocument()
     expect(within(tabs()).getByRole('tab', { name: 'Сегодня' })).toHaveAttribute('aria-selected', 'true')
 
     await user.click(within(services()).getByRole('button', { name: 'Управление' }))
