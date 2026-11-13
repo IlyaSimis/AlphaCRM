@@ -52,6 +52,9 @@ export const sandboxStaff: StaffItem[] = [
   { id: 'sandbox-doctor', fullName: 'Врач песочницы', username: 'sandbox-doctor', role: 'DOCTOR', practitionerId: PETROV_ID, active: true },
   { id: 'sandbox-manager', fullName: 'Менеджер песочницы', username: 'sandbox-manager', role: 'MANAGER', practitionerId: null, active: true },
   { id: 'sandbox-cashier', fullName: 'Кассир песочницы', username: 'sandbox-cashier', role: 'CASHIER', practitionerId: null, active: true },
+  { id: 'sandbox-nurse', fullName: 'Медсестра песочницы', username: 'sandbox-nurse', role: 'NURSE', practitionerId: null, active: true },
+  { id: 'sandbox-senior-nurse', fullName: 'Старший медперсонал песочницы', username: 'sandbox-senior-nurse', role: 'SENIOR_NURSE', practitionerId: null, active: true },
+  { id: 'sandbox-support', fullName: 'Техподдержка песочницы', username: 'sandbox-support', role: 'SUPPORT', practitionerId: null, active: true },
 ]
 
 export const demoTasks: TaskItem[] = [

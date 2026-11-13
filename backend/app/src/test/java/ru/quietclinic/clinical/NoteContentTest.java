@@ -21,9 +21,9 @@ class NoteContentTest {
 
   @Test
   void readsFieldsBackFromSignedSnapshot() {
-    var snapshot =
+    String snapshot =
         NoteContent.canonical("Complaints \"in quotes\"", "Status\nsecond line", "F41", "");
-    var fields = NoteContent.parse(snapshot);
+    SnapshotFields fields = NoteContent.parse(snapshot);
     assertThat(fields.complaints()).isEqualTo("Complaints \"in quotes\"");
     assertThat(fields.mentalStatus()).isEqualTo("Status\nsecond line");
     assertThat(fields.diagnosis()).isEqualTo("F41");

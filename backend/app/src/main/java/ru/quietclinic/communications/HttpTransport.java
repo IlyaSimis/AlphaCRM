@@ -18,7 +18,7 @@ class HttpTransport {
 
   /** HTTP-статус ответа; сетевая ошибка — IOException. */
   int postJson(URI uri, String body, Map<String, String> headers) throws IOException {
-    var request =
+    HttpRequest.Builder request =
         HttpRequest.newBuilder(uri)
             .timeout(Duration.ofSeconds(10))
             .header("Content-Type", "application/json; charset=utf-8")

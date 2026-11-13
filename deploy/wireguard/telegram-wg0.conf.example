@@ -1,0 +1,12 @@
+# /etc/wireguard/wg0.conf на зарубежном VPS Telegram-бота.
+[Interface]
+Address = 10.77.0.2/30
+ListenPort = 51820
+PrivateKey = REPLACE_TELEGRAM_VPS_PRIVATE_KEY
+
+[Peer]
+PublicKey = REPLACE_MIS_PUBLIC_KEY
+AllowedIPs = 10.77.0.1/32
+# Если у МИС статический публичный адрес, укажите Endpoint = IP_MIS:51820.
+# За NAT endpoint можно не задавать: МИС сам инициирует соединение и поддерживает его keepalive.
+PersistentKeepalive = 25

@@ -27,6 +27,7 @@ class CashboxFiscalAdapter implements FiscalPort {
 
   private final PaymentRepository payments;
   private final ChargeRepository charges;
+  private final RefundRepository refunds;
   private final TransactionTemplate tx;
   private final String url;
   private final String secret;
@@ -36,11 +37,13 @@ class CashboxFiscalAdapter implements FiscalPort {
   CashboxFiscalAdapter(
       PaymentRepository payments,
       ChargeRepository charges,
+      RefundRepository refunds,
       TransactionTemplate tx,
       @Value("${clinic.cashbox.url:}") String url,
       @Value("${clinic.cashbox.secret:}") String secret) {
     this.payments = payments;
     this.charges = charges;
+    this.refunds = refunds;
     this.tx = tx;
     this.url = url == null ? "" : url.trim();
     this.secret = secret == null ? "" : secret;
@@ -49,11 +52,29 @@ class CashboxFiscalAdapter implements FiscalPort {
   @Override
   public FiscalResult sendReceipt(UUID paymentId, String idempotencyKey) {
     if (url.isEmpty() || secret.isBlank()) return FiscalResult.notConfigured();
-    var body = tx.execute(status -> body(paymentId, idempotencyKey));
+    String body = tx.execute(status -> body(paymentId, idempotencyKey));
     if (body == null) return new FiscalResult("REJECTED", "PAYMENT_NOT_FOUND");
-    var timestamp = Instant.now().getEpochSecond();
+    return post(
+        body,
+        idempotencyKey,
+        () -> payments.findById(paymentId).ifPresent(p -> p.fiscalStatus = SENT_STATUS));
+  }
+
+  @Override
+  public FiscalResult sendRefund(UUID refundId, String idempotencyKey) {
+    if (url.isEmpty() || secret.isBlank()) return FiscalResult.notConfigured();
+    String body = tx.execute(status -> refundBody(refundId, idempotencyKey));
+    if (body == null) return new FiscalResult("REJECTED", "REFUND_NOT_FOUND");
+    return post(
+        body,
+        idempotencyKey,
+        () -> refunds.findById(refundId).ifPresent(r -> r.fiscalStatus = SENT_STATUS));
+  }
+
+  private FiscalResult post(String body, String idempotencyKey, Runnable onSent) {
+    long timestamp = Instant.now().getEpochSecond();
     try {
-      var request =
+      HttpRequest request =
           HttpRequest.newBuilder(URI.create(url))
               .timeout(Duration.ofSeconds(10))
               .header("Content-Type", "application/json; charset=utf-8")
@@ -62,12 +83,9 @@ class CashboxFiscalAdapter implements FiscalPort {
               .header(Signature.SIGNATURE_HEADER, Signature.sign(secret, timestamp, body))
               .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
               .build();
-      var status = client.send(request, HttpResponse.BodyHandlers.discarding()).statusCode();
-      var result = FiscalResult.ofHttp(status);
-      if ("SENT".equals(result.outcome())) {
-        tx.executeWithoutResult(
-            s -> payments.findById(paymentId).ifPresent(p -> p.fiscalStatus = SENT_STATUS));
-      }
+      int status = client.send(request, HttpResponse.BodyHandlers.discarding()).statusCode();
+      FiscalResult result = FiscalResult.ofHttp(status);
+      if ("SENT".equals(result.outcome())) tx.executeWithoutResult(s -> onSent.run());
       return result;
     } catch (InterruptedException ex) {
       Thread.currentThread().interrupt();
@@ -78,9 +96,9 @@ class CashboxFiscalAdapter implements FiscalPort {
   }
 
   private String body(UUID paymentId, String idempotencyKey) {
-    var payment = payments.findById(paymentId).orElse(null);
+    PaymentRecord payment = payments.findById(paymentId).orElse(null);
     if (payment == null) return null;
-    var charge = charges.findById(payment.chargeId).orElse(null);
+    Charge charge = charges.findById(payment.chargeId).orElse(null);
     if (charge == null) return null;
     return "{\"idempotencyKey\":\""
         + idempotencyKey
@@ -94,6 +112,27 @@ class CashboxFiscalAdapter implements FiscalPort {
         + charge.currency
         + "\",\"paidAt\":\""
         + payment.createdAt
+        + "\"}";
+  }
+
+  /** Возврат прихода: сумма, валюта, id возврата, платежа и счёта — без ФИО и данных приёма. */
+  private String refundBody(UUID refundId, String idempotencyKey) {
+    RefundRecord refund = refunds.findById(refundId).orElse(null);
+    if (refund == null) return null;
+    return "{\"idempotencyKey\":\""
+        + idempotencyKey
+        + "\",\"operation\":\"refund\",\"refundId\":\""
+        + refund.id
+        + "\",\"paymentId\":\""
+        + refund.paymentId
+        + "\",\"chargeId\":\""
+        + refund.chargeId
+        + "\",\"amountMinor\":"
+        + refund.amountMinor
+        + ",\"currency\":\""
+        + refund.currency
+        + "\",\"refundedAt\":\""
+        + refund.createdAt
         + "\"}";
   }
 }

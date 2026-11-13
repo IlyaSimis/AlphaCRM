@@ -33,7 +33,7 @@ class BillingControllerTest {
   }
 
   private String book(String startsAt, String endsAt) throws Exception {
-    var body =
+    String body =
         mvc.perform(
                 post("/api/v1/appointments")
                     .with(staff.role("ADMINISTRATOR"))
@@ -72,11 +72,11 @@ class BillingControllerTest {
   }
 
   @Test
-  void administratorIssuesOneChargeAndOnlyCashierAcceptsPayment() throws Exception {
-    var appointment = book("2026-11-24T09:00:00Z", "2026-11-24T09:30:00Z");
+  void administratorIssuesOneChargeAndPaymentNeedsFinanceRole() throws Exception {
+    String appointment = book("2026-11-24T09:00:00Z", "2026-11-24T09:30:00Z");
 
     createCharge("DOCTOR", appointment).andExpect(status().isForbidden());
-    var created =
+    String created =
         createCharge("ADMINISTRATOR", appointment)
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.status").value("PENDING"))
@@ -89,7 +89,9 @@ class BillingControllerTest {
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("CHARGE_ALREADY_EXISTS"));
 
-    pay("ADMINISTRATOR", chargeId, "pay-" + chargeId).andExpect(status().isForbidden());
+    // Оплату принимают кассир и администратор (finance.invoice.write); менеджер и врач — нет.
+    pay("MANAGER", chargeId, "pay-" + chargeId).andExpect(status().isForbidden());
+    pay("DOCTOR", chargeId, "pay-" + chargeId).andExpect(status().isForbidden());
     pay("CASHIER", chargeId, "pay-" + chargeId)
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.chargeStatus").value("PAID"));
@@ -106,11 +108,12 @@ class BillingControllerTest {
   }
 
   @Test
-  void chargeListIsClosedForDoctorsAndManagers() throws Exception {
+  void chargeListIsClosedForDoctorsAndReadOnlyForManagers() throws Exception {
     mvc.perform(get("/api/v1/billing/charges").with(staff.role("DOCTOR")))
         .andExpect(status().isForbidden());
+    // Менеджер видит счета только на чтение (раздел C: finance — R).
     mvc.perform(get("/api/v1/billing/charges").with(staff.role("MANAGER")))
-        .andExpect(status().isForbidden());
+        .andExpect(status().isOk());
     mvc.perform(get("/api/v1/billing/charges").with(staff.role("ADMINISTRATOR")))
         .andExpect(status().isOk());
   }

@@ -40,6 +40,23 @@ public class ServiceCatalogController {
     return services.changePrice(id, request);
   }
 
+  @PutMapping("/{id}/pricing")
+  ServiceView changePricing(
+      @PathVariable UUID id, @Valid @RequestBody ServicePricingRequest request) {
+    return services.changePricing(id, request);
+  }
+
+  @GetMapping("/{id}/consumption-norms")
+  List<ServiceNormView> norms(@PathVariable UUID id) {
+    return services.norms(id);
+  }
+
+  @PutMapping("/{id}/consumption-norms")
+  List<ServiceNormView> replaceNorms(
+      @PathVariable UUID id, @Valid @RequestBody ServiceNormsRequest request) {
+    return services.replaceNorms(id, request);
+  }
+
   @PostMapping("/{id}/deactivate")
   ServiceView deactivate(@PathVariable UUID id) {
     return services.setActive(id, false);

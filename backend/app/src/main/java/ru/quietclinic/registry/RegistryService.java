@@ -1,12 +1,12 @@
 package ru.quietclinic.registry;
 
 import static ru.quietclinic.platform.PlatformConfig.actorId;
+import static ru.quietclinic.platform.PlatformConfig.can;
 import static ru.quietclinic.platform.PlatformConfig.clinicId;
 import static ru.quietclinic.platform.PlatformConfig.conflict;
 import static ru.quietclinic.platform.PlatformConfig.forbidden;
-import static ru.quietclinic.platform.PlatformConfig.hasRole;
 import static ru.quietclinic.platform.PlatformConfig.notFound;
-import static ru.quietclinic.platform.PlatformConfig.requireRole;
+import static ru.quietclinic.platform.PlatformConfig.requirePermission;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -19,6 +19,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.quietclinic.audit.AuditService;
+import ru.quietclinic.platform.Permission;
 
 /**
  * Регистратура: задачи сотрудникам и лист ожидания. Модуль связан с пациентами, врачами и записями
@@ -48,8 +49,8 @@ class RegistryService {
    */
   @Transactional(readOnly = true)
   List<TaskView> tasks(LocalDate dueTo, UUID patientId) {
-    requireRole("ADMINISTRATOR", "MANAGER", "CASHIER");
-    var rows =
+    requirePermission(Permission.REGISTRY_TASK_READ);
+    List<RegistryTask> rows =
         patientId != null
             ? tasks.findByClinicIdAndPatientIdOrderByDueDate(clinicId(), patientId)
             : tasks.findByClinicIdAndStatusAndDueDateLessThanEqualOrderByDueDate(
@@ -59,8 +60,8 @@ class RegistryService {
 
   @Transactional
   TaskView createTask(CreateTaskRequest request) {
-    requireRole("ADMINISTRATOR");
-    var assigneeActive =
+    requirePermission(Permission.REGISTRY_TASK_MANAGE);
+    boolean assigneeActive =
         exists(
             "select count(*) from staff_user where id = ? and active = true and clinic_id = ?",
             request.assigneeId());
@@ -72,7 +73,7 @@ class RegistryService {
             "select count(*) from patient where id = ? and clinic_id = ?", request.patientId())) {
       throw notFound("PATIENT_NOT_FOUND", "Patient not found");
     }
-    var task =
+    RegistryTask task =
         tasks.save(
             new RegistryTask(
                 clinicId(),
@@ -82,7 +83,7 @@ class RegistryService {
                 request.assigneeId(),
                 actorId()));
     // В аудит — только наличие пациента, не текст задачи: в нём могут быть данные пациента.
-    var reason = task.patientId != null ? "with-patient" : "without-patient";
+    String reason = task.patientId != null ? "with-patient" : "without-patient";
     audit.record(actorId(), "REGISTRY_TASK_CREATED", "TASK", task.id, "ALLOWED", reason);
     return TaskView.of(task);
   }
@@ -90,12 +91,12 @@ class RegistryService {
   /** Закрыть или открыть снова может администратор или сам исполнитель. */
   @Transactional
   TaskView setDone(UUID id, boolean done) {
-    requireRole("ADMINISTRATOR", "MANAGER", "CASHIER");
-    var task =
+    requirePermission(Permission.REGISTRY_TASK_READ);
+    RegistryTask task =
         tasks
             .findByIdAndClinicId(id, clinicId())
             .orElseThrow(() -> notFound("TASK_NOT_FOUND", "Task not found"));
-    if (!hasRole("ADMINISTRATOR") && !actorId().equals(task.assigneeId)) {
+    if (!can(Permission.REGISTRY_TASK_MANAGE) && !actorId().equals(task.assigneeId)) {
       throw forbidden(
           "TASK_CLOSE_FORBIDDEN", "Only the assignee or an administrator can close the task");
     }
@@ -114,8 +115,8 @@ class RegistryService {
   /** Активные ожидания; с врачом и днём — только подходящие к освободившемуся слоту. */
   @Transactional(readOnly = true)
   List<WaitlistView> waitlist(UUID practitionerId, LocalDate day) {
-    requireRole("ADMINISTRATOR", "MANAGER");
-    var own = clinicPatients();
+    requirePermission(Permission.WAITLIST_READ);
+    Set<UUID> own = clinicPatients();
     return waitlist.findByStatusOrderByWishFrom("ACTIVE").stream()
         .filter(e -> own.contains(e.patientId))
         .filter(e -> practitionerId == null || day == null || e.matches(practitionerId, day))
@@ -125,7 +126,7 @@ class RegistryService {
 
   @Transactional
   WaitlistView addToWaitlist(CreateWaitlistRequest request) {
-    requireRole("ADMINISTRATOR");
+    requirePermission(Permission.WAITLIST_MANAGE);
     if (request.wishTo().isBefore(request.wishFrom())) {
       throw conflict("INVALID_RANGE", "Period end must not be before its start");
     }
@@ -144,7 +145,7 @@ class RegistryService {
       throw conflict("SERVICE_INACTIVE", "The service is switched off");
     }
     try {
-      var entry =
+      WaitlistEntry entry =
           waitlist.saveAndFlush(
               new WaitlistEntry(
                   request.patientId(),
@@ -161,8 +162,8 @@ class RegistryService {
 
   @Transactional
   WaitlistView book(UUID id, BookWaitlistRequest request) {
-    requireRole("ADMINISTRATOR");
-    var entry = active(id);
+    requirePermission(Permission.WAITLIST_MANAGE);
+    WaitlistEntry entry = active(id);
     if (!exists(
         "select count(*) from appointment a join practitioner p on p.id = a.practitioner_id"
             + " where a.id = ? and p.clinic_id = ?",
@@ -177,15 +178,15 @@ class RegistryService {
 
   @Transactional
   WaitlistView cancel(UUID id) {
-    requireRole("ADMINISTRATOR");
-    var entry = active(id);
+    requirePermission(Permission.WAITLIST_MANAGE);
+    WaitlistEntry entry = active(id);
     entry.status = "CANCELLED";
     audit.record(actorId(), "WAITLIST_CANCELLED", "WAITLIST", entry.id, "ALLOWED", null);
     return WaitlistView.of(entry);
   }
 
   private WaitlistEntry active(UUID id) {
-    var entry =
+    WaitlistEntry entry =
         waitlist
             .findById(id)
             .filter(e -> clinicPatients().contains(e.patientId))
@@ -198,7 +199,7 @@ class RegistryService {
 
   /** Запрос вида «… where id = ? and clinic_id = ?»: второй параметр — клиника сотрудника. */
   private boolean exists(String sql, UUID id) {
-    var count = jdbc.queryForObject(sql, Long.class, id, clinicId());
+    Long count = jdbc.queryForObject(sql, Long.class, id, clinicId());
     return count != null && count > 0;
   }
 

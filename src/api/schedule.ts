@@ -1,7 +1,7 @@
 import { ApiError, LEBEDEVA_ID, PETROV_ID, failure, apiFetch } from './client'
 import { clinicInstant, clinicParts } from '../shared/clinicTime'
 import { patientName, rememberPatient } from './patients'
-import type { AppointmentStatus, Practitioner, ScheduleItem, ServiceItem } from './types'
+import type { AppointmentStatus, Practitioner, ScheduleItem, ServiceItem, ServiceNorm } from './types'
 
 export const demoPractitioners: Practitioner[] = [
   { id: PETROV_ID, fullName: 'Александр Петров', specialty: 'Психиатр', workingHours: [{ dayOfWeek: 2, startsAt: '09:00:00', endsAt: '18:00:00' }, { dayOfWeek: 4, startsAt: '09:00:00', endsAt: '18:00:00' }] },
@@ -62,6 +62,8 @@ export function toScheduleItem(row: Record<string, string | number | null>, date
     patientId,
     amountMinor: (row.amountMinor as number | null) ?? null,
     currency: (row.currency as string | null) ?? null,
+    priceMode: (row.priceMode as ScheduleItem['priceMode']) ?? null,
+    estimateMinor: (row.estimateMinor as number | null) ?? null,
   }
 }
 
@@ -93,12 +95,15 @@ export async function loadServices(): Promise<ServiceItem[]> {
   return Array.isArray(rows) ? rows.map(toService) : []
 }
 
-/** Ответ сервера без поля active (старая версия API) считается включённой услугой. */
+/** Ответ сервера без поля active или priceMode (старая версия API) — включённая услуга с фиксированной ценой. */
 function toService(row: ServiceItem): ServiceItem {
-  return { ...row, active: row.active !== false }
+  return { ...row, active: row.active !== false, priceMode: row.priceMode ?? 'FIXED' }
 }
 
-export async function createService(input: { name: string; durationMinutes: number; priceMinor: number }): Promise<ServiceItem> {
+/** Цена услуги: фиксированная сумма или пределы свободной цены. */
+export type ServicePricing = { priceMode: 'FIXED'; priceMinor: number } | { priceMode: 'OPEN'; minMinor: number; maxMinor: number }
+
+export async function createService(input: { name: string; durationMinutes: number } & ({ priceMinor: number; priceMode?: 'FIXED' } | { priceMode: 'OPEN'; minMinor: number; maxMinor: number })): Promise<ServiceItem> {
   const response = await apiFetch('/services', { method: 'POST', body: JSON.stringify({ ...input, currency: 'RUB' }) })
   if (!response.ok) throw await failure(response, 'Не удалось создать услугу')
   return toService(await response.json())
@@ -126,6 +131,10 @@ export type NewAppointment = {
   time: string
   minutes: number
   serviceName: string
+  /** Оценка суммы для услуги со свободной ценой, в копейках; необязательна. */
+  estimateMinor?: number | null
+  /** ClientID посетителя сайта пациента; CRM не подставляет идентификатор браузера сотрудника. */
+  metricaClientId?: string
 }
 
 export async function createAppointment(input: NewAppointment) {
@@ -139,6 +148,8 @@ export async function createAppointment(input: NewAppointment) {
       startsAt,
       endsAt,
       serviceName: input.serviceName,
+      ...(input.estimateMinor != null ? { estimateMinor: input.estimateMinor } : {}),
+      ...(input.metricaClientId ? { metricaClientId: input.metricaClientId } : {}),
     }),
   })
   if (!response.ok) throw await failure(response, 'Не удалось создать запись', { 409: 'Интервал врача уже занят' })
@@ -183,6 +194,26 @@ export async function saveServicePrice(serviceId: string, priceMinor: number): P
   const response = await apiFetch(`/services/${serviceId}/price`, { method: 'PUT', body: JSON.stringify({ priceMinor }) })
   if (!response.ok) throw await failure(response, 'Не удалось сохранить цену')
   return toService(await response.json())
+}
+
+/** Режим цены: фиксированная или свободная (с пределами). Действует для новых записей. */
+export async function saveServicePricing(serviceId: string, pricing: ServicePricing): Promise<ServiceItem> {
+  const response = await apiFetch(`/services/${serviceId}/pricing`, { method: 'PUT', body: JSON.stringify(pricing) })
+  if (!response.ok) throw await failure(response, 'Не удалось сохранить цену')
+  return toService(await response.json())
+}
+
+/** Нормы расхода услуги: склад спишет эти позиции при завершении приёма. */
+export async function loadServiceNorms(serviceId: string): Promise<ServiceNorm[]> {
+  const response = await apiFetch(`/services/${serviceId}/consumption-norms`)
+  if (!response.ok) throw await failure(response, 'Нормы расхода недоступны')
+  return response.json()
+}
+
+export async function saveServiceNorms(serviceId: string, norms: ServiceNorm[]): Promise<ServiceNorm[]> {
+  const response = await apiFetch(`/services/${serviceId}/consumption-norms`, { method: 'PUT', body: JSON.stringify({ norms }) })
+  if (!response.ok) throw await failure(response, 'Не удалось сохранить нормы расхода')
+  return response.json()
 }
 
 export async function cancelAppointment(id: string) {

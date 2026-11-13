@@ -17,6 +17,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import ru.quietclinic.SecondClinic;
@@ -25,6 +26,7 @@ import ru.quietclinic.StaffSessions;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("local")
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
 class ServiceCatalogControllerTest {
   static final String REPEAT = "00000000-0000-0000-0000-000000000602";
   @Autowired MockMvc mvc;
@@ -53,14 +55,14 @@ class ServiceCatalogControllerTest {
 
   @Test
   void newPriceDoesNotRewriteExistingAppointments() throws Exception {
-    var repeat = "00000000-0000-0000-0000-000000000602";
-    var booking =
+    String repeat = "00000000-0000-0000-0000-000000000602";
+    String booking =
         """
         {"patientId":"00000000-0000-0000-0000-000000000101",
          "practitionerId":"00000000-0000-0000-0000-000000000201",
          "startsAt":"%s","endsAt":"%s","serviceName":"Повторный приём"}
         """;
-    var before =
+    String before =
         mvc.perform(
                 post("/api/v1/appointments")
                     .with(staff.admin())
@@ -106,8 +108,8 @@ class ServiceCatalogControllerTest {
   @Test
   void administratorCreatesAndSwitchesOffServiceWithoutTouchingOldAppointments() throws Exception {
     // В H2 название услуги уникально во всей базе: у каждого прогона своё.
-    var name = "Group session " + UUID.randomUUID().toString().substring(0, 8);
-    var body =
+    String name = "Group session " + UUID.randomUUID().toString().substring(0, 8);
+    String body =
         """
         {"name":"%s","durationMinutes":90,"priceMinor":250000,"currency":"RUB"}
         """
@@ -118,7 +120,7 @@ class ServiceCatalogControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body))
         .andExpect(status().isForbidden());
-    var created =
+    String created =
         mvc.perform(
                 post("/api/v1/services")
                     .with(staff.admin())
@@ -155,7 +157,7 @@ class ServiceCatalogControllerTest {
       // Новая услуга сразу доступна в записи.
       mvc.perform(get("/api/v1/services").with(staff.doctor(StaffSessions.PETROV)))
           .andExpect(jsonPath("$[*].name").value(hasItem(name)));
-      var booked =
+      String booked =
           mvc.perform(
                   post("/api/v1/appointments")
                       .with(staff.admin())
@@ -205,7 +207,8 @@ class ServiceCatalogControllerTest {
   @Test
   void servicesBelongToTheirClinic() throws Exception {
     SecondClinic.ensure(jdbc);
-    var other = staff.login(SecondClinic.ADMIN_USERNAME, SecondClinic.ADMIN_PASSWORD);
+    StaffSessions.Login other =
+        staff.login(SecondClinic.ADMIN_USERNAME, SecondClinic.ADMIN_PASSWORD);
     mvc.perform(get("/api/v1/services").with(other))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[*].id").value(not(hasItem(REPEAT))));

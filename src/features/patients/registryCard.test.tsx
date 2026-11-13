@@ -1,7 +1,7 @@
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-import { anna, enterDemo, goOffline, jsonResponse, renderApp, withAuth } from '../../test/helpers'
+import { anna, enterDemo, goOffline, jsonResponse, renderApp, withAuth, openPage } from '../../test/helpers'
 
 describe('patient card: registry', () => {
   it('the administrator changes the referral source and note; a doctor does not see them', async () => {
@@ -9,9 +9,9 @@ describe('patient card: registry', () => {
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user, 'ADMINISTRATOR')
-    await user.click(screen.getByRole('button', { name: 'Пациенты' }))
+    await openPage(user, 'Пациенты')
     await user.click(screen.getByText('Анна Михайлова'))
-    expect(screen.getByText('Рекомендация знакомых')).toBeInTheDocument()
+    expect(await screen.findByText('Рекомендация знакомых')).toBeInTheDocument()
     expect(screen.getByText('Просит звонить после 18:00')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Изменить' }))
     await user.click(screen.getByRole('combobox', { name: 'Откуда пришёл' }))
@@ -24,7 +24,7 @@ describe('patient card: registry', () => {
 
     await user.click(screen.getByRole('button', { name: 'Выйти' }))
     await enterDemo(user)
-    await user.click(screen.getByRole('button', { name: 'Пациенты' }))
+    await openPage(user, 'Пациенты')
     await user.click(screen.getByText('Анна Михайлова'))
     expect(screen.queryByText('Удобно по утрам')).not.toBeInTheDocument()
     expect(screen.queryByText('Задачи регистратуры')).not.toBeInTheDocument()
@@ -35,9 +35,9 @@ describe('patient card: registry', () => {
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user, 'ADMINISTRATOR')
-    await user.click(screen.getByRole('button', { name: 'Пациенты' }))
+    await openPage(user, 'Пациенты')
     await user.click(screen.getByText('Мария Соколова'))
-    expect(screen.getByRole('button', { name: 'Выполнено: Обновить согласие' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Выполнено: Обновить согласие' })).toBeInTheDocument()
     // Задача без пациента в карточку не попадает.
     expect(screen.queryByText(/Заказать бланки согласий/)).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Задача' }))
@@ -60,13 +60,13 @@ describe('patient card: registry', () => {
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Пациенты' }))
+    await openPage(user, 'Пациенты')
     await user.click(screen.getByText('Анна Михайлова'))
     expect(screen.getByText(/Этот телефон уже указан в другой карточке/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Борис Михайлов' }))
     expect(screen.getByRole('heading', { name: 'Борис Михайлов' })).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Пациенты' }))
+    await openPage(user, 'Пациенты')
     await user.click(screen.getByText('Анна Михайлова'))
     await user.click(screen.getByRole('button', { name: 'Изменить' }))
     await user.type(screen.getByLabelText('Заметка регистратуры'), 'Только для регистратуры')
@@ -91,9 +91,9 @@ describe('patient card: registry', () => {
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Пациенты' }))
+    await openPage(user, 'Пациенты')
     await user.click(screen.getByText('Анна Михайлова'))
-    expect(screen.getByText('не подключён')).toBeInTheDocument()
+    expect(screen.getAllByText('Не подключён')).toHaveLength(2)
     await user.click(screen.getByRole('button', { name: 'Изменить' }))
     await user.type(screen.getByLabelText('Telegram chat id'), '+7 916')
     expect(screen.getByText(/только цифры/)).toBeInTheDocument()
@@ -101,7 +101,7 @@ describe('patient card: registry', () => {
     await user.clear(screen.getByLabelText('Telegram chat id'))
     await user.type(screen.getByLabelText('Telegram chat id'), '987654321')
     await user.click(screen.getByRole('button', { name: 'Сохранить' }))
-    expect(await screen.findByText('подключён')).toBeInTheDocument()
+    expect(await screen.findByText('Подключён')).toBeInTheDocument()
     expect(screen.queryByText('987654321')).not.toBeInTheDocument()
     const call = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith('/registry') && init?.method === 'PUT')
     expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ telegramChatId: '987654321', removeTelegram: false })

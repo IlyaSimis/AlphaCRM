@@ -43,7 +43,7 @@ class SchedulingControllerTest {
 
   private String book(String patientId, String practitionerId, String startsAt, String endsAt)
       throws Exception {
-    var response =
+    String response =
         attemptBooking(patientId, practitionerId, startsAt, endsAt, "Повторный приём")
             .andExpect(status().isCreated())
             .andReturn()
@@ -55,7 +55,7 @@ class SchedulingControllerTest {
   private ResultActions attemptBooking(
       String patientId, String practitionerId, String startsAt, String endsAt, String service)
       throws Exception {
-    var body =
+    String body =
         """
         {"patientId":"%s","practitionerId":"%s","startsAt":"%s","endsAt":"%s","serviceName":"%s"}
         """
@@ -92,7 +92,7 @@ class SchedulingControllerTest {
 
   @Test
   void walksThroughVisitLifecycleWithRoleChecks() throws Exception {
-    var id = book(PETROV, "2026-11-03T09:00:00Z", "2026-11-03T09:30:00Z");
+    String id = book(PETROV, "2026-11-03T09:00:00Z", "2026-11-03T09:30:00Z");
 
     change(id, "DOCTOR", PETROV, "CONFIRMED").andExpect(status().isForbidden());
     change(id, "ADMINISTRATOR", PETROV, "CONFIRMED")
@@ -120,7 +120,7 @@ class SchedulingControllerTest {
 
   @Test
   void noShowFreesTheSlotForAnotherBooking() throws Exception {
-    var id = book(LEBEDEVA, "2026-11-05T10:00:00Z", "2026-11-05T10:30:00Z");
+    String id = book(LEBEDEVA, "2026-11-05T10:00:00Z", "2026-11-05T10:30:00Z");
     change(id, "ADMINISTRATOR", PETROV, "NO_SHOW").andExpect(jsonPath("$.status").value("NO_SHOW"));
     // Неявка освобождает интервал: на него можно записать другого пациента.
     book(LEBEDEVA, "2026-11-05T10:00:00Z", "2026-11-05T10:30:00Z");
@@ -163,10 +163,15 @@ class SchedulingControllerTest {
   }
 
   @Test
-  void onlyAdministratorCanCancelAndTheSlotCanBeBookedAgain() throws Exception {
+  void otherDoctorCannotCancelAndTheSlotCanBeBookedAgain() throws Exception {
+    // Врач отменяет только свои записи (schedule.appointment.write-own); 301 — запись Петрова.
     mvc.perform(
             post("/api/v1/appointments/00000000-0000-0000-0000-000000000301/cancel")
-                .with(staff.role("DOCTOR")))
+                .with(staff.doctor(LEBEDEVA)))
+        .andExpect(status().isForbidden());
+    mvc.perform(
+            post("/api/v1/appointments/00000000-0000-0000-0000-000000000301/cancel")
+                .with(staff.role("CASHIER")))
         .andExpect(status().isForbidden());
 
     mvc.perform(
@@ -187,7 +192,7 @@ class SchedulingControllerTest {
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("ALREADY_CANCELLED"));
 
-    var rebook =
+    String rebook =
         """
         {
           "patientId":"00000000-0000-0000-0000-000000000103",
@@ -242,7 +247,7 @@ class SchedulingControllerTest {
 
   @Test
   void administratorReschedulesWithinHoursWithoutOverlap() throws Exception {
-    var id = book(PETROV, "2026-11-10T09:00:00Z", "2026-11-10T09:30:00Z");
+    String id = book(PETROV, "2026-11-10T09:00:00Z", "2026-11-10T09:30:00Z");
     book(LEBEDEVA, "2026-11-12T11:00:00Z", "2026-11-12T11:30:00Z");
 
     reschedule(id, "DOCTOR", LEBEDEVA, "2026-11-12T10:00:00Z", "2026-11-12T10:30:00Z")
@@ -273,7 +278,7 @@ class SchedulingControllerTest {
 
   @Test
   void finishedAppointmentsCannotBeRescheduled() throws Exception {
-    var id = book(PETROV, "2026-11-10T11:00:00Z", "2026-11-10T11:30:00Z");
+    String id = book(PETROV, "2026-11-10T11:00:00Z", "2026-11-10T11:30:00Z");
     change(id, "ADMINISTRATOR", PETROV, "NO_SHOW").andExpect(status().isOk());
     reschedule(id, "ADMINISTRATOR", PETROV, "2026-11-10T12:00:00Z", "2026-11-10T12:30:00Z")
         .andExpect(status().isConflict())
@@ -306,7 +311,7 @@ class SchedulingControllerTest {
 
   @Test
   void bookingGrantsCareRelationshipToTheDoctor() throws Exception {
-    var created =
+    String created =
         mvc.perform(
                 post("/api/v1/patients")
                     .with(staff.role("ADMINISTRATOR"))
@@ -320,7 +325,7 @@ class SchedulingControllerTest {
             .getResponse()
             .getContentAsString();
     String patientId = JsonPath.read(created, "$.id");
-    var history = "/api/v1/clinical/patients/" + patientId + "/encounters";
+    String history = "/api/v1/clinical/patients/" + patientId + "/encounters";
 
     mvc.perform(get(history).with(staff.doctor(LEBEDEVA))).andExpect(status().isForbidden());
     book(patientId, LEBEDEVA, "2026-11-19T10:00:00Z", "2026-11-19T10:30:00Z");
@@ -329,7 +334,7 @@ class SchedulingControllerTest {
 
   @Test
   void lebedevaCannotMovePetrovsAppointment() throws Exception {
-    var id = book(PETROV, "2026-12-01T09:00:00Z", "2026-12-01T09:30:00Z");
+    String id = book(PETROV, "2026-12-01T09:00:00Z", "2026-12-01T09:30:00Z");
     change(id, "ADMINISTRATOR", PETROV, "ARRIVED").andExpect(status().isOk());
 
     change(id, "DOCTOR", LEBEDEVA, "COMPLETED").andExpect(status().isForbidden());
@@ -351,16 +356,17 @@ class SchedulingControllerTest {
 
   @Test
   void administratorChangesWeeklyShiftAndDayOffRejectsBooking() throws Exception {
-    var hours = "/api/v1/practitioners/" + LEBEDEVA + "/working-hours";
-    var original =
+    String hours = "/api/v1/practitioners/" + LEBEDEVA + "/working-hours";
+    String original =
         """
         {"shifts":[{"dayOfWeek":2,"startsAt":"10:00","endsAt":"19:00"},
                    {"dayOfWeek":4,"startsAt":"10:00","endsAt":"19:00"}]}
         """;
     try {
+      // Смены меняют администраторы и менеджер; кассир — нет.
       mvc.perform(
               put(hours)
-                  .with(staff.role("MANAGER"))
+                  .with(staff.role("CASHIER"))
                   .contentType(MediaType.APPLICATION_JSON)
                   .content(original))
           .andExpect(status().isForbidden());

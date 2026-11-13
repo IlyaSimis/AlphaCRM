@@ -9,6 +9,7 @@ import { TaskDialog } from '../registry/TaskDialog'
 import { TaskList } from '../registry/TaskList'
 import type { Registry } from '../registry/useRegistry'
 import { RegistryDialog } from './RegistryDialog'
+import { MessengerPanel } from './MessengerPanel'
 
 type RegistryPanelProps = {
   patient: PatientItem
@@ -56,7 +57,7 @@ export function RegistryPanel({ patient, sharedWith, admin, selfId, registry, on
       </Box>
       <Info label="Откуда пришёл" value={referralLabel(patient.referralSource)} />
       <Info label="Заметка регистратуры" value={patient.registryNote || '—'} />
-      <Info label="Telegram" value={patient.telegramConnected ? 'подключён' : 'не подключён'} />
+      <MessengerPanel patient={patient} admin={admin} />
       <Box className="panel-title-row" sx={{ mt: 2 }}>
         <Typography sx={{ fontWeight: 700 }}>Задачи регистратуры</Typography>
         {admin && <Button size="small" startIcon={<AddRounded />} onClick={() => { setTaskError(''); setTaskDialog(true) }}>Задача</Button>}

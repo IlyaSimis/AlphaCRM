@@ -3,12 +3,13 @@ import { AddRounded } from '@mui/icons-material'
 import { Alert, Box, Button, Typography } from '@mui/material'
 import type { PatientItem, Practitioner, ServiceItem, StaffItem } from '../../api/types'
 import { localToday } from '../../shared/dates'
-import { canManageClinic, canSeeWaitlist } from '../../shared/roles'
+import { canManageRegistry, canSeeWaitlist } from '../../shared/roles'
 import { periodLabel } from './registry'
 import { TaskDialog } from './TaskDialog'
 import { TaskList } from './TaskList'
 import type { Registry } from './useRegistry'
 import { WaitlistDialog } from './WaitlistDialog'
+import { rolesOf } from '../../shared/permissions'
 
 type RegistryPageProps = {
   staff: StaffItem
@@ -20,8 +21,8 @@ type RegistryPageProps = {
 
 /** Регистратура: задачи на сегодня и лист ожидания. Сообщения пациентам отсюда не отправляются. */
 export function RegistryPage({ staff, registry, patients, practitioners, services }: RegistryPageProps) {
-  const role = staff.role
-  const admin = canManageClinic(role)
+  const role = rolesOf(staff)
+  const admin = canManageRegistry(role)
   const today = localToday()
   const [taskDialog, setTaskDialog] = useState(false)
   const [taskError, setTaskError] = useState('')

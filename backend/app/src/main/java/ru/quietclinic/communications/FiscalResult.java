@@ -16,7 +16,7 @@ public record FiscalResult(String outcome, String reason) {
   }
 
   public static FiscalResult ofHttp(int status) {
-    var result = DeliveryResult.ofHttp(CHANNEL, status);
+    DeliveryResult result = DeliveryResult.ofHttp(CHANNEL, status);
     return new FiscalResult(result.outcome().name(), result.reason());
   }
 

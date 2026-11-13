@@ -1,10 +1,10 @@
 package ru.quietclinic.clinical;
 
 import static ru.quietclinic.platform.PlatformConfig.actorId;
+import static ru.quietclinic.platform.PlatformConfig.can;
 import static ru.quietclinic.platform.PlatformConfig.clinicId;
-import static ru.quietclinic.platform.PlatformConfig.hasRole;
 import static ru.quietclinic.platform.PlatformConfig.notFound;
-import static ru.quietclinic.platform.PlatformConfig.requireRole;
+import static ru.quietclinic.platform.PlatformConfig.requirePermission;
 
 import java.sql.ResultSet;
 import java.util.HashMap;
@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.quietclinic.audit.AuditService;
 import ru.quietclinic.platform.EncryptionService;
+import ru.quietclinic.platform.Permission;
 
 /**
  * Архив подписанных документов, только чтение. Врач видит документы, которые подписал сам; менеджер
@@ -50,14 +51,14 @@ class SignedDocumentService {
   /** Менеджер может сузить список до одного врача; врачу фильтр не нужен — он видит только своё. */
   @Transactional(readOnly = true)
   List<SignedDocumentView> list(UUID practitionerId) {
-    requireRole("DOCTOR", "MANAGER");
-    var rows =
-        hasRole("DOCTOR")
+    requirePermission(Permission.SIGNED_DOCUMENT_READ, Permission.SIGNED_DOCUMENT_READ_OWN);
+    List<MedicalDocument> rows =
+        !can(Permission.SIGNED_DOCUMENT_READ)
             ? documents.findByStateAndSignedByOrderBySignedAtDesc(SIGNED, actorId())
             : practitionerId != null
                 ? documents.findByStateAndSignedByOrderBySignedAtDesc(SIGNED, practitionerId)
                 : documents.findByStateOrderBySignedAtDesc(SIGNED);
-    var result = views(rows);
+    List<SignedDocumentView> result = views(rows);
     result.forEach(
         d ->
             audit.record(actorId(), "SIGNED_DOCUMENT_READ", "DOCUMENT", d.id(), "ALLOWED", "list"));
@@ -66,14 +67,14 @@ class SignedDocumentService {
 
   @Transactional(readOnly = true)
   SignedDocumentView get(UUID id) {
-    requireRole("DOCTOR", "MANAGER");
-    var doc =
+    requirePermission(Permission.SIGNED_DOCUMENT_READ, Permission.SIGNED_DOCUMENT_READ_OWN);
+    MedicalDocument doc =
         documents
             .findById(id)
             .filter(d -> SIGNED.equals(d.state))
-            .filter(d -> !hasRole("DOCTOR") || actorId().equals(d.signedBy))
+            .filter(d -> can(Permission.SIGNED_DOCUMENT_READ) || actorId().equals(d.signedBy))
             .orElseThrow(() -> notFound("SIGNED_DOCUMENT_NOT_FOUND", "Signed document not found"));
-    var view =
+    SignedDocumentView view =
         views(List.of(doc)).stream()
             .findFirst()
             .orElseThrow(() -> notFound("SIGNED_DOCUMENT_NOT_FOUND", "Signed document not found"));
@@ -83,9 +84,9 @@ class SignedDocumentService {
 
   /** Только документы врачей своей клиники; имена — из таблиц, без зависимости от кода модулей. */
   private List<SignedDocumentView> views(List<MedicalDocument> rows) {
-    var doctors = names("select id, full_name from practitioner where clinic_id = ?");
-    var patients = names("select id, full_name from patient where clinic_id = ?");
-    var byId =
+    Map<UUID, String> doctors = names("select id, full_name from practitioner where clinic_id = ?");
+    Map<UUID, String> patients = names("select id, full_name from patient where clinic_id = ?");
+    Map<UUID, Encounter> byId =
         encounters.findAllById(rows.stream().map(d -> d.encounterId).distinct().toList()).stream()
             .collect(Collectors.toMap(e -> e.id, Function.identity()));
     return rows.stream()
@@ -93,8 +94,8 @@ class SignedDocumentService {
         .filter(d -> byId.containsKey(d.encounterId))
         .map(
             d -> {
-              var encounter = byId.get(d.encounterId);
-              var fields = NoteContent.parse(encryption.decrypt(d.snapshotEncrypted));
+              Encounter encounter = byId.get(d.encounterId);
+              SnapshotFields fields = NoteContent.parse(encryption.decrypt(d.snapshotEncrypted));
               return new SignedDocumentView(
                   d.id,
                   d.encounterId,
@@ -116,7 +117,7 @@ class SignedDocumentService {
   }
 
   private Map<UUID, String> names(String sql) {
-    var result = new HashMap<UUID, String>();
+    Map<UUID, String> result = new HashMap<>();
     jdbc.query(
         sql,
         (ResultSet row) -> {

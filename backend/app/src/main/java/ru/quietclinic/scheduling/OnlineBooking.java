@@ -7,6 +7,9 @@ import static ru.quietclinic.platform.PlatformConfig.requireRole;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -18,8 +21,8 @@ import ru.quietclinic.platform.ClinicTime;
 
 /**
  * Онлайн-запись для Telegram-бота: врачи с графиком, свободные окна и запись пациента на одну
- * услугу из справочника ({@code clinic.online-booking.service-name}). Вызывающий — сервисная учётная
- * запись бота с ролью BOT, клиника — из неё же.
+ * услугу из справочника ({@code clinic.online-booking.service-name}). Вызывающий — сервисная
+ * учётная запись бота с ролью BOT, клиника — из неё же.
  */
 @Service
 public class OnlineBooking {
@@ -95,26 +98,27 @@ public class OnlineBooking {
     if (practitioners.findByIdAndClinicId(practitionerId, clinicId()).isEmpty()) {
       throw notFound("PRACTITIONER_NOT_FOUND", "Practitioner not found");
     }
-    var duration = Duration.ofMinutes(onlineService().durationMinutes);
-    var shifts = schedules.findByPractitionerIdOrderByDayOfWeek(practitionerId);
-    var zone = time.zone();
-    var today = time.today();
-    var earliest = time.now().plus(minLead);
-    var busy =
+    Duration duration = Duration.ofMinutes(onlineService().durationMinutes);
+    List<PractitionerSchedule> shifts =
+        schedules.findByPractitionerIdOrderByDayOfWeek(practitionerId);
+    ZoneId zone = time.zone();
+    LocalDate today = time.today();
+    Instant earliest = time.now().plus(minLead);
+    List<Appointment> busy =
         appointments.findBusy(
             practitionerId, time.startOf(today), time.startOf(today.plusDays(days + 1L)));
-    var result = new ArrayList<FreeSlot>();
-    for (var offset = 0; offset < days && result.size() < maxSlots; offset++) {
-      var day = today.plusDays(offset);
-      var dayOfWeek = day.getDayOfWeek().getValue();
-      for (var shift : shifts) {
+    List<FreeSlot> result = new ArrayList<>();
+    for (int offset = 0; offset < days && result.size() < maxSlots; offset++) {
+      LocalDate day = today.plusDays(offset);
+      int dayOfWeek = day.getDayOfWeek().getValue();
+      for (PractitionerSchedule shift : shifts) {
         if (shift.dayOfWeek != dayOfWeek) continue;
-        var shiftEnd = day.atTime(shift.endsAt);
-        for (var start = day.atTime(shift.startsAt);
+        LocalDateTime shiftEnd = day.atTime(shift.endsAt);
+        for (LocalDateTime start = day.atTime(shift.startsAt);
             !start.plus(duration).isAfter(shiftEnd) && result.size() < maxSlots;
             start = start.plus(slotStep)) {
-          var startsAt = start.atZone(zone).toInstant();
-          var endsAt = startsAt.plus(duration);
+          Instant startsAt = start.atZone(zone).toInstant();
+          Instant endsAt = startsAt.plus(duration);
           if (startsAt.isBefore(earliest) || overlaps(busy, startsAt, endsAt)) continue;
           result.add(new FreeSlot(startsAt, endsAt));
         }
@@ -127,8 +131,7 @@ public class OnlineBooking {
   public OnlineAppointment book(UUID patientId, UUID practitionerId, Instant startsAt) {
     requireRole(ROLE);
     return OnlineAppointment.of(
-        appointmentService.createOnline(
-            patientId, practitionerId, startsAt, onlineService().name));
+        appointmentService.createOnline(patientId, practitionerId, startsAt, onlineService().name));
   }
 
   @Transactional(readOnly = true)
@@ -152,7 +155,7 @@ public class OnlineBooking {
       throw conflict(
           "ONLINE_SERVICE_NOT_CONFIGURED", "Set CLINIC_BOT_SERVICE to a service from the catalog");
     }
-    var service =
+    ClinicService service =
         services
             .findByClinicIdAndName(clinicId(), serviceName)
             .orElseThrow(
@@ -164,7 +167,7 @@ public class OnlineBooking {
   }
 
   private static boolean overlaps(List<Appointment> busy, Instant startsAt, Instant endsAt) {
-    for (var a : busy) {
+    for (Appointment a : busy) {
       if (a.startsAt.isBefore(endsAt) && a.endsAt.isAfter(startsAt)) return true;
     }
     return false;

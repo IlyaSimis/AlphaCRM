@@ -62,7 +62,7 @@ class WorkingHoursPolicyTest {
 
   @Test
   void shiftsAreReadInTheClinicTimeZone() {
-    var moscow = ZoneId.of("Europe/Moscow");
+    ZoneId moscow = ZoneId.of("Europe/Moscow");
     // 06:00 UTC — это 09:00 в Москве: начало смены вторника.
     assertThat(
             WorkingHoursPolicy.fits(

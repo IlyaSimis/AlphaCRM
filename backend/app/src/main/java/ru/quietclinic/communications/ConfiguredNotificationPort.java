@@ -1,35 +1,94 @@
 package ru.quietclinic.communications;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
- * Выбор канала по настройкам окружения: вебхук клиники, если задан его адрес; иначе Telegram, если
- * задан токен бота; иначе безопасный mock.
+ * Выбор канала: предпочтительный мессенджер пациента, затем второй подключённый, вебхук клиники или
+ * безопасный mock. Настроенность канала проверяется вместе с наличием внешнего id.
  */
 @Component
 class ConfiguredNotificationPort implements NotificationPort {
   private final WebhookChannel webhook;
-  private final TelegramChannel telegram;
+  private final TelegramChannel legacyTelegram;
+  private final MaxChannel legacyMax;
   private final SafeMockNotificationAdapter mock;
+  private final MessengerChannelFactory scoped;
+
+  @Autowired
+  ConfiguredNotificationPort(
+      WebhookChannel webhook,
+      TelegramChannel telegram,
+      MaxChannel max,
+      SafeMockNotificationAdapter mock,
+      MessengerChannelFactory scoped) {
+    this.webhook = webhook;
+    this.legacyTelegram = telegram;
+    this.legacyMax = max;
+    this.mock = mock;
+    this.scoped = scoped;
+  }
 
   ConfiguredNotificationPort(
+      WebhookChannel webhook,
+      TelegramChannel telegram,
+      MaxChannel max,
+      SafeMockNotificationAdapter mock) {
+    this(webhook, telegram, max, mock, null);
+  }
+
+  /** Совместимость модульных тестов и старых конфигураций без MAX. */
+  ConfiguredNotificationPort(
       WebhookChannel webhook, TelegramChannel telegram, SafeMockNotificationAdapter mock) {
-    this.webhook = webhook;
-    this.telegram = telegram;
-    this.mock = mock;
+    this(webhook, telegram, null, mock, null);
   }
 
   @Override
   public String channelFor(PatientMessage message) {
+    String preferred = message.preferredMessenger();
+    TelegramChannel telegram = telegramFor(message);
+    MaxChannel max = maxFor(message);
+    if (MaxChannel.NAME.equals(preferred)
+        && present(message.maxUserId())
+        && max != null
+        && max.configured()) return MaxChannel.NAME;
+    if (TelegramChannel.NAME.equals(preferred)
+        && present(message.telegramChatId())
+        && telegram.configured()) {
+      return TelegramChannel.NAME;
+    }
+    if (present(message.telegramChatId()) && telegram.configured()) return TelegramChannel.NAME;
+    if (present(message.maxUserId()) && max != null && max.configured()) return MaxChannel.NAME;
     if (webhook.configured()) return WebhookChannel.NAME;
-    if (telegram.configured()) return TelegramChannel.NAME;
     return SafeMockNotificationAdapter.NAME;
   }
 
   @Override
   public DeliveryResult deliver(PatientMessage message) {
-    if (webhook.configured()) return webhook.send(message);
-    if (telegram.configured()) return telegram.send(message);
-    return mock.send(message);
+    return switch (channelFor(message)) {
+      case TelegramChannel.NAME -> telegramFor(message).send(message);
+      case MaxChannel.NAME -> {
+        MaxChannel max = maxFor(message);
+        yield max == null
+            ? DeliveryResult.notConfigured(MaxChannel.NAME, "CHANNEL_NOT_CONFIGURED")
+            : max.send(message);
+      }
+      case WebhookChannel.NAME -> webhook.send(message);
+      default -> mock.send(message);
+    };
+  }
+
+  private TelegramChannel telegramFor(PatientMessage message) {
+    if (scoped == null || message.clinicId() == null) return legacyTelegram;
+    return scoped.telegram(message.clinicId()).orElse(legacyTelegram);
+  }
+
+  private MaxChannel maxFor(PatientMessage message) {
+    if (scoped == null || message.clinicId() == null) return legacyMax;
+    return scoped.max(message.clinicId()).orElse(legacyMax);
+  }
+
+  private static boolean present(String value) {
+    return value != null && !value.isBlank();
   }
 }

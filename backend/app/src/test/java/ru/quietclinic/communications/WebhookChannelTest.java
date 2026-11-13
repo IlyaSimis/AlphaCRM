@@ -25,7 +25,7 @@ class WebhookChannelTest {
 
   @Test
   void bodyCarriesTemplateFieldsAndOnlyTheTelegramChatIdAsAddress() {
-    var body = WebhookChannel.body(message("12345"));
+    String body = WebhookChannel.body(message("12345"));
     assertThat(body)
         .contains("\"template\":\"appointment-confirmed\"")
         .contains("\"idempotencyKey\":\"appointment-confirmed:x:1\"")
@@ -53,12 +53,12 @@ class WebhookChannelTest {
 
   @Test
   void withoutAnyChannelTheMockLeavesTheMessagePending() {
-    var port =
+    ConfiguredNotificationPort port =
         new ConfiguredNotificationPort(
             new WebhookChannel(new HttpTransport(), "", ""),
             new TelegramChannel(new HttpTransport(), "", "https://api.telegram.org"),
             new SafeMockNotificationAdapter());
-    var result = port.deliver(message("12345"));
+    DeliveryResult result = port.deliver(message("12345"));
     assertThat(result.outcome()).isEqualTo(DeliveryOutcome.NOT_CONFIGURED);
     assertThat(result.reason()).isEqualTo("CHANNEL_NOT_CONFIGURED");
     assertThat(port.channelFor(message("12345"))).isEqualTo("MOCK");
@@ -66,8 +66,9 @@ class WebhookChannelTest {
 
   @Test
   void telegramNeedsAChatIdNotJustAPhone() {
-    var telegram = new TelegramChannel(new HttpTransport(), "token", "https://api.telegram.org");
-    var result = telegram.send(message(null));
+    TelegramChannel telegram =
+        new TelegramChannel(new HttpTransport(), "token", "https://api.telegram.org");
+    DeliveryResult result = telegram.send(message(null));
     assertThat(result.outcome()).isEqualTo(DeliveryOutcome.NOT_CONFIGURED);
     assertThat(result.reason()).isEqualTo("NO_TELEGRAM_CONTACT");
   }

@@ -4,9 +4,10 @@ import { loadStaff } from '../../api/staff'
 import type { StaffItem, TaskItem, WaitlistItem } from '../../api/types'
 import { demoTasks, demoWaitlist, sandboxStaff as initialSandboxStaff } from '../../app/demoData'
 import { localToday } from '../../shared/dates'
-import { canManageClinic, canSeeRegistry, canSeeWaitlist } from '../../shared/roles'
+import { canManageRegistry, canSeeRegistry, canSeeStaff, canSeeWaitlist } from '../../shared/roles'
 import { useSandboxState } from '../../shared/sandbox'
 import { dueTasks, matchingWaitlist } from './registry'
+import { rolesOf } from '../../shared/permissions'
 
 export type TaskDraft = { title: string; dueDate: string; assigneeId: string; patientId: string | null }
 export type WaitlistDraft = { patientId: string; practitionerId: string; serviceId: string; wishFrom: string; wishTo: string }
@@ -16,7 +17,7 @@ export type WaitlistDraft = { patientId: string; practitionerId: string; service
  * пациенту ничего не отправляется. На сервере — API регистратуры, в песочнице — память вкладки.
  */
 export function useRegistry(staff: StaffItem, live: boolean, apiOnline: boolean, notify: (message: string) => void) {
-  const role = staff.role
+  const role = rolesOf(staff)
   const sandbox = !live
   const [tasks, setTasks] = useSandboxState<TaskItem[]>('tasks', live ? [] : demoTasks, sandbox)
   const [waitlist, setWaitlist] = useSandboxState<WaitlistItem[]>('waitlist', live ? [] : demoWaitlist, sandbox)
@@ -40,13 +41,14 @@ export function useRegistry(staff: StaffItem, live: boolean, apiOnline: boolean,
         .then((items) => { if (!cancelled) setWaitlist(items) })
         .catch((reason: Error) => { if (!cancelled) setError(reason.message) })
     }
-    if (canManageClinic(role)) {
+    // Исполнители задач — из списка сотрудников, если он доступен роли.
+    if (canManageRegistry(role) && canSeeStaff(role)) {
       loadStaff()
         .then((items) => { if (!cancelled) setRemoteStaff(items) })
         .catch(() => { /* исполнителей подставим из известных учётных записей */ })
     }
     return () => { cancelled = true }
-  }, [apiOnline, role, today, revision])
+  }, [apiOnline, role, today, revision, setTasks, setWaitlist])
 
   /** Сотрудники для выбора исполнителя и подписи задач. На сервере — только его учётные записи. */
   const staffList = live ? remoteStaff ?? [staff] : sandboxStaff
@@ -76,7 +78,7 @@ export function useRegistry(staff: StaffItem, live: boolean, apiOnline: boolean,
   }
 
   /** Закрыть задачу может её исполнитель или администратор — как на сервере. */
-  const canClose = (task: TaskItem) => role === 'ADMINISTRATOR' || task.assigneeId === staff.id
+  const canClose = (task: TaskItem) => canManageRegistry(role) || task.assigneeId === staff.id
 
   const toggleTask = async (task: TaskItem) => {
     const done = task.status === 'OPEN'

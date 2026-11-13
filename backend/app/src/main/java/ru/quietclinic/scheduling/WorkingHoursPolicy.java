@@ -14,10 +14,10 @@ final class WorkingHoursPolicy {
 
   static boolean fits(
       List<PractitionerSchedule> shifts, Instant startsAt, Instant endsAt, ZoneId zone) {
-    var start = LocalDateTime.ofInstant(startsAt, zone);
-    var end = LocalDateTime.ofInstant(endsAt, zone);
+    LocalDateTime start = LocalDateTime.ofInstant(startsAt, zone);
+    LocalDateTime end = LocalDateTime.ofInstant(endsAt, zone);
     if (!end.isAfter(start) || !end.toLocalDate().equals(start.toLocalDate())) return false;
-    var day = start.getDayOfWeek().getValue();
+    int day = start.getDayOfWeek().getValue();
     return shifts.stream()
         .anyMatch(
             shift ->

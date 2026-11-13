@@ -47,11 +47,48 @@ export const actionLabels: Record<string, string> = {
   SIGNED_DOCUMENT_READ: 'Просмотр подписанного документа',
   NOTIFICATION_DELIVERED: 'Сообщение пациенту доставлено',
   FISCAL_RECEIPT_SENT: 'Чек передан в кассу',
+  CHARGE_AMOUNT_SET: 'Сумма свободной цены',
+  CHARGE_VOIDED: 'Аннулирование счёта',
+  HR_CONTRACT_CHANGED: 'Изменение условий работы',
+  HR_CONTRACT_READ: 'Просмотр условий работы',
+  HR_CONTRACT_LIST_READ: 'Просмотр ставок',
+  STAFF_ROLES_CHANGED: 'Изменение ролей',
+  CLINICAL_BREAK_GLASS_GRANTED: 'Экстренный доступ к медданным',
+  CLINICAL_BREAK_GLASS_LIST_READ: 'Просмотр журнала экстренных доступов',
+  PAYMENT_REFUNDED: 'Возврат оплаты',
+  SERVICE_NORMS_CHANGED: 'Нормы расхода услуги',
+  OUTBOX_RETRY_REQUESTED: 'Повтор внешнего вывода',
+  ITEM_CATEGORY_CREATED: 'Новая категория склада',
+  ITEM_CATEGORY_UPDATED: 'Изменение категории склада',
+  ITEM_CREATED: 'Новая позиция склада',
+  ITEM_UPDATED: 'Изменение позиции склада',
+  WAREHOUSE_CREATED: 'Новый склад',
+  STOCK_DOCUMENT_CREATED: 'Новая накладная',
+  STOCK_DOCUMENT_UPDATED: 'Изменение накладной',
+  STOCK_DOCUMENT_POSTED: 'Проведение накладной',
+  STOCK_DOCUMENT_CANCELLED: 'Отмена накладной',
+  MARKING_RETRY_REQUESTED: 'Повтор операции маркировки',
+  DRIVE_FOLDER_CREATED: 'Новая папка на диске',
+  DRIVE_FILE_UPLOADED: 'Загрузка файла на диск',
+  DRIVE_FILE_READ: 'Скачивание файла с диска',
+  DRIVE_NODE_RENAMED: 'Переименование на диске',
+  DRIVE_NODE_MOVED: 'Перенос на диске',
+  DRIVE_NODE_TRASHED: 'Удаление в корзину',
+  DRIVE_NODE_RESTORED: 'Восстановление из корзины',
+  DRIVE_SHARE_CHANGED: 'Изменение доступа на диске',
+  DRIVE_ACCESS: 'Доступ к файлу на диске',
+  DRIVE_QUOTA_CHANGED: 'Изменение квоты диска',
+  WORKSPACE_ITEM_CREATED: 'Новая личная запись',
+  WORKSPACE_ITEM_UPDATED: 'Изменение личной записи',
+  WORKSPACE_ITEM_ARCHIVED: 'Личная запись в архив',
+  WORKSPACE_ITEM_RESTORED: 'Восстановление личной записи',
 }
 
 export const objectLabels: Record<string, string> = {
   PATIENT: 'Пациент', APPOINTMENT: 'Запись', ENCOUNTER: 'Приём', DOCUMENT: 'Документ', CHARGE: 'Счёт', PAYMENT: 'Платёж', CONSENT: 'Согласие',
   TASK: 'Задача', WAITLIST: 'Лист ожидания', PRACTITIONER: 'Врач', SERVICE: 'Услуга', STAFF: 'Сотрудник', OUTBOX: 'Внешний вывод', CLINIC: 'Клиника', PATIENT_FILE: 'Файл PDF',
+  ITEM: 'Позиция склада', ITEM_CATEGORY: 'Категория склада', WAREHOUSE: 'Склад', STOCK_DOCUMENT: 'Накладная', MARKING_OPERATION: 'Операция маркировки',
+  DRIVE_NODE: 'Файл или папка диска', CLINIC_DRIVE: 'Диск клиники', WORKSPACE_ITEM: 'Личная запись',
 }
 
 /** Коды, которые только повторяют колонку «Действие». */
@@ -66,6 +103,26 @@ const fixed: Record<string, string> = {
   granted: 'выдано',
   revoked: 'отозвано',
   'appointment-completed': 'после завершения приёма',
+  'appointment-completed:open': 'после завершения приёма, свободная цена',
+  'open-price': 'свободная цена',
+  'break-glass': 'экстренный доступ',
+  password: 'неверный пароль',
+  PATIENT_COMPLAINT: 'жалоба пациента',
+  LEGAL_REQUEST: 'запрос суда или органов',
+  DOCTOR_UNAVAILABLE: 'лечащий врач недоступен',
+  QUALITY_REVIEW: 'проверка качества',
+  // Причины аннулирования и возврата — коды из списка, без свободного текста.
+  DUPLICATE: 'дубль счёта',
+  ERROR: 'ошибка',
+  PATIENT_DECLINED: 'пациент отказался',
+  OTHER: 'другое',
+  PATIENT_REQUEST: 'по просьбе пациента',
+  SERVICE_NOT_PROVIDED: 'услуга не оказана',
+  'stock-shortage': 'нехватка на складе',
+  FIXED: 'фиксированная цена',
+  OPEN: 'свободная цена',
+  direct: 'напрямую',
+  link: 'по ссылке',
   // Старые события: до свободного текста задача выбиралась из двух видов.
   'call-back': 'перезвонить',
   'update-consent': 'обновить согласие',
@@ -77,13 +134,15 @@ const fixed: Record<string, string> = {
   'telegram-bot': 'через Telegram-бота',
 }
 
-const roleNames: Record<string, string> = { ADMINISTRATOR: 'администратор', DOCTOR: 'врач', MANAGER: 'менеджер', CASHIER: 'кассир' }
+const roleNames: Record<string, string> = {
+  OWNER: 'владелец', SENIOR_ADMINISTRATOR: 'старший администратор', ADMINISTRATOR: 'администратор', DOCTOR: 'врач', MANAGER: 'менеджер', CASHIER: 'кассир', NURSE: 'медперсонал', SUPPORT: 'техподдержка',
+}
 
 const dayNames = ['', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс']
 
 const fieldNames: Record<string, string> = {
   phone: 'телефон', fullName: 'ФИО', birthDate: 'дата рождения', referralSource: 'источник', registryNote: 'заметка регистратуры', telegram: 'Telegram',
-  email: 'e-mail', secondPhone: 'второй телефон', assignedStaff: 'постоянный администратор',
+  email: 'e-mail', secondPhone: 'второй телефон', assignedStaff: 'постоянный администратор', profile: 'расширенные реквизиты',
   specialty: 'специальность', room: 'кабинет', shifts: 'график',
 }
 
@@ -106,8 +165,10 @@ export function reasonLabel(code: string | null | undefined): string {
   if (repeatsAction.has(code)) return '—'
   if (fixed[code]) return fixed[code]
 
-  const role = /^role:([A-Z]+)$/.exec(code)
+  const role = /^role:([A-Z_]+)$/.exec(code)
   if (role && roleNames[role[1]]) return `роль: ${roleNames[role[1]]}`
+  const roles = /^roles:([A-Z_]+(,[A-Z_]+)*)$/.exec(code)
+  if (roles && roles[1].split(',').every((item) => roleNames[item])) return `роли: ${roles[1].split(',').map((item) => roleNames[item]).join(', ')}`
 
   const days = /^days:([1-7](,[1-7])*)?$/.exec(code)
   if (days) return days[1] ? `рабочие дни: ${days[1].split(',').map((day) => dayNames[Number(day)]).join(', ')}` : 'рабочих дней нет'

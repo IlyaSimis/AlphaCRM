@@ -3,6 +3,7 @@ package ru.quietclinic.audit;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -38,12 +39,35 @@ public class AuditService {
   @Transactional(readOnly = true)
   public AuditPage page(Collection<UUID> actorIds, String result, int page, int size) {
     if (actorIds.isEmpty()) return new AuditPage(List.of(), page, size, 0);
-    var request = PageRequest.of(page, size);
-    var rows =
+    PageRequest request = PageRequest.of(page, size);
+    Page<AuditEvent> rows =
         result == null || result.isBlank()
             ? repository.findByActorIdInOrderByOccurredAtDescIdDesc(actorIds, request)
             : repository.findByActorIdInAndResultOrderByOccurredAtDescIdDesc(
                 actorIds, result, request);
+    return new AuditPage(
+        rows.getContent().stream().map(AuditService::view).toList(),
+        page,
+        size,
+        rows.getTotalElements());
+  }
+
+  /** Страница журнала без событий над перечисленными типами объектов. */
+  @Transactional(readOnly = true)
+  public AuditPage page(
+      Collection<UUID> actorIds,
+      String result,
+      Collection<String> hiddenTypes,
+      int page,
+      int size) {
+    if (actorIds.isEmpty()) return new AuditPage(List.of(), page, size, 0);
+    PageRequest request = PageRequest.of(page, size);
+    Page<AuditEvent> rows =
+        result == null || result.isBlank()
+            ? repository.findByActorIdInAndObjectTypeNotInOrderByOccurredAtDescIdDesc(
+                actorIds, hiddenTypes, request)
+            : repository.findByActorIdInAndResultAndObjectTypeNotInOrderByOccurredAtDescIdDesc(
+                actorIds, result, hiddenTypes, request);
     return new AuditPage(
         rows.getContent().stream().map(AuditService::view).toList(),
         page,

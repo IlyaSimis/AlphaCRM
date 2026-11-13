@@ -8,11 +8,15 @@ export default defineConfig({
     // API на том же origin, что и интерфейс: cookie сессии SameSite=Lax и CSRF-cookie
     // доступны фронтенду так же, как за nginx в Docker.
     proxy: {
-      '/api': { target: process.env.VITE_API_PROXY ?? 'http://127.0.0.1:8081', changeOrigin: false },
+      '/api': { target: process.env.VITE_API_PROXY ?? 'http://127.0.0.1:8081', changeOrigin: false, ws: true },
     },
   },
   test: {
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
+    // Не создаём worker на каждый файл: на Windows это приводит к тайм-аутам.
+    maxWorkers: 4,
+    // Полные пользовательские сценарии MUI + userEvent могут занимать больше 5 секунд.
+    testTimeout: 10_000,
   },
 })

@@ -13,8 +13,8 @@ class AppointmentStatsServiceTest {
   static final UUID LEBEDEVA = UUID.fromString("00000000-0000-0000-0000-000000000202");
 
   private static Appointment appointment(UUID practitioner, String startsAt, String status) {
-    var start = Instant.parse(startsAt);
-    var appointment =
+    Instant start = Instant.parse(startsAt);
+    Appointment appointment =
         new Appointment(UUID.randomUUID(), practitioner, start, start.plusSeconds(1800), "Visit");
     appointment.status = status;
     return appointment;
@@ -22,7 +22,7 @@ class AppointmentStatsServiceTest {
 
   @Test
   void groupsByUtcDayPractitionerAndStatus() {
-    var rows =
+    List<AppointmentStatRow> rows =
         AppointmentStatsService.aggregate(
             List.of(
                 appointment(PETROV, "2026-10-06T09:00:00Z", "COMPLETED"),

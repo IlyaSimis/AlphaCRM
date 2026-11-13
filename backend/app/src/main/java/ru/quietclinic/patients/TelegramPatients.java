@@ -12,11 +12,13 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.quietclinic.audit.AuditService;
+import ru.quietclinic.platform.PlatformConfig;
 
 /**
- * Пациенты, которые пишут в Telegram-бот клиники. Связь — контакт TELEGRAM с chat id: один chat id
- * может стоять у нескольких карточек (человек записывает и себя, и родственника), карточкой «по
- * умолчанию» считается самая новая. Вызывающий — сервисная учётная запись бота с ролью BOT.
+ * Пациенты, которые пишут боту клиники в Telegram или MAX. Один внешний id может стоять у
+ * нескольких карточек (человек записывает и себя, и родственника), карточкой «по умолчанию»
+ * считается самая новая. Вызывающий — сервисная учётная запись бота с ролью BOT. Историческое имя
+ * класса сохранено ради совместимости публичной границы модуля.
  */
 @Service
 public class TelegramPatients {
@@ -31,47 +33,105 @@ public class TelegramPatients {
   private final PatientRepository patients;
   private final ContactRepository contacts;
   private final AuditService audit;
+  private final PatientPrivacyService privacy;
+  private final ContactTokenService tokens;
 
-  TelegramPatients(PatientRepository patients, ContactRepository contacts, AuditService audit) {
+  TelegramPatients(
+      PatientRepository patients,
+      ContactRepository contacts,
+      AuditService audit,
+      PatientPrivacyService privacy,
+      ContactTokenService tokens) {
     this.patients = patients;
     this.contacts = contacts;
     this.audit = audit;
+    this.privacy = privacy;
+    this.tokens = tokens;
   }
 
-  /** Самая новая карточка клиники с этим chat id. */
+  /** Самая новая карточка клиники с этим внешним id. */
   @Transactional(readOnly = true)
   public Optional<TelegramPatient> findByChatId(String chatId) {
+    return findByExternalId(MessengerChannel.TELEGRAM, chatId);
+  }
+
+  @Transactional(readOnly = true)
+  public Optional<TelegramPatient> findByExternalId(MessengerChannel channel, String externalId) {
     requireRole(ROLE);
-    return linked(chatId).stream().findFirst().map(TelegramPatient::of);
+    return linked(channel, externalId).stream().findFirst().map(TelegramPatient::of);
+  }
+
+  @Transactional(readOnly = true)
+  public List<TelegramPatient> findAllByExternalId(MessengerChannel channel, String externalId) {
+    requireRole(ROLE);
+    return linked(channel, externalId).stream().map(TelegramPatient::of).toList();
   }
 
   @Transactional(readOnly = true)
   public Optional<TelegramPatient> find(UUID patientId) {
     requireRole(ROLE);
-    return patients.findByIdAndClinicId(patientId, clinicId()).map(TelegramPatient::of);
+    return patients
+        .findByIdAndClinicId(patientId, clinicId())
+        .map(
+            patient -> {
+              privacy.decrypt(patient);
+              return TelegramPatient.of(patient);
+            });
   }
 
-  /** Карточка связана с этим chat id: только такой пациент может подтвердить или отменить запись. */
+  /** Только владелец связанного внешнего id может управлять записью пациента. */
   @Transactional(readOnly = true)
   public boolean isLinked(UUID patientId, String chatId) {
-    requireRole(ROLE);
-    return linked(chatId).stream().anyMatch(p -> p.id.equals(patientId));
+    return isLinked(patientId, MessengerChannel.TELEGRAM, chatId);
   }
 
-  /**
-   * Карточка для онлайн-записи. Сначала ищется уже заведённая карточка того же человека — то же
-   * ФИО, дата рождения и телефон (основной или второй); среди них — уже связанная с этим chat id. Её
-   * связывает с Telegram и, если действующего согласия нет, добавляет согласие из бота. Не нашлась —
-   * заводится новая карточка с телефоном, контактом Telegram и согласием.
-   */
+  @Transactional(readOnly = true)
+  public boolean isLinked(UUID patientId, MessengerChannel channel, String externalId) {
+    requireRole(ROLE);
+    return linked(channel, externalId).stream().anyMatch(p -> p.id.equals(patientId));
+  }
+
+  /** Погашение одноразовой ссылки из карточки: существующий пациент, без создания дубля. */
+  @Transactional
+  public TelegramPatient link(UUID patientId, MessengerChannel channel, String externalId) {
+    requireRole(ROLE);
+    Patient patient =
+        patients
+            .findByIdAndClinicId(patientId, clinicId())
+            .orElseThrow(() -> PlatformConfig.notFound("PATIENT_NOT_FOUND", "Patient not found"));
+    privacy.decrypt(patient);
+    patient.updateMessenger(channel, externalId, false);
+    if (patient.preferredMessenger == null) patient.preferMessenger(channel);
+    privacy.encrypt(patient);
+    Patient saved = patients.saveAndFlush(patient);
+    // После merge Hibernate может вернуть другой экземпляр: transient-значения нужно восстановить.
+    privacy.decrypt(saved);
+    tokens.rebuild(saved);
+    audit.record(
+        actorId(),
+        "PATIENT_MESSENGER_LINKED",
+        "PATIENT",
+        patient.id,
+        "ALLOWED",
+        channel.name().toLowerCase(Locale.ROOT));
+    return TelegramPatient.of(patient);
+  }
+
   @Transactional
   public UUID resolveForBooking(TelegramPatientRequest request) {
+    return resolveForBooking(MessengerChannel.TELEGRAM, request);
+  }
+
+  /** Общая логика поиска существующей карточки и согласия для обоих мессенджеров. */
+  @Transactional
+  public UUID resolveForBooking(MessengerChannel channel, TelegramPatientRequest request) {
     requireRole(ROLE);
-    var name = request.fullName().trim().replaceAll("\\s+", " ");
-    var phoneKey = PhoneIndex.normalize(request.phone());
-    var alreadyLinked = linked(request.chatId());
-    var existing =
+    String name = request.fullName().trim().replaceAll("\\s+", " ");
+    String phoneKey = PhoneIndex.normalize(request.phone());
+    List<Patient> alreadyLinked = linked(channel, request.chatId());
+    Optional<Patient> existing =
         contacts.findByTypeInAndPatientClinicId(PhoneIndex.PHONE_TYPES, clinicId()).stream()
+            .peek(privacy::decrypt)
             .filter(c -> PhoneIndex.normalize(c.value).equals(phoneKey))
             .map(c -> c.patient)
             .filter(p -> request.birthDate().equals(p.birthDate))
@@ -82,37 +142,53 @@ public class TelegramPatients {
                     .thenComparing(p -> p.createdAt, Comparator.reverseOrder()))
             .findFirst();
     if (existing.isPresent()) {
-      var patient = existing.get();
-      if (patient.updateTelegram(request.chatId(), false)) {
+      Patient patient = existing.get();
+      if (patient.updateMessenger(channel, request.chatId(), false)) {
         audit.record(
-            actorId(), "PATIENT_REGISTRY_UPDATED", "PATIENT", patient.id, "ALLOWED", "telegram");
+            actorId(),
+            "PATIENT_REGISTRY_UPDATED",
+            "PATIENT",
+            patient.id,
+            "ALLOWED",
+            channel.name().toLowerCase(Locale.ROOT));
       }
+      if (patient.preferredMessenger == null) patient.preferMessenger(channel);
       if (!patient.hasActiveConsent()) {
-        var consent = patient.grantConsent(request.consentVersion(), CONSENT_BASIS);
+        Consent consent = patient.grantConsent(request.consentVersion(), channel.consentBasis());
         patients.saveAndFlush(patient);
         audit.record(
             actorId(), "PATIENT_CONSENT_CHANGED", "CONSENT", consent.id, "ALLOWED", "granted");
       }
-      patients.save(patient);
-      return patient.id;
+      privacy.encrypt(patient);
+      Patient saved = patients.saveAndFlush(patient);
+      privacy.decrypt(saved);
+      tokens.rebuild(saved);
+      return saved.id;
     }
-    var patient = new Patient(name, request.birthDate());
+    Patient patient = new Patient(name, request.birthDate());
     patient.clinicId = clinicId();
-    patient.update(new PatientDetails(name, request.birthDate(), request.phone(), null, null, null));
-    patient.updateTelegram(request.chatId(), false);
-    patient.consents.add(new Consent(patient, request.consentVersion().trim(), CONSENT_BASIS));
-    patients.save(patient);
-    audit.record(actorId(), "PATIENT_CREATED", "PATIENT", patient.id, "ALLOWED", REASON);
-    return patient.id;
+    patient.update(
+        new PatientDetails(name, request.birthDate(), request.phone(), null, null, null));
+    patient.updateMessenger(channel, request.chatId(), false);
+    patient.preferMessenger(channel);
+    patient.consents.add(
+        new Consent(patient, request.consentVersion().trim(), channel.consentBasis()));
+    privacy.encrypt(patient);
+    Patient saved = patients.saveAndFlush(patient);
+    privacy.decrypt(saved);
+    tokens.rebuild(saved);
+    audit.record(
+        actorId(), "PATIENT_CREATED", "PATIENT", saved.id, "ALLOWED", channel.consentBasis());
+    return saved.id;
   }
 
-  /** Карточки клиники с этим chat id, новые сверху. */
-  private List<Patient> linked(String chatId) {
-    return contacts
-        .findByTypeAndValueAndPatientClinicId(Patient.TELEGRAM, chatId.trim(), clinicId())
-        .stream()
-        .map(c -> c.patient)
-        .distinct()
+  /** Карточки клиники с этим внешним id, новые сверху. */
+  private List<Patient> linked(MessengerChannel channel, String externalId) {
+    List<Patient> result =
+        patients.findAllById(tokens.channelMatches(clinicId(), channel, externalId));
+    result.removeIf(patient -> !clinicId().equals(patient.clinicId));
+    result.forEach(privacy::decrypt);
+    return result.stream()
         .sorted(Comparator.comparing((Patient p) -> p.createdAt).reversed())
         .toList();
   }

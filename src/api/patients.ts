@@ -1,8 +1,28 @@
 import { failure, apiFetch } from './client'
-import type { AssignedStaff, ConsentItem, PatientItem, RegistryInput } from './types'
+import type { AssignedStaff, ConsentItem, PatientItem, PatientProfile, RegistryInput } from './types'
 
-/** Карточка пациента целиком. Пустые email и secondPhone, assignedStaffId: null — поле убирается. */
-export type PatientInput = { fullName: string; birthDate: string; phone: string; email: string; secondPhone: string; assignedStaffId: string | null }
+/** Карточка пациента целиком. Отсутствующий profile не затирает реквизиты в старых интеграциях. */
+export type PatientInput = { fullName: string; birthDate: string; phone: string; email: string; secondPhone: string; assignedStaffId: string | null; profile?: PatientProfile }
+
+export const emptyPatientProfile = (): PatientProfile => ({
+  representatives: [], tags: [], emailNotifications: false, smsNotifications: false, messengerNotifications: false, pushNotifications: false,
+})
+
+export function normalizePatientProfile(profile?: PatientProfile | null): PatientProfile {
+  return { ...emptyPatientProfile(), ...(profile ?? {}), representatives: profile?.representatives ?? [], tags: profile?.tags ?? [] }
+}
+
+/** Пустые строки не отправляются как даты и реквизиты; пустые представители удаляются. */
+export function cleanPatientProfile(profile: PatientProfile): PatientProfile {
+  const cleaned = Object.fromEntries(Object.entries(profile).map(([key, value]) => [key, typeof value === 'string' ? value.trim() || null : value])) as PatientProfile
+  return {
+    ...cleaned,
+    tags: (profile.tags ?? []).map((tag) => tag.trim()).filter(Boolean),
+    representatives: (profile.representatives ?? [])
+      .map((item) => ({ fullName: item.fullName?.trim() || null, relationship: item.relationship?.trim() || null, primary: Boolean(item.primary) }))
+      .filter((item) => item.fullName || item.relationship),
+  }
+}
 
 /** Имена пациентов по id: API расписания возвращает только patientId. */
 const names: Record<string, string> = {
@@ -67,9 +87,12 @@ export function toPatient(row: Record<string, unknown>): PatientItem {
     registryNote: (row.registryNote as string | null | undefined) ?? null,
     phoneSharedWith: (row.phoneSharedWith as PatientItem['phoneSharedWith']) ?? [],
     telegramConnected: row.telegramConnected === true,
+    maxConnected: row.maxConnected === true,
+    preferredMessenger: (row.preferredMessenger as PatientItem['preferredMessenger'] | undefined) ?? null,
     email: (row.email as string | null | undefined) ?? null,
     secondPhone: (row.secondPhone as string | null | undefined) ?? null,
     assignedStaff: (row.assignedStaff as AssignedStaff | null | undefined) ?? null,
+    profile: normalizePatientProfile(row.profile as PatientProfile | null | undefined),
   }
 }
 
@@ -107,6 +130,7 @@ export function localPatient(id: string, input: PatientInput, consents: ConsentI
   return {
     id, name: input.fullName, birth: formatBirth(input.birthDate), birthDate: input.birthDate, phone: input.phone, consent: consentStatus(consents), consents,
     email: input.email.trim() || null, secondPhone: input.secondPhone.trim() || null, assignedStaff,
+    profile: input.profile ? cleanPatientProfile(input.profile) : normalizePatientProfile(null),
   }
 }
 

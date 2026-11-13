@@ -9,7 +9,7 @@ import { FormSection, Info } from '../../shared/ui'
 import { PatientFiles } from '../files/PatientFiles'
 import { SignDialog } from './SignDialog'
 import { useVisit } from './useVisit'
-import { activeDocument, isLocked, latestSigned, noteComplete, noteSections, visitTimeLabel, type VisitTarget } from './visit'
+import { activeDocument, isLocked, latestSigned, noteComplete, noteSections, visitTimeLabel, type VisitTarget } from './visitRules'
 
 type VisitProps = {
   target: VisitTarget

@@ -35,22 +35,32 @@ class SecurityConfig {
 
   /** Отключает автоконфигурацию пользователя в памяти; вход идёт через {@link AuthService}. */
   @Bean
-  UserDetailsService staffUserDetails(StaffRepository staff) {
-    return username ->
-        staff
-            .findByUsername(username)
-            .map(
-                user ->
-                    User.withUsername(user.username)
-                        .password(user.passwordHash)
-                        .roles(user.role)
-                        .disabled(!user.active)
-                        .build())
-            .orElseThrow(() -> new UsernameNotFoundException("not found"));
+  UserDetailsService staffUserDetails(
+      StaffRepository staff, ru.quietclinic.tenancy.TenantDirectory directory) {
+    return username -> {
+      java.util.UUID tenantId = directory.clinicForLogin(username).orElse(null);
+      if (tenantId == null) return loadUser(staff, username);
+      return ru.quietclinic.tenancy.TenantScope.call(tenantId, () -> loadUser(staff, username));
+    };
+  }
+
+  private static org.springframework.security.core.userdetails.UserDetails loadUser(
+      StaffRepository staff, String username) {
+    return staff
+        .findByUsername(username)
+        .map(
+            user ->
+                User.withUsername(user.username)
+                    .password(user.passwordHash)
+                    .roles(user.role)
+                    .disabled(!user.active)
+                    .build())
+        .orElseThrow(() -> new UsernameNotFoundException("not found"));
   }
 
   @Bean
-  SecurityFilterChain security(HttpSecurity http, StaffRepository staff) throws Exception {
+  SecurityFilterChain security(HttpSecurity http, StaffRepository staff, AuthService authService)
+      throws Exception {
     return http.csrf(
             csrf ->
                 csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
@@ -82,8 +92,12 @@ class SecurityConfig {
             logout ->
                 logout
                     .logoutUrl("/api/v1/auth/logout")
-                    .deleteCookies(SESSION_COOKIE)
-                    .logoutSuccessHandler((request, response, auth) -> response.setStatus(204)))
+                    .addLogoutHandler(
+                        (request, response, authentication) ->
+                            authService.logout(request, authentication))
+                    .deleteCookies(SESSION_COOKIE, "SESSION")
+                    .logoutSuccessHandler(
+                        (request, response, authentication) -> response.setStatus(204)))
         .requestCache(cache -> cache.disable())
         .build();
   }
@@ -92,7 +106,7 @@ class SecurityConfig {
   @Bean
   CorsConfigurationSource corsConfigurationSource(
       @Value("${clinic.cors.allowed-origins}") String allowedOrigins) {
-    var config = new CorsConfiguration();
+    CorsConfiguration config = new CorsConfiguration();
     config.setAllowedOrigins(
         Arrays.stream(allowedOrigins.split(","))
             .map(String::trim)
@@ -101,7 +115,7 @@ class SecurityConfig {
     config.setAllowCredentials(true);
     config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
     config.setAllowedHeaders(List.of("Content-Type", "X-XSRF-TOKEN", "X-Correlation-Id"));
-    var source = new UrlBasedCorsConfigurationSource();
+    UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
     source.registerCorsConfiguration("/api/**", config);
     return source;
   }

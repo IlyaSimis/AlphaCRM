@@ -1,10 +1,6 @@
 import { useState } from 'react'
 import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Stack, TextField } from '@mui/material'
-
-export const consentBases = [
-  { value: 'SIGNED_FORM', label: 'Подписанная форма' },
-  { value: 'ELECTRONIC_SIGNATURE', label: 'Электронная подпись' },
-]
+import { consentBases } from './consentLabels'
 
 /** Новая версия согласия. Текст основания не попадает в аудит — только факт и id. */
 export function ConsentDialog({ error, onClose, onSave }: { error: string; onClose: () => void; onSave: (input: { version: string; basis: string }) => void }) {

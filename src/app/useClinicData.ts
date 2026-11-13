@@ -26,25 +26,30 @@ import {
   loadServices,
   rescheduleAppointment,
   savePractitionerCard,
-  saveServicePrice,
+  saveServicePricing,
+  type ServicePricing,
   saveWorkingHours,
   setServiceActive,
   statusLabel,
   withStatus,
 } from '../api/schedule'
 import type { AppointmentStatus, AssignedStaff, ChargeItem, PatientItem, Practitioner, RegistryInput, ScheduleItem, ServiceItem } from '../api/types'
-import { localCharge } from '../features/cashier/cashier'
-import { localBooking, validateBooking, type BookingDraft } from '../features/schedule/booking'
+import { localCharge } from '../features/cashier/cashierRules'
+import { estimateOf, localBooking, validateBooking, type BookingDraft } from '../features/schedule/booking'
 import type { RescheduleDraft } from '../features/schedule/RescheduleDialog'
 import type { ScheduleView } from '../features/schedule/scheduleView'
 import { availableActions } from '../features/schedule/statusActions'
 import { OUTSIDE_WORKING_HOURS, fitsWorkingHours } from '../features/schedule/workingHours'
+import { can } from '../shared/permissions'
 import type { Role } from '../shared/roles'
 import { localToday, weekOf } from '../shared/dates'
 import { useSandboxState } from '../shared/sandbox'
 import { readStored, storageKeys, writeStored } from '../shared/storage'
 import { isUuid } from '../shared/text'
 import { clinicDay, demoAppointments, demoPatients } from './demoData'
+
+/** Новая услуга: фиксированная цена или свободная с пределами. */
+export type NewService = { name: string; durationMinutes: number } & ({ priceMode?: 'FIXED'; priceMinor: number } | { priceMode: 'OPEN'; minMinor: number; maxMinor: number })
 
 const scheduleDateKey = storageKeys.scheduleDate
 
@@ -115,7 +120,7 @@ export function useClinicData(doctorId: string, live: boolean) {
       .then((remote) => { if (!cancelled) setServices(remote) })
       .catch(() => { /* справочник недоступен: запись покажет, что услуг нет */ })
     return () => { cancelled = true }
-  }, [live])
+  }, [live, setPatientItems, setPractitioners, setServices])
 
   useEffect(() => {
     if (!apiOnline) return
@@ -134,7 +139,7 @@ export function useClinicData(doctorId: string, live: boolean) {
         if (!cancelled && generation === loadGeneration.current) setApiOnline(false)
       })
     return () => { cancelled = true }
-  }, [apiOnline, scheduleDate, scheduleView])
+  }, [apiOnline, scheduleDate, scheduleView, setScheduleItems])
 
   const updateLocally = (id: string, change: (item: ScheduleItem) => ScheduleItem) =>
     setScheduleItems((items) => items.map((row) => row.id === id ? change(row) : row))
@@ -187,8 +192,15 @@ export function useClinicData(doctorId: string, live: boolean) {
   const payLocalCharge = (chargeId: string) =>
     setLocalCharges((charges) => charges.map((charge) => charge.chargeId === chargeId ? { ...charge, status: 'PAID', paymentStatus: 'CONFIRMED' } : charge))
 
+  /** Демо-режим: сумма свободной цены — счёт становится обычным, к оплате. */
+  const setLocalChargeAmount = (chargeId: string, amountMinor: number) =>
+    setLocalCharges((charges) => charges.map((charge) => charge.chargeId === chargeId ? { ...charge, amountMinor, status: 'PENDING' } : charge))
+
+  /** Отменяют записи сотрудники с schedule.appointment.write; врач — только свои. */
+  const mayChange = (item: ScheduleItem, role: Role) => can(role, 'schedule.appointment.write') || (can(role, 'schedule.appointment.write-own') && item.practitionerId === doctorId)
+
   const cancelBooking = async (item: ScheduleItem, role: Role) => {
-    if (role !== 'ADMINISTRATOR' || item.statusCode === 'CANCELLED' || !item.id) return
+    if (!mayChange(item, role) || item.statusCode === 'CANCELLED' || !item.id) return
     const id = item.id
     notifyError(await mutateAppointment({ ...item, id }, () => cancelAppointment(id), () => updateLocally(id, (row) => withStatus(row, 'CANCELLED')), {
       done: 'Запись отменена',
@@ -250,10 +262,12 @@ export function useClinicData(doctorId: string, live: boolean) {
     return result
   }
 
-  const book = async (draft: BookingDraft): Promise<DialogResult> => {
-    const invalid = validateBooking(draft, patientItems, services, practitioners, apiOnline ? new Date() : undefined)
+  const book = async (draft: BookingDraft, patientOverride?: PatientItem): Promise<DialogResult> => {
+    // Только что созданный пациент уже есть в ответе API, но ещё не успел попасть в React state.
+    const patients = patientOverride ? [patientOverride, ...patientItems.filter((item) => item.id !== patientOverride.id)] : patientItems
+    const invalid = validateBooking(draft, patients, services, practitioners, apiOnline ? new Date() : undefined)
     if (invalid) return { status: 'error', message: invalid }
-    const patient = patientItems.find((item) => item.id === draft.patientId) as PatientItem
+    const patient = patients.find((item) => item.id === draft.patientId) as PatientItem
     const service = services.find((item) => item.id === draft.serviceId) as ServiceItem
     const showLocal = (message: string): DialogResult => {
       loadGeneration.current += 1
@@ -268,7 +282,7 @@ export function useClinicData(doctorId: string, live: boolean) {
     const generation = ++loadGeneration.current
     try {
       const created = await createAppointment(
-        { patientId: patient.id, patientName: patient.name, practitionerId: draft.practitionerId, date: draft.date, time: draft.time, minutes: service.durationMinutes, serviceName: service.name },
+        { patientId: patient.id, patientName: patient.name, practitionerId: draft.practitionerId, date: draft.date, time: draft.time, minutes: service.durationMinutes, serviceName: service.name, estimateMinor: service.priceMode === 'OPEN' ? estimateOf(draft) : null },
       )
       const day = await loadSchedule(draft.date)
       if (generation !== loadGeneration.current) return { status: 'stale' }
@@ -285,29 +299,40 @@ export function useClinicData(doctorId: string, live: boolean) {
     }
   }
 
-  /** Возвращает текст ошибки для формы или null. assigned — подпись администратора для песочницы. */
-  const createPatient = async (input: PatientInput, assigned: AssignedStaff | null = null): Promise<string | null> => {
+  /** Возвращает текст ошибки для формы или null. onCreated нужен связанному сценарию записи. */
+  const createPatient = async (input: PatientInput, assigned: AssignedStaff | null = null, onCreated?: (patient: PatientItem) => void): Promise<string | null> => {
     const local = () => localPatient(crypto.randomUUID(), input, undefined, assigned)
     if (apiOnline) {
       try {
         const created = await createPatientApi(input)
         setPatientItems((items) => [created, ...items])
+        onCreated?.(created)
         notify('Пациент сохранён')
         return null
       } catch (error) {
         if (error instanceof ApiError && error.status < 500) return error.message
         setApiOnline(false)
-        setPatientItems((items) => [local(), ...items])
+        const created = local()
+        setPatientItems((items) => [created, ...items])
+        onCreated?.(created)
         notify('Сервер недоступен: пациент виден только до обновления страницы')
         return null
       }
     }
-    setPatientItems((items) => [local(), ...items])
+    const created = local()
+    setPatientItems((items) => [created, ...items])
+    onCreated?.(created)
     notify('Демо-режим: пациент виден только до обновления страницы')
     return null
   }
 
   const replacePatient = (updated: PatientItem) => setPatientItems((items) => items.map((item) => item.id === updated.id ? updated : item))
+
+  const refreshPatients = async () => {
+    if (!apiOnline) return
+    setPatientItems(await loadPatients())
+    bump()
+  }
 
   /** Возвращает текст ошибки для формы или null, если форму можно закрыть. */
   const updatePatient = async (patient: PatientItem, input: PatientInput, assigned: AssignedStaff | null = null): Promise<string | null> => {
@@ -412,25 +437,31 @@ export function useClinicData(doctorId: string, live: boolean) {
       .catch(() => notify('Не удалось обновить список врачей'))
   }
 
-  /** Новая цена — только для новых записей: снимок цены в уже созданных записях не трогаем. */
-  const savePrice = async (service: ServiceItem, priceMinor: number): Promise<string | null> => {
+  /**
+   * Новая цена или режим цены — только для новых записей: снимок цены в уже созданных записях не
+   * трогаем. Число — фиксированная цена (как раньше), объект — режим со своей суммой или пределами.
+   */
+  const savePrice = async (service: ServiceItem, price: number | ServicePricing): Promise<string | null> => {
+    const pricing: ServicePricing = typeof price === 'number' ? { priceMode: 'FIXED', priceMinor: price } : price
     const replace = (updated: ServiceItem) => setServices((items) => items.map((item) => item.id === updated.id ? updated : item))
     if (apiOnline && isUuid(service.id)) {
       try {
-        replace(await saveServicePrice(service.id, priceMinor))
+        replace(await saveServicePricing(service.id, pricing))
         notify('Цена сохранена')
         return null
       } catch (error) {
         return (error as Error).message
       }
     }
-    replace({ ...service, priceMinor })
+    replace(pricing.priceMode === 'FIXED'
+      ? { ...service, priceMode: 'FIXED', priceMinor: pricing.priceMinor, minMinor: null, maxMinor: null }
+      : { ...service, priceMode: 'OPEN', priceMinor: null, minMinor: pricing.minMinor, maxMinor: pricing.maxMinor })
     notify('Демо-режим: цена видна только до обновления страницы')
     return null
   }
 
   /** Новая услуга сразу доступна в записи на приём. Возвращает текст ошибки или null. */
-  const addService = async (input: { name: string; durationMinutes: number; priceMinor: number }): Promise<string | null> => {
+  const addService = async (input: NewService): Promise<string | null> => {
     const name = input.name.trim()
     if (apiOnline) {
       try {
@@ -443,7 +474,10 @@ export function useClinicData(doctorId: string, live: boolean) {
       }
     }
     if (services.some((item) => item.name.toLowerCase() === name.toLowerCase())) return 'Услуга с таким названием уже есть'
-    setServices((items) => [...items, { id: crypto.randomUUID(), name, durationMinutes: input.durationMinutes, priceMinor: input.priceMinor, currency: 'RUB', active: true }])
+    const pricing = input.priceMode === 'OPEN'
+      ? { priceMode: 'OPEN' as const, priceMinor: null, minMinor: input.minMinor, maxMinor: input.maxMinor }
+      : { priceMode: 'FIXED' as const, priceMinor: input.priceMinor, minMinor: null, maxMinor: null }
+    setServices((items) => [...items, { id: crypto.randomUUID(), name, durationMinutes: input.durationMinutes, currency: 'RUB', active: true, ...pricing }])
     notify('Демо-режим: услуга видна только до обновления страницы')
     return null
   }
@@ -513,10 +547,14 @@ export function useClinicData(doctorId: string, live: boolean) {
     reschedule,
     book,
     createPatient,
+    refreshPatients,
     updatePatient,
     grantConsent,
     revokeConsent,
     addLocalCharge,
     payLocalCharge,
+    setLocalChargeAmount,
   }
 }
+
+export type ClinicData = ReturnType<typeof useClinicData>

@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.jayway.jsonpath.JsonPath;
 import jakarta.servlet.http.Cookie;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,7 +35,7 @@ class AuthControllerTest {
   }
 
   private ResultActions login(String username, String password) throws Exception {
-    var token = staff.csrfToken();
+    String token = staff.csrfToken();
     return mvc.perform(
         post("/api/v1/auth/login")
             .cookie(new Cookie("XSRF-TOKEN", token))
@@ -45,7 +46,7 @@ class AuthControllerTest {
 
   @Test
   void repeatedFailuresCloseSignInForThatLogin() throws Exception {
-    for (var i = 0; i < 5; i++) {
+    for (int i = 0; i < 5; i++) {
       login("throttle.target", "wrong-" + i).andExpect(status().isUnauthorized());
     }
     login("throttle.target", "wrong-again")
@@ -76,26 +77,24 @@ class AuthControllerTest {
 
   @Test
   void wrongPasswordAndUnknownLoginGiveTheSameAnswer() throws Exception {
-    var wrongPassword =
+    String wrongPassword =
         login(StaffSessions.ADMIN, "not-the-password")
             .andExpect(status().isUnauthorized())
             .andReturn()
             .getResponse()
             .getContentAsString();
-    var unknownUser =
+    String unknownUser =
         login("nobody", StaffSessions.ADMIN_PASSWORD)
             .andExpect(status().isUnauthorized())
             .andReturn()
             .getResponse()
             .getContentAsString();
-    org.assertj.core.api.Assertions.assertThat((String) JsonPath.read(unknownUser, "$.code"))
+    Assertions.assertThat((String) JsonPath.read(unknownUser, "$.code"))
         .isEqualTo(JsonPath.read(wrongPassword, "$.code"))
         .isEqualTo("INVALID_CREDENTIALS");
     String first = JsonPath.read(wrongPassword, "$.message");
     String second = JsonPath.read(unknownUser, "$.message");
-    org.assertj.core.api.Assertions.assertThat(first)
-        .isEqualTo(second)
-        .isEqualTo(AuthService.INVALID_CREDENTIALS);
+    Assertions.assertThat(first).isEqualTo(second).isEqualTo(AuthService.INVALID_CREDENTIALS);
   }
 
   @Test
@@ -112,7 +111,7 @@ class AuthControllerTest {
 
   @Test
   void changingRequestWithoutCsrfHeaderIsRejected() throws Exception {
-    var login = staff.login(StaffSessions.ADMIN, StaffSessions.ADMIN_PASSWORD);
+    StaffSessions.Login login = staff.login(StaffSessions.ADMIN, StaffSessions.ADMIN_PASSWORD);
     mvc.perform(
             post("/api/v1/patients")
                 .session(login.session())
@@ -128,11 +127,26 @@ class AuthControllerTest {
 
   @Test
   void logoutEndsTheSession() throws Exception {
-    var login = staff.login(StaffSessions.ADMIN, StaffSessions.ADMIN_PASSWORD);
+    StaffSessions.Login login = staff.login(StaffSessions.ADMIN, StaffSessions.ADMIN_PASSWORD);
     mvc.perform(get("/api/v1/auth/me").with(login)).andExpect(status().isOk());
     mvc.perform(post("/api/v1/auth/logout").with(login)).andExpect(status().isNoContent());
     mvc.perform(get("/api/v1/auth/me").session(login.session()))
         .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void newLoginReplacesOnlyThePreviousSession() throws Exception {
+    StaffSessions.Login previous = staff.login(StaffSessions.ADMIN, StaffSessions.ADMIN_PASSWORD);
+    StaffSessions.Login current = staff.login(StaffSessions.ADMIN, StaffSessions.ADMIN_PASSWORD);
+
+    mvc.perform(get("/api/v1/auth/me").with(previous))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("SESSION_REPLACED"));
+    mvc.perform(get("/api/v1/auth/me").with(current)).andExpect(status().isOk());
+
+    // Даже если выход старой сессии дошёл до обработчика, новую он отозвать не может.
+    mvc.perform(post("/api/v1/auth/logout").with(previous));
+    mvc.perform(get("/api/v1/auth/me").with(current)).andExpect(status().isOk());
   }
 
   @Test
@@ -147,8 +161,8 @@ class AuthControllerTest {
                      "password":"start-pass-1","role":"CASHIER"}
                     """))
         .andExpect(status().isCreated());
-    var login = staff.login("password.change", "start-pass-1");
-    var change = "/api/v1/auth/password";
+    StaffSessions.Login login = staff.login("password.change", "start-pass-1");
+    String change = "/api/v1/auth/password";
 
     // Временный пароль: до смены видны только «кто я», смена пароля и выход.
     mvc.perform(get("/api/v1/auth/me").with(login))
@@ -198,7 +212,9 @@ class AuthControllerTest {
     login(StaffSessions.ADMIN, StaffSessions.ADMIN_PASSWORD)
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.username").value("admin"))
-        .andExpect(jsonPath("$.role").value("ADMINISTRATOR"))
+        .andExpect(jsonPath("$.role").value("OWNER"))
+        .andExpect(jsonPath("$.permissionsVersion").isNotEmpty())
+        .andExpect(jsonPath("$.permissions").isArray())
         .andExpect(jsonPath("$.mustChangePassword").value(false));
     mvc.perform(get("/api/v1/patients").with(staff.admin())).andExpect(status().isOk());
   }

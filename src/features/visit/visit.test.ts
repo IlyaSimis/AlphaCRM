@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { DocumentSummary } from '../../api/types'
-import { activeDocument, isLocked, latestSigned, noteComplete, noteOf, upsertDocument, visitTimeLabel } from './visit'
+import { activeDocument, isLocked, latestSigned, noteComplete, noteOf, upsertDocument, visitTimeLabel } from './visitRules'
 
 const signed: DocumentSummary = { id: 'd1', state: 'SIGNED_LOCKED', templateVersion: 'v2.4', signedAt: '2026-10-20T10:06:00Z', amendsDocumentId: null }
 const amendment: DocumentSummary = { id: 'd2', state: 'DRAFT', templateVersion: 'v2.4', signedAt: null, amendsDocumentId: 'd1' }

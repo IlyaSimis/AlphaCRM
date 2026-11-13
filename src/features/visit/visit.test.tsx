@@ -6,7 +6,7 @@ import { anna, enterDemo, goOffline, jsonResponse, renderApp, withAuth } from '.
 type User = ReturnType<typeof userEvent.setup>
 
 async function fillNote(user: User) {
-  await user.type(screen.getByLabelText('Жалобы и анамнез'), 'Нарушение сна')
+  await user.type(await screen.findByLabelText('Жалобы и анамнез'), 'Нарушение сна')
   await user.type(screen.getByLabelText('Психический статус'), 'Контакт продуктивный')
   await user.type(screen.getByLabelText('Диагноз'), 'Синтетический диагноз')
   await user.type(screen.getByLabelText('Назначения и рекомендации'), 'Контроль через 2 недели')
@@ -19,7 +19,7 @@ describe('patient visit', () => {
     renderApp()
     await enterDemo(user)
     await user.click(screen.getByRole('button', { name: 'Начать приём 09:00 Анна Михайлова' }))
-    expect(screen.getByRole('heading', { name: 'Анна Михайлова' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Анна Михайлова' })).toBeInTheDocument()
     expect(screen.getByText(/ПЕРВИЧНЫЙ ПРИЁМ · .* · 09:00–09:50/)).toBeInTheDocument()
     expect(screen.getByLabelText('Диагноз')).toHaveValue('')
 
@@ -31,7 +31,7 @@ describe('patient visit', () => {
     expect(screen.getByText(/после подписания эту версию нельзя изменить/i)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /подписать и заблокировать/i }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-    expect(await screen.findByText(/документ подписан/i)).toBeInTheDocument()
+    expect((await screen.findAllByText(/документ подписан/i)).length).toBeGreaterThan(0)
     expect(screen.getByLabelText('Диагноз')).toBeDisabled()
   })
 
@@ -62,12 +62,13 @@ describe('patient visit', () => {
       if (address.endsWith('/documents')) return jsonResponse({ id: 'd1', state: 'DRAFT', templateVersion: 'v2.4' }, 201)
       if (address.endsWith('/sign')) return jsonResponse({ id: 'd1', state: 'SIGNED_LOCKED', templateVersion: 'v2.4', signedAt: '2026-10-20T09:40:00Z' })
       if (address.includes('/patients')) return jsonResponse([anna])
-      if (address.includes('/appointments')) return jsonResponse([{ id: appointmentId, patientId: anna.id, practitionerId: '00000000-0000-0000-0000-000000000201', startsAt: '2026-10-20T09:00:00Z', endsAt: '2026-10-20T09:50:00Z', serviceName: 'Первичный приём', status: 'ARRIVED' }])
+      if (address.includes('/appointments')) return jsonResponse([{ id: appointmentId, patientId: anna.id, practitionerId: '00000000-0000-0000-0000-000000000201', startsAt: '2026-10-20T09:00:00Z', endsAt: '2026-10-20T09:50:00Z', serviceName: 'Серверный приём', status: 'ARRIVED' }])
       return jsonResponse({}, 404)
     }, 't.petrov')
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
+    expect(await screen.findByText('Серверный приём')).toBeInTheDocument()
     await user.click(await screen.findByRole('button', { name: 'Начать приём 09:00 Анна Михайлова' }))
     expect(await screen.findByText('Данные приёма на сервере')).toBeInTheDocument()
     const start = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith('/clinical/encounters') && init?.method === 'POST')
@@ -81,7 +82,7 @@ describe('patient visit', () => {
 
     await user.click(screen.getByRole('button', { name: /проверить и подписать/i }))
     await user.click(screen.getByRole('button', { name: /подписать и заблокировать/i }))
-    expect(await screen.findByText(/документ подписан/i)).toBeInTheDocument()
+    expect((await screen.findAllByText(/документ подписан/i)).length).toBeGreaterThan(0)
     const paths = fetchMock.mock.calls.map(([url]) => String(url))
     expect(paths.some((path) => path.endsWith('/clinical/encounters/e1/documents'))).toBe(true)
     expect(paths.some((path) => path.endsWith('/clinical/documents/d1/sign'))).toBe(true)

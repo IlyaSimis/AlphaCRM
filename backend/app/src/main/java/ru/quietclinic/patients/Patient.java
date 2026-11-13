@@ -9,10 +9,13 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 @Entity
@@ -45,6 +48,16 @@ class Patient {
    */
   UUID assignedStaffId;
 
+  /** В БД — только AES-GCM шифртекст; открытый документ существует лишь в памяти сервиса. */
+  @Column(name = "profile", columnDefinition = "text")
+  String profileEncrypted;
+
+  @Transient PatientProfile profile;
+
+  /** Канал, в который уведомления уходят первыми; null — автоматический выбор. */
+  @Column(length = 16)
+  String preferredMessenger;
+
   @OneToMany(mappedBy = "patient", cascade = CascadeType.ALL, orphanRemoval = true)
   List<Contact> contacts = new ArrayList<>();
 
@@ -52,6 +65,7 @@ class Patient {
   List<Consent> consents = new ArrayList<>();
 
   static final String TELEGRAM = "TELEGRAM";
+  static final String MAX = "MAX";
   static final String PHONE = "PHONE";
   static final String SECOND_PHONE = "SECOND_PHONE";
   static final String EMAIL = "EMAIL";
@@ -66,13 +80,13 @@ class Patient {
   }
 
   /**
-   * Применяет карточку целиком: ФИО, дату рождения, телефон, e-mail, второй телефон и постоянного
-   * администратора. Пустой необязательный контакт удаляется, а не хранится пустой строкой.
+   * Применяет карточку целиком. Пустой необязательный контакт удаляется, а не хранится пустой
+   * строкой. Отсутствующий profile означает старый клиент и не затирает расширенные реквизиты.
    * Возвращает имена изменённых полей — их, без значений, пишем в аудит.
    */
   List<String> update(PatientDetails details) {
-    var changed = new ArrayList<String>();
-    var name = details.fullName().trim();
+    List<String> changed = new ArrayList<>();
+    String name = details.fullName().trim();
     if (!name.equals(fullName)) {
       fullName = name;
       changed.add("fullName");
@@ -84,17 +98,21 @@ class Patient {
     if (setContact(PHONE, details.phone())) changed.add("phone");
     if (setContact(EMAIL, details.email())) changed.add("email");
     if (setContact(SECOND_PHONE, details.secondPhone())) changed.add("secondPhone");
-    if (!java.util.Objects.equals(details.assignedStaffId(), assignedStaffId)) {
+    if (!Objects.equals(details.assignedStaffId(), assignedStaffId)) {
       assignedStaffId = details.assignedStaffId();
       changed.add("assignedStaff");
+    }
+    if (details.profile() != null && !Objects.equals(details.profile(), profile)) {
+      profile = details.profile();
+      changed.add("profile");
     }
     return changed;
   }
 
   /** Один контакт этого типа: новое значение, удаление пустым или «без изменений». */
   private boolean setContact(String type, String newValue) {
-    var value = blankToNull(newValue);
-    var current = contacts.stream().filter(c -> type.equals(c.type)).findFirst();
+    String value = blankToNull(newValue);
+    Optional<Contact> current = contacts.stream().filter(c -> type.equals(c.type)).findFirst();
     if (value == null) {
       if (current.isEmpty()) return false;
       contacts.remove(current.get());
@@ -111,13 +129,13 @@ class Patient {
 
   /** Новая действующая версия согласия. Прежние версии не удаляются. */
   Consent grantConsent(String version, String basis) {
-    var consent = new Consent(this, version.trim(), basis.trim());
+    Consent consent = new Consent(this, version.trim(), basis.trim());
     consents.add(consent);
     return consent;
   }
 
   Consent revokeConsent(UUID consentId) {
-    var consent =
+    Consent consent =
         consents.stream()
             .filter(c -> c.id.equals(consentId))
             .findFirst()
@@ -133,40 +151,55 @@ class Patient {
 
   /** Возвращает имена изменённых полей: в аудит попадает факт изменения, без текста заметки. */
   List<String> updateRegistry(String newReferralSource, String newRegistryNote) {
-    var changed = new ArrayList<String>();
-    var source = blankToNull(newReferralSource);
-    if (!java.util.Objects.equals(source, referralSource)) {
+    List<String> changed = new ArrayList<>();
+    String source = blankToNull(newReferralSource);
+    if (!Objects.equals(source, referralSource)) {
       referralSource = source;
       changed.add("referralSource");
     }
-    var note = blankToNull(newRegistryNote);
-    if (!java.util.Objects.equals(note, registryNote)) {
+    String note = blankToNull(newRegistryNote);
+    if (!Objects.equals(note, registryNote)) {
       registryNote = note;
       changed.add("registryNote");
     }
     return changed;
   }
 
-  /**
-   * Chat id Telegram пациента — контакт TELEGRAM, один на пациента. Пациент получает его, только
-   * начав диалог с ботом клиники. {@code remove} — отключить; пустое значение — не менять.
-   */
+  /** Внешний id мессенджера — зашифрованный контакт; remove отключает только этот канал. */
   boolean updateTelegram(String chatId, boolean remove) {
-    var current = contacts.stream().filter(c -> TELEGRAM.equals(c.type)).findFirst();
+    return updateMessenger(MessengerChannel.TELEGRAM, chatId, remove);
+  }
+
+  boolean updateMessenger(MessengerChannel channel, String externalId, boolean remove) {
+    String type = channel.name();
+    Optional<Contact> current = contacts.stream().filter(c -> type.equals(c.type)).findFirst();
     if (remove) {
       if (current.isEmpty()) return false;
       contacts.remove(current.get());
+      if (type.equals(preferredMessenger)) preferredMessenger = null;
       return true;
     }
-    var value = blankToNull(chatId);
+    String value = blankToNull(externalId);
     if (value == null || current.map(c -> c.value.equals(value)).orElse(false)) return false;
     if (current.isPresent()) current.get().value = value;
-    else contacts.add(new Contact(this, TELEGRAM, value));
+    else contacts.add(new Contact(this, type, value));
     return true;
   }
 
+  boolean messengerConnected(MessengerChannel channel) {
+    return contacts.stream().anyMatch(c -> channel.name().equals(c.type));
+  }
+
   boolean telegramConnected() {
-    return contacts.stream().anyMatch(c -> TELEGRAM.equals(c.type));
+    return messengerConnected(MessengerChannel.TELEGRAM);
+  }
+
+  void preferMessenger(MessengerChannel channel) {
+    if (channel != null && !messengerConnected(channel)) {
+      throw conflict(
+          "MESSENGER_NOT_CONNECTED", "Connect this messenger before making it preferred");
+    }
+    preferredMessenger = channel == null ? null : channel.name();
   }
 
   String phone() {

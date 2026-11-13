@@ -4,9 +4,11 @@ import java.util.UUID;
 
 record BillingView(
     UUID chargeId,
-    long amountMinor,
+    Long amountMinor,
     String currency,
     String chargeStatus,
     UUID paymentId,
     String paymentStatus,
-    String fiscalStatus) {}
+    String fiscalStatus,
+    String paymentMethod,
+    String failureReason) {}

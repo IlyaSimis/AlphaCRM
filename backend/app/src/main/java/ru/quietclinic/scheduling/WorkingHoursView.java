@@ -1,3 +1,5 @@
 package ru.quietclinic.scheduling;
 
-record WorkingHoursView(int dayOfWeek, java.time.LocalTime startsAt, java.time.LocalTime endsAt) {}
+import java.time.LocalTime;
+
+record WorkingHoursView(int dayOfWeek, LocalTime startsAt, LocalTime endsAt) {}

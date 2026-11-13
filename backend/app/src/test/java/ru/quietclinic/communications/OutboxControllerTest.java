@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
+import java.util.UUID;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,7 +37,7 @@ class OutboxControllerTest {
 
   @Test
   void administratorSeesTemplateChannelAndStatusWithoutTextOrContact() throws Exception {
-    var body =
+    String body =
         mvc.perform(
                 post("/api/v1/appointments")
                     .with(staff.admin())
@@ -71,7 +72,8 @@ class OutboxControllerTest {
         .andExpect(status().isForbidden());
 
     SecondClinic.ensure(jdbc);
-    var other = staff.login(SecondClinic.ADMIN_USERNAME, SecondClinic.ADMIN_PASSWORD);
+    StaffSessions.Login other =
+        staff.login(SecondClinic.ADMIN_USERNAME, SecondClinic.ADMIN_PASSWORD);
     mvc.perform(get("/api/v1/outbox").with(other))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[*].aggregateId").value(Matchers.not(hasItem(appointment))));
@@ -79,7 +81,7 @@ class OutboxControllerTest {
 
   @Test
   void failedFilterReturnsOnlyFailedRowsOfTheClinic() throws Exception {
-    var body =
+    String body =
         mvc.perform(
                 post("/api/v1/appointments")
                     .with(staff.admin())
@@ -99,7 +101,7 @@ class OutboxControllerTest {
     jdbc.update(
         "update outbox_message set status = 'FAILED', last_error = 'HTTP_500', attempts = 5"
             + " where aggregate_id = ? and template = 'appointment-reminder'",
-        java.util.UUID.fromString(appointment));
+        UUID.fromString(appointment));
 
     mvc.perform(get("/api/v1/outbox").param("status", "failed").with(staff.admin()))
         .andExpect(status().isOk())
@@ -117,7 +119,8 @@ class OutboxControllerTest {
         .andExpect(status().isForbidden());
 
     SecondClinic.ensure(jdbc);
-    var other = staff.login(SecondClinic.ADMIN_USERNAME, SecondClinic.ADMIN_PASSWORD);
+    StaffSessions.Login other =
+        staff.login(SecondClinic.ADMIN_USERNAME, SecondClinic.ADMIN_PASSWORD);
     mvc.perform(get("/api/v1/outbox").param("status", "FAILED").with(other))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[*].aggregateId").value(Matchers.not(hasItem(appointment))));

@@ -3,10 +3,11 @@ import { ArticleRounded, LockOutlined } from '@mui/icons-material'
 import { Alert, Box, Button, CircularProgress, MenuItem, TextField, Typography } from '@mui/material'
 import { loadSignedDocument, loadSignedDocuments } from '../../api/clinical'
 import type { Practitioner, SignedDocumentItem } from '../../api/types'
+import { can } from '../../shared/permissions'
 import type { Role } from '../../shared/roles'
 import { SignedPdfList } from '../files/SignedPdfList'
 import { SignedDocumentDialog } from './SignedDocumentDialog'
-import { documentKind, preview, signedMoment } from './signedDocuments'
+import { documentKind, preview, signedMoment } from './signedDocumentRules'
 
 type SignedDocumentsProps = {
   role: Role
@@ -25,7 +26,7 @@ export function SignedDocuments({ role, apiOnline, practitioners }: SignedDocume
   const [error, setError] = useState('')
   const [open, setOpen] = useState<SignedDocumentItem | null>(null)
   const [openError, setOpenError] = useState('')
-  const manager = role === 'MANAGER'
+  const manager = can(role, 'clinical.signed-document.read')
 
   useEffect(() => {
     if (!apiOnline) return

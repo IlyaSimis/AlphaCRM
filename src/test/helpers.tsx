@@ -1,8 +1,9 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { vi } from 'vitest'
+import { expect, vi } from 'vitest'
 import { LEBEDEVA_ID, PETROV_ID } from '../api/client'
 import App from '../app/App'
+import { pageTitles, serviceOf, serviceTitles, type Page } from '../app/pages'
 import { ClinicThemeProvider } from '../app/theme'
 import type { ServiceItem, StaffItem, StaffRole } from '../api/types'
 import { roleLabels } from '../shared/roles'
@@ -12,6 +13,32 @@ import { roleLabels } from '../shared/roles'
  * («Касса»), поэтому переходы по меню ищутся здесь.
  */
 export const menu = () => within(document.querySelector('.desktop-sidebar') as HTMLElement)
+
+type User = ReturnType<typeof userEvent.setup>
+
+function pageByTitle(title: string): Page {
+  const page = (Object.keys(pageTitles) as Page[]).find((item) => pageTitles[item] === title)
+  if (!page) throw new Error(`Нет страницы «${title}»`)
+  return page
+}
+
+/** Открыть страницу: сервис слева и его раздел в верхней панели. */
+export async function openPage(user: User, title: string) {
+  const accessibleName = title === 'StaffChat' ? /^StaffChat(?:,|$)/ : title
+  await user.click(menu().getByRole('button', { name: title === 'StaffChat' ? accessibleName : serviceTitles[serviceOf(pageByTitle(title))] }))
+  await user.click(screen.getByRole('tab', { name: accessibleName }))
+  // Нестартовые разделы подгружаются через React.lazy.
+  await waitFor(() => expect(screen.queryByLabelText('Загрузка раздела')).not.toBeInTheDocument())
+}
+
+/** Есть ли страница у сотрудника: сервис слева и раздел сверху. */
+export async function menuHas(user: User, title: string) {
+  const accessibleName = title === 'StaffChat' ? /^StaffChat(?:,|$)/ : title
+  const service = menu().queryByRole('button', { name: title === 'StaffChat' ? accessibleName : serviceTitles[serviceOf(pageByTitle(title))] })
+  if (!service) return false
+  await user.click(service)
+  return screen.queryByRole('tab', { name: accessibleName }) !== null
+}
 
 export const renderApp = () => render(<ClinicThemeProvider><App /></ClinicThemeProvider>)
 
@@ -55,6 +82,9 @@ export function testAccounts(): Record<string, StaffItem> {
     't.cashier': account('00000000-0000-0000-0000-0000000a0003', 'Тестовый кассир', 't.cashier', 'CASHIER'),
     't.petrov': account('00000000-0000-0000-0000-0000000a0004', 'Александр Петров', 't.petrov', 'DOCTOR', PETROV_ID),
     't.lebedeva': account('00000000-0000-0000-0000-0000000a0005', 'Ольга Лебедева', 't.lebedeva', 'DOCTOR', LEBEDEVA_ID),
+    't.nurse': account('00000000-0000-0000-0000-0000000a0006', 'Тестовая медсестра', 't.nurse', 'NURSE'),
+    't.senior-nurse': account('00000000-0000-0000-0000-0000000a0008', 'Тестовый старший медперсонал', 't.senior-nurse', 'SENIOR_NURSE'),
+    't.support': account('00000000-0000-0000-0000-0000000a0007', 'Тестовая техподдержка', 't.support', 'SUPPORT'),
   }
 }
 
@@ -71,6 +101,8 @@ type AuthOptions = {
   mustChange?: string[]
   /** Справочник услуг на GET /services; null — запрос уходит в handler. */
   services?: ServiceItem[] | null
+  /** Ответ GET /me/dashboard; по умолчанию — без виджетов. */
+  dashboard?: unknown
 }
 
 /**
@@ -110,6 +142,8 @@ export function withAuth(handler: Handler, initial: string | null = 'admin', opt
       return jsonResponse(null, 204)
     }
     if (accounts[current].mustChangePassword) return jsonResponse({ code: 'PASSWORD_CHANGE_REQUIRED', message: 'Change the temporary password first' }, 403)
+    // Дашборд по умолчанию пустой: тесты экранов, которым он не нужен, его не описывают.
+    if (method === 'GET' && /\/me\/dashboard$/.test(address)) return jsonResponse(options.dashboard ?? { role: null, monthStart: '', today: '', generatedAt: '', widgets: [] })
     const services = options.services === undefined ? seedServices : options.services
     if (services && method === 'GET' && /\/services(\?|$)/.test(address)) return jsonResponse(services)
     return handler(address, init)
@@ -118,8 +152,6 @@ export function withAuth(handler: Handler, initial: string | null = 'admin', opt
   return mock
 }
 
-type User = ReturnType<typeof userEvent.setup>
-
 /** Песочница без сервера: войти с ролью. Врач песочницы ведёт записи первого демо-врача. */
 export async function enterDemo(user: User, role: StaffRole = 'DOCTOR') {
   await user.click(await screen.findByRole('button', { name: `Песочница: ${roleLabels[role]}` }))
@@ -127,7 +159,7 @@ export async function enterDemo(user: User, role: StaffRole = 'DOCTOR') {
 
 /** Администратор, кассир и менеджер начинают со страницы «Сегодня»: перейти в расписание. */
 export async function openSchedule(user: User) {
-  await user.click(await screen.findByRole('button', { name: 'Расписание' }))
+  await openPage(user, 'Расписание')
 }
 
 /** Вход через форму, как это делает сотрудник. */
@@ -139,7 +171,7 @@ export async function signIn(user: User, username: string, password = username =
   await user.click(screen.getByRole('button', { name: 'Войти' }))
 }
 
-const loginsByRole: Record<StaffRole, string> = { ADMINISTRATOR: 'admin', DOCTOR: 't.petrov', MANAGER: 't.manager', CASHIER: 't.cashier' }
+const loginsByRole: Record<StaffRole, string> = { OWNER: 'admin', SENIOR_ADMINISTRATOR: 'admin', ADMINISTRATOR: 'admin', DOCTOR: 't.petrov', MANAGER: 't.manager', CASHIER: 't.cashier', NURSE: 't.nurse', SENIOR_NURSE: 't.senior-nurse', SUPPORT: 't.support' }
 
 /** Сменить сотрудника: выйти и войти другим — в песочнице кнопкой роли, на сервере через форму. */
 export async function chooseRole(user: User, role: StaffRole, username = loginsByRole[role]) {

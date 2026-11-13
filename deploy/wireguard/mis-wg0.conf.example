@@ -1,0 +1,11 @@
+# /etc/wireguard/wg0.conf на сервере МИС в РФ. Ключи подставляются локально, не коммитятся.
+[Interface]
+Address = 10.77.0.1/30
+ListenPort = 51820
+PrivateKey = REPLACE_MIS_PRIVATE_KEY
+
+[Peer]
+PublicKey = REPLACE_TELEGRAM_VPS_PUBLIC_KEY
+AllowedIPs = 10.77.0.2/32
+Endpoint = REPLACE_TELEGRAM_VPS_PUBLIC_IP:51820
+PersistentKeepalive = 25

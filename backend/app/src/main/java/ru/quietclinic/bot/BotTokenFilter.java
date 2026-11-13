@@ -8,25 +8,35 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
- * Вход бота по сервисному токену в заголовке {@code X-Bot-Token} (CLINIC_BOT_API_TOKEN). Без токена в
- * настройках API бота выключено. Сессия не создаётся, CSRF не нужен: cookie здесь нет. Не бин —
- * добавляется только в цепочку /api/v1/bot/**.
+ * Вход бота по сервисному токену в заголовке {@code X-Bot-Token} (CLINIC_BOT_API_TOKEN). Без токена
+ * в настройках API бота выключено. Сессия не создаётся, CSRF не нужен: cookie здесь нет. Не бин —
+ * добавляется только в цепочки /api/v1/bot/** и /api/v1/messenger/**.
  */
 final class BotTokenFilter extends OncePerRequestFilter {
   static final String HEADER = "X-Bot-Token";
 
-  private final byte[] token;
+  private final List<byte[]> tokens;
   private final BotClinicResolver clinics;
 
   BotTokenFilter(String token, BotClinicResolver clinics) {
-    this.token = token == null ? new byte[0] : token.trim().getBytes(StandardCharsets.UTF_8);
+    this.tokens =
+        token == null
+            ? List.of()
+            : Arrays.stream(token.split(","))
+                .map(String::trim)
+                .filter(value -> !value.isEmpty())
+                .map(value -> value.getBytes(StandardCharsets.UTF_8))
+                .toList();
     this.clinics = clinics;
   }
 
@@ -34,22 +44,25 @@ final class BotTokenFilter extends OncePerRequestFilter {
   protected void doFilterInternal(
       HttpServletRequest request, HttpServletResponse response, FilterChain chain)
       throws ServletException, IOException {
-    if (token.length == 0) {
-      error(response, 401, "BOT_API_DISABLED", "Bot API is disabled: CLINIC_BOT_API_TOKEN is empty");
+    if (tokens.isEmpty()) {
+      error(
+          response, 401, "BOT_API_DISABLED", "Bot API is disabled: CLINIC_BOT_API_TOKEN is empty");
       return;
     }
-    var presented = request.getHeader(HEADER);
-    if (presented == null
-        || !MessageDigest.isEqual(token, presented.trim().getBytes(StandardCharsets.UTF_8))) {
+    String presented = request.getHeader(HEADER);
+    byte[] presentedBytes =
+        presented == null ? null : presented.trim().getBytes(StandardCharsets.UTF_8);
+    if (presentedBytes == null
+        || tokens.stream().noneMatch(token -> MessageDigest.isEqual(token, presentedBytes))) {
       error(response, 401, "BOT_TOKEN_INVALID", "Bot token is missing or wrong");
       return;
     }
-    var clinicId = clinics.clinicId();
+    UUID clinicId = clinics.clinicId();
     if (clinicId == null) {
       error(response, 409, "BOT_CLINIC_UNKNOWN", "Set CLINIC_BOT_CLINIC_ID: clinic is ambiguous");
       return;
     }
-    var context = SecurityContextHolder.createEmptyContext();
+    SecurityContext context = SecurityContextHolder.createEmptyContext();
     context.setAuthentication(
         UsernamePasswordAuthenticationToken.authenticated(
             new BotPrincipal(clinicId), null, List.of(new SimpleGrantedAuthority("ROLE_BOT"))));

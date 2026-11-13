@@ -39,8 +39,14 @@ export function useSession() {
 
   useEffect(() => {
     // 401 от живого API: сессия истекла или сотрудника отключили — назад на вход.
-    onUnauthorized(() => setState((current) => current.status === 'signedIn' && current.live
-      ? { status: 'signedOut', serverOnline: true, message: 'Сессия закончилась. Войдите снова.' }
+    onUnauthorized((code) => setState((current) => current.status === 'signedIn' && current.live
+      ? {
+          status: 'signedOut',
+          serverOnline: true,
+          message: code === 'SESSION_REPLACED'
+            ? 'Выполнен вход на другом устройстве. Войдите снова.'
+            : 'Сессия закончилась. Войдите снова.',
+        }
       : current))
     return () => onUnauthorized(null)
   }, [])

@@ -37,24 +37,61 @@ services:
       DATABASE_USER: ${POSTGRES_USER:-quiet_clinic}
       DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?Задайте POSTGRES_PASSWORD в .env}
       CLINIC_DEV_KMS_KEY: ${CLINIC_KMS_KEY:?Задайте CLINIC_KMS_KEY в .env (scripts/init-env.sh)}
+      CLINIC_KMS_KEY_VERSION: ${CLINIC_KMS_KEY_VERSION:-dev-v1}
+      CLINIC_KMS_KEYS: ${CLINIC_KMS_KEYS:-}
       # Пустая база: клиника и её администратор admin. Пароль обязателен (scripts/init-env.sh).
       CLINIC_NAME: ${CLINIC_NAME:-AlphaCRM}
       CLINIC_ADMIN_NAME: ${CLINIC_ADMIN_NAME:-Администратор}
       CLINIC_ADMIN_PASSWORD: ${CLINIC_ADMIN_PASSWORD:?Задайте CLINIC_ADMIN_PASSWORD в .env (scripts/init-env.sh)}
+      # Отдельная база на клинику; управляющий PostgreSQL-пользователь должен иметь CREATEDB/CREATEROLE.
+      CLINIC_TENANCY_ENABLED: ${CLINIC_TENANCY_ENABLED:-false}
+      CLINIC_TENANCY_POOL_SIZE: ${CLINIC_TENANCY_POOL_SIZE:-5}
+      CLINIC_TENANCY_PROVISIONING_TOKEN: ${CLINIC_TENANCY_PROVISIONING_TOKEN:-}
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
       # Внешние выводы: секреты только из .env. Пусто — канал выключен, сообщения ждут в outbox.
       CLINIC_OUTBOUND_WEBHOOK_URL: ${CLINIC_OUTBOUND_WEBHOOK_URL:-}
       CLINIC_OUTBOUND_WEBHOOK_SECRET: ${CLINIC_OUTBOUND_WEBHOOK_SECRET:-}
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      # Telegram — только relay на зарубежном VPS через WireGuard; токен Telegram здесь не нужен.
+      CLINIC_OUTBOUND_TELEGRAM_RELAY_URL: ${CLINIC_OUTBOUND_TELEGRAM_RELAY_URL:-}
+      CLINIC_OUTBOUND_TELEGRAM_RELAY_SECRET: ${CLINIC_OUTBOUND_TELEGRAM_RELAY_SECRET:-}
+      CLINIC_OUTBOUND_MAX_BOT_TOKEN: ${CLINIC_OUTBOUND_MAX_BOT_TOKEN:-}
+      CLINIC_MESSENGER_TELEGRAM_PUBLIC_URL: ${CLINIC_MESSENGER_TELEGRAM_PUBLIC_URL:-}
+      CLINIC_MESSENGER_MAX_PUBLIC_URL: ${CLINIC_MESSENGER_MAX_PUBLIC_URL:-}
       CLINIC_CASHBOX_URL: ${CLINIC_CASHBOX_URL:-}
       CLINIC_CASHBOX_SECRET: ${CLINIC_CASHBOX_SECRET:-}
       CLINIC_TIME_ZONE: ${CLINIC_TIME_ZONE:-UTC}
-      # API Telegram-бота (/api/v1/bot/**). Пусто — API выключено. Снаружи nginx этот путь не отдаёт.
+      # Приватный API ботов (/api/v1/messenger/**; /api/v1/bot/** — совместимость). Наружу не отдаётся.
       CLINIC_BOT_API_TOKEN: ${CLINIC_BOT_API_TOKEN:-}
       CLINIC_BOT_CLINIC_ID: ${CLINIC_BOT_CLINIC_ID:-}
       CLINIC_BOT_SERVICE: ${CLINIC_BOT_SERVICE:-Первичный приём}
       CLINIC_BOT_TASK_ASSIGNEE: ${CLINIC_BOT_TASK_ASSIGNEE:-}
       TELEGRAM_REMINDER_BUTTONS: ${TELEGRAM_REMINDER_BUTTONS:-true}
+      # Честный знак: none — не настроено (операции ждут в очереди), mock — заглушка MVP.
+      CLINIC_MARKING_ADAPTER: ${CLINIC_MARKING_ADAPTER:-none}
+      # Корпоративный диск: зашифрованные файлы в томе quiet-clinic-drive.
+      CLINIC_DRIVE_STORAGE_DIR: /var/lib/alphacrm/drive
+      # Вложения StaffChat: файлы переживают пересоздание backend-контейнера.
+      CLINIC_CHAT_STORAGE_DIR: /var/lib/alphacrm/staff-chat
+      CLINIC_DRIVE_QUOTA_BYTES: ${CLINIC_DRIVE_QUOTA_BYTES:-10737418240}
+      # PDF договоров и предпросмотр DOCX/XLSX: LibreOffice уже установлен в backend-образе.
+      CLINIC_CONTRACT_LIBREOFFICE_BINARY: ${CLINIC_CONTRACT_LIBREOFFICE_BINARY:-/usr/bin/libreoffice}
+      # ИИ-навигатор. Пустой ключ — локальный поиск работает, обращения к модели выключены.
+      CLINIC_ASSISTANT_API_KEY: ${CLINIC_ASSISTANT_API_KEY:-}
+      CLINIC_ASSISTANT_MODEL: ${CLINIC_ASSISTANT_MODEL:-gpt-5.4-nano}
+      CLINIC_ASSISTANT_API_URL: ${CLINIC_ASSISTANT_API_URL:-https://api.openai.com/v1}
+      # Mango Office: исходящие callback и подписанные webhook о звонках.
+      MANGO_API_KEY: ${MANGO_API_KEY:-}
+      MANGO_API_SALT: ${MANGO_API_SALT:-}
+      MANGO_API_URL: ${MANGO_API_URL:-https://app.mango-office.ru}
+      MANGO_DEFAULT_EXTENSION: ${MANGO_DEFAULT_EXTENSION:-}
+      MANGO_LINE_NUMBER: ${MANGO_LINE_NUMBER:-}
+      MANGO_CLINIC_ID: ${MANGO_CLINIC_ID:-}
+      # Терминал: секрет подписи ответов адаптера банка.
+      TERMINAL_PROVIDER: ${TERMINAL_PROVIDER:-generic}
+      TERMINAL_WEBHOOK_SECRET: ${TERMINAL_WEBHOOK_SECRET:-}
+    volumes:
+      - quiet-clinic-drive:/var/lib/alphacrm/drive
+      - quiet-clinic-staff-chat:/var/lib/alphacrm/staff-chat
     depends_on:
       postgres:
         condition: service_healthy
@@ -78,26 +115,26 @@ services:
     ports:
       - "${APP_BIND:-127.0.0.1}:${APP_PORT:-8080}:8080"
 
-  # Telegram-бот клиники (проект ClinicaBot). Включается профилем: COMPOSE_PROFILES=bot в .env.
-  # Ходит в backend напрямую по внутренней сети, наружу портов не открывает.
-  bot:
+  # MAX-бот развёртывается в РФ рядом с МИС. Telegram-бот запускается отдельно на зарубежном VPS.
+  max-bot:
     <<: *restart
-    profiles: ["bot"]
+    profiles: ["max-bot"]
     build:
-      context: ${BOT_SOURCE_DIR:-../ClinicaBot}
-    image: quiet-clinic-bot:${APP_VERSION:-local}
+      context: ../alphacrm-max-bot
+    image: alphacrm-max-bot:${APP_VERSION:-local}
     environment:
-      # Тот же бот, через который CRM шлёт пациентам подтверждения и напоминания.
-      BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
-      CLINIC_API_URL: http://backend:8081/api/v1/bot
-      CLINIC_API_TOKEN: ${CLINIC_BOT_API_TOKEN:-}
-      OPERATOR_CHAT_ID: ${BOT_OPERATOR_CHAT_ID:-}
-      ADMIN_IDS: ${BOT_ADMIN_IDS:-}
-      CLINIC_ADDRESS: ${CLINIC_ADDRESS:-}
-      CLINIC_PHONE: ${CLINIC_PHONE:-}
-      CLINIC_HOURS: ${CLINIC_HOURS:-}
+      MAX_BOT_TOKEN: ${CLINIC_OUTBOUND_MAX_BOT_TOKEN:-}
+      MAX_WEBHOOK_SECRET: ${MAX_WEBHOOK_SECRET:-}
+      PUBLIC_URL: ${MAX_BOT_PUBLIC_URL:-}
+      CRM_API_URL: http://backend:8081/api/v1/messenger
+      CRM_BOT_TOKEN: ${CLINIC_BOT_API_TOKEN:-}
+      BOT_CONSENT_VERSION: max-bot-v1
       CLINIC_PRIVACY_URL: ${CLINIC_PRIVACY_URL:-}
-      BOT_CONSENT_VERSION: ${BOT_CONSENT_VERSION:-telegram-bot-v1}
+      STATE_DB: /data/max-bot.db
+    ports:
+      - "127.0.0.1:${MAX_BOT_PORT:-8082}:8080"
+    volumes:
+      - max-bot-state:/data
     depends_on:
       backend:
         condition: service_healthy
@@ -108,3 +145,6 @@ services:
 
 volumes:
   quiet-clinic-postgres:
+  quiet-clinic-drive:
+  quiet-clinic-staff-chat:
+  max-bot-state:

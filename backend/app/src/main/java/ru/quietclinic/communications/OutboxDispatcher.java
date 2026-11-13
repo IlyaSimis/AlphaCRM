@@ -66,14 +66,15 @@ class OutboxDispatcher {
   }
 
   /**
-   * Один проход: переносы, зависшие попытки, затем до 50 очередных сообщений. Возвращает, сколько
-   * сообщений взято в работу (не только доставленных).
+   * Один проход: восстановление напоминаний, переносы, зависшие попытки, затем до 50 очередных
+   * сообщений. Возвращает, сколько сообщений взято в работу (не только доставленных).
    */
   int runOnce(Instant now) {
+    reconcileMissingReminders(now);
     reconcileRescheduled(now);
     recoverStuck(now);
-    var taken = 0;
-    for (var candidate :
+    int taken = 0;
+    for (OutboxMessage candidate :
         outbox.findTop50ByStatusInAndNextAttemptAtLessThanEqualOrderByCreatedAt(DUE, now)) {
       if (candidate.attempts >= MAX_ATTEMPTS) continue;
       taken++;
@@ -88,15 +89,25 @@ class OutboxDispatcher {
     return taken;
   }
 
+  /** Доукомплектовывает напоминания для существующих записей; ключ не даёт создать дубликат. */
+  void reconcileMissingReminders(Instant now) {
+    for (NoticeSource.MissingReminder missing : notices.missingReminders(now)) {
+      tx.executeWithoutResult(
+          status ->
+              service.scheduleReminder(
+                  missing.appointmentId(), missing.startsAt(), missing.clinicId(), now));
+    }
+  }
+
   /** Подтверждение и напоминание на старое время отменяются, ставятся новые — на новое. */
   void reconcileRescheduled(Instant now) {
-    for (var appointmentId : notices.rescheduledAppointments(now)) {
+    for (UUID appointmentId : notices.rescheduledAppointments(now)) {
       tx.executeWithoutResult(
           status -> {
-            var notice = notices.load(appointmentId).orElse(null);
+            AppointmentNotice notice = notices.load(appointmentId).orElse(null);
             if (notice == null) return;
             UUID clinic = null;
-            for (var old :
+            for (OutboxMessage old :
                 outbox.findByAggregateIdAndTemplateInAndStatusIn(
                     appointmentId, NoticeTemplates.ABOUT_TIME, UNSENT)) {
               clinic = old.clinicId;
@@ -121,13 +132,15 @@ class OutboxDispatcher {
    * ключ идемпотентности и повтор отбросит сам; у Telegram такого ключа нет, поэтому без повтора.
    */
   void recoverStuck(Instant now) {
-    for (var stuck : outbox.findByStatusAndLastAttemptAtBefore("SENDING", now.minus(STUCK_AFTER))) {
+    for (OutboxMessage stuck :
+        outbox.findByStatusAndLastAttemptAtBefore("SENDING", now.minus(STUCK_AFTER))) {
       tx.executeWithoutResult(
           status -> {
-            var message = outbox.findById(stuck.id).orElseThrow();
+            OutboxMessage message = outbox.findById(stuck.id).orElseThrow();
             if (!"SENDING".equals(message.status)) return;
             message.lastError = "DELIVERY_UNCERTAIN";
-            if (TelegramChannel.NAME.equals(message.channel)) {
+            if (TelegramChannel.NAME.equals(message.channel)
+                || MaxChannel.NAME.equals(message.channel)) {
               message.status = "FAILED";
               message.attempts = MAX_ATTEMPTS;
               message.nextAttemptAt = null;
@@ -141,10 +154,10 @@ class OutboxDispatcher {
   /** true — сообщение доставлено этой попыткой. */
   private boolean process(UUID id, Instant now) {
     // Шаг 1, транзакция: сверка с записью и пометка попытки. Занятое другим доставщиком — мимо.
-    var prepared = tx.execute(status -> prepare(id, now));
+    Prepared prepared = tx.execute(status -> prepare(id, now));
     if (prepared == null) return false;
     // Шаг 2, без транзакции: сама отправка.
-    var result = send(prepared);
+    DeliveryResult result = send(prepared);
     // Шаг 3, транзакция: итог.
     tx.executeWithoutResult(status -> finish(id, result, now));
     if (result.outcome() == DeliveryOutcome.SENT) {
@@ -163,7 +176,7 @@ class OutboxDispatcher {
   }
 
   private Prepared prepare(UUID id, Instant now) {
-    var message = outbox.findById(id).orElse(null);
+    OutboxMessage message = outbox.findById(id).orElse(null);
     if (message == null || !DUE.contains(message.status)) return null;
     if (NoticeTemplates.FISCALIZATION.equals(message.topic)) {
       message.status = "SENDING";
@@ -171,13 +184,18 @@ class OutboxDispatcher {
       message.lastAttemptAt = now;
       return new Prepared(message.topic, message.template, message.clinicId, message, null);
     }
-    var notice = notices.load(message.aggregateId).orElse(null);
-    var skip = skipReason(message, notice, now);
+    AppointmentNotice notice = notices.load(message.aggregateId).orElse(null);
+    if (NoticeTemplates.isReminder(message.template)
+        && !service.reminderEnabled(message.clinicId, message.template)) {
+      close(message, "CANCELLED", "REMINDER_DISABLED", now);
+      return null;
+    }
+    String skip = skipReason(message, notice, now);
     if (skip != null) {
       close(message, "NO_CONSENT".equals(skip) ? "SKIPPED" : "CANCELLED", skip, now);
       return null;
     }
-    var patientMessage = text.render(message.template, message.idempotencyKey, notice);
+    PatientMessage patientMessage = text.render(message.template, message.idempotencyKey, notice);
     message.status = "SENDING";
     message.channel = notifications.channelFor(patientMessage);
     message.lastAttemptAt = now;
@@ -202,8 +220,10 @@ class OutboxDispatcher {
   private DeliveryResult send(Prepared prepared) {
     try {
       if (prepared.patientMessage() == null) {
-        return fiscal
-            .sendReceipt(prepared.message().aggregateId, prepared.message().idempotencyKey)
+        OutboxMessage message = prepared.message();
+        return (NoticeTemplates.REFUND_RECEIPT.equals(message.template)
+                ? fiscal.sendRefund(message.aggregateId, message.idempotencyKey)
+                : fiscal.sendReceipt(message.aggregateId, message.idempotencyKey))
             .asDelivery();
       }
       return notifications.deliver(prepared.patientMessage());
@@ -213,7 +233,7 @@ class OutboxDispatcher {
   }
 
   private void finish(UUID id, DeliveryResult result, Instant now) {
-    var message = outbox.findById(id).orElseThrow();
+    OutboxMessage message = outbox.findById(id).orElseThrow();
     message.channel = result.channel();
     switch (result.outcome()) {
       case SENT -> {

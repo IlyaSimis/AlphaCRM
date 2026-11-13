@@ -2,6 +2,7 @@ package ru.quietclinic.communications;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,19 +18,24 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class OutboxService {
   static final Duration REMINDER_LEAD = Duration.ofHours(24);
+  static final Duration SHORT_REMINDER_LEAD = Duration.ofHours(3);
+
   /** Причина SKIPPED у подтверждения записи, сделанной в боте: пациент уже видел ответ бота. */
   static final String SHOWN_IN_BOT = "SHOWN_IN_BOT";
 
   private final OutboxRepository repository;
   private final JdbcTemplate jdbc;
+  private final NotificationSettingsService notificationSettings;
   private final ZoneId zone;
 
   OutboxService(
       OutboxRepository repository,
       JdbcTemplate jdbc,
+      NotificationSettingsService notificationSettings,
       @Value("${clinic.time-zone:UTC}") String zone) {
     this.repository = repository;
     this.jdbc = jdbc;
+    this.notificationSettings = notificationSettings;
     this.zone = ZoneId.of(zone);
   }
 
@@ -46,7 +52,7 @@ public class OutboxService {
    */
   @Transactional
   public void appointmentBookedOnline(UUID appointmentId, Instant startsAt) {
-    var now = Instant.now();
+    Instant now = Instant.now();
     scheduleFor(appointmentId, startsAt, clinicOfAppointment(appointmentId), now);
     repository
         .findByIdempotencyKey(key(NoticeTemplates.CONFIRMED, appointmentId, startsAt))
@@ -91,6 +97,20 @@ public class OutboxService {
         Instant.now());
   }
 
+  /** Чек возврата: тем же портом кассы, что чек оплаты; клиника — по записи счёта. */
+  @Transactional
+  public void fiscalRefund(UUID refundId, UUID appointmentId) {
+    enqueue(
+        NoticeTemplates.FISCALIZATION,
+        "REFUND",
+        refundId,
+        clinicOfAppointment(appointmentId),
+        NoticeTemplates.REFUND_RECEIPT,
+        NoticeTemplates.REFUND_RECEIPT + ":" + refundId,
+        null,
+        Instant.now());
+  }
+
   /** Подтверждение и напоминание на конкретное время записи — при создании и после переноса. */
   void scheduleFor(UUID appointmentId, Instant startsAt, UUID clinicId, Instant now) {
     enqueue(
@@ -102,19 +122,46 @@ public class OutboxService {
         key(NoticeTemplates.CONFIRMED, appointmentId, startsAt),
         startsAt,
         now);
-    var today = now.atZone(zone).toLocalDate();
-    if (startsAt.atZone(zone).toLocalDate().isAfter(today)) {
-      var due = startsAt.minus(REMINDER_LEAD);
-      enqueue(
-          NoticeTemplates.NOTIFICATION,
-          "APPOINTMENT",
-          appointmentId,
-          clinicId,
-          NoticeTemplates.REMINDER,
-          key(NoticeTemplates.REMINDER, appointmentId, startsAt),
-          startsAt,
-          due.isAfter(now) ? due : now);
+    scheduleReminder(appointmentId, startsAt, clinicId, now);
+  }
+
+  /** Ставит включённые напоминания; просроченное по расписанию уходит на ближайшем проходе. */
+  void scheduleReminder(UUID appointmentId, Instant startsAt, UUID clinicId, Instant now) {
+    NotificationSettings settings = notificationSettings.forClinic(clinicId);
+    LocalDate today = now.atZone(zone).toLocalDate();
+    if (settings.reminder24hEnabled() && startsAt.atZone(zone).toLocalDate().isAfter(today)) {
+      scheduleReminder(
+          appointmentId, startsAt, clinicId, now, NoticeTemplates.REMINDER, REMINDER_LEAD);
     }
+    if (settings.reminder3hEnabled()) {
+      scheduleReminder(
+          appointmentId, startsAt, clinicId, now, NoticeTemplates.REMINDER_3H, SHORT_REMINDER_LEAD);
+    }
+  }
+
+  boolean reminderEnabled(UUID clinicId, String template) {
+    NotificationSettings settings = notificationSettings.forClinic(clinicId);
+    return (NoticeTemplates.REMINDER.equals(template) && settings.reminder24hEnabled())
+        || (NoticeTemplates.REMINDER_3H.equals(template) && settings.reminder3hEnabled());
+  }
+
+  private void scheduleReminder(
+      UUID appointmentId,
+      Instant startsAt,
+      UUID clinicId,
+      Instant now,
+      String template,
+      Duration lead) {
+    Instant due = startsAt.minus(lead);
+    enqueue(
+        NoticeTemplates.NOTIFICATION,
+        "APPOINTMENT",
+        appointmentId,
+        clinicId,
+        template,
+        key(template, appointmentId, startsAt),
+        startsAt,
+        due.isAfter(now) ? due : now);
   }
 
   private void enqueue(

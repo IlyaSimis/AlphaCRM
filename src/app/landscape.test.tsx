@@ -1,10 +1,11 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-import css from '../index.css?raw'
-import { enterDemo, goOffline, menu, renderApp } from '../test/helpers'
+import { readFileSync } from 'node:fs'
+import { enterDemo, goOffline, menu, renderApp, openPage } from '../test/helpers'
 import { Landscape, MOUNTAINS } from './Landscape'
 
+const css = readFileSync('src/index.css', 'utf8')
 const content = () => document.querySelector('.content') as HTMLElement
 
 describe('workspace background and greeting', () => {
@@ -24,12 +25,15 @@ describe('workspace background and greeting', () => {
     // Оба светила в сцене: какое видно, решает тема (CSS), смена темы сцену не пересоздаёт.
     expect(scenes[0].querySelectorAll('.ls-sun')).toHaveLength(1)
     expect(scenes[0].querySelectorAll('.ls-moon')).toHaveLength(1)
-    await user.click(screen.getByRole('button', { name: 'Включить тёмную тему' }))
+    await user.click(screen.getByRole('button', { name: 'Настройки' }))
+    await user.click(screen.getByRole('switch', { name: 'Тёмная тема' }))
     await waitFor(() => expect(document.documentElement).toHaveAttribute('data-theme', 'dark'))
     expect(document.querySelector('.landscape')).toBe(scenes[0])
+    await user.click(screen.getByRole('button', { name: 'Готово' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
 
     // Смена вкладки не создаёт вторую сцену и не проигрывает выезд заново.
-    await user.click(menu().getByRole('button', { name: 'Пациенты' }))
+    await openPage(user, 'Пациенты')
     expect(document.querySelectorAll('.landscape')).toHaveLength(1)
     expect(document.querySelector('.landscape')).toBe(scenes[0])
   })
@@ -66,7 +70,7 @@ describe('workspace background and greeting', () => {
     await user.click(screen.getByRole('button', { name: 'Выйти' }))
     await enterDemo(user, 'ADMINISTRATOR')
     expect(within(content()).getByText('Доброе утро, Администратор')).toBeInTheDocument()
-    await user.click(menu().getByRole('button', { name: 'Расписание' }))
+    await openPage(user, 'Расписание')
     expect(within(content()).queryByText(/^(Доброе утро|Добрый день|Добрый вечер)/)).not.toBeInTheDocument()
   })
 })

@@ -1,24 +1,36 @@
 package ru.quietclinic.patients;
 
 import static ru.quietclinic.platform.PlatformConfig.actorId;
+import static ru.quietclinic.platform.PlatformConfig.can;
 import static ru.quietclinic.platform.PlatformConfig.clinicId;
 import static ru.quietclinic.platform.PlatformConfig.conflict;
 import static ru.quietclinic.platform.PlatformConfig.notFound;
-import static ru.quietclinic.platform.PlatformConfig.requireRole;
+import static ru.quietclinic.platform.PlatformConfig.requirePermission;
 
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.quietclinic.audit.AuditService;
+import ru.quietclinic.platform.Permission;
 
 /**
  * Административные данные пациента: поиск, регистрация, карточка и редактирование. Всё — в пределах
  * клиники сотрудника: карточка другой клиники выглядит как несуществующая.
+ *
+ * <p>Доступ по матрице RBAC: врач видит карточки только пациентов, с которыми у него активная связь
+ * с лечением ({@code clinical.patient.read-care}); кассир — только ФИО (без {@code
+ * clinical.patient.contacts-read}); техподдержка пациентов не видит.
  */
 @Service
 class PatientService {
@@ -26,28 +38,36 @@ class PatientService {
   private final ContactRepository contacts;
   private final AuditService audit;
   private final JdbcTemplate jdbc;
+  private final PatientPrivacyService privacy;
+  private final ContactTokenService tokens;
 
   PatientService(
       PatientRepository patients,
       ContactRepository contacts,
       AuditService audit,
-      JdbcTemplate jdbc) {
+      JdbcTemplate jdbc,
+      PatientPrivacyService privacy,
+      ContactTokenService tokens) {
     this.patients = patients;
     this.contacts = contacts;
     this.audit = audit;
     this.jdbc = jdbc;
+    this.privacy = privacy;
+    this.tokens = tokens;
   }
 
   /** Карточки, у которых совпадает основной или второй телефон, — предупреждение регистратуре. */
   private PhoneIndex phoneIndex() {
-    return new PhoneIndex(
-        contacts.findByTypeInAndPatientClinicId(PhoneIndex.PHONE_TYPES, clinicId()));
+    List<Contact> rows =
+        contacts.findByTypeInAndPatientClinicId(PhoneIndex.PHONE_TYPES, clinicId());
+    rows.forEach(privacy::decrypt);
+    return new PhoneIndex(rows);
   }
 
   /** Сотрудники своей клиники по id — для подписи постоянного администратора. */
   private Map<UUID, AssignedStaffView> clinicStaff() {
-    var result = new HashMap<UUID, AssignedStaffView>();
-    for (var row :
+    Map<UUID, AssignedStaffView> result = new HashMap<>();
+    for (AssignedStaffView row :
         jdbc.query(
             "select id, full_name, active from staff_user where clinic_id = ?",
             (rs, i) ->
@@ -67,8 +87,27 @@ class PatientService {
 
   private static PatientView view(
       Patient patient, PhoneIndex index, Map<UUID, AssignedStaffView> staff) {
-    var assigned = patient.assignedStaffId == null ? null : staff.get(patient.assignedStaffId);
-    return PatientView.of(patient, index.sharedWith(patient), assigned);
+    AssignedStaffView assigned =
+        patient.assignedStaffId == null ? null : staff.get(patient.assignedStaffId);
+    PatientView view = PatientView.of(patient, index.sharedWith(patient), assigned);
+    return can(Permission.PATIENT_CONTACTS_READ) ? view : view.nameOnly();
+  }
+
+  /** Пациенты с активной связью с лечением у текущего врача. */
+  private Set<UUID> carePatients() {
+    return new HashSet<>(
+        jdbc.queryForList(
+            "select patient_id from care_relationship where practitioner_id = ?"
+                + " and valid_from <= ? and valid_until > ?",
+            UUID.class,
+            actorId(),
+            Timestamp.from(Instant.now()),
+            Timestamp.from(Instant.now())));
+  }
+
+  /** Все пациенты клиники или только пациенты врача по связи с лечением. */
+  private boolean visible(Patient patient, Set<UUID> care) {
+    return can(Permission.PATIENT_READ) || (care != null && care.contains(patient.id));
   }
 
   /**
@@ -78,10 +117,12 @@ class PatientService {
    */
   private void checkAssignable(UUID staffId, UUID current) {
     if (staffId == null || staffId.equals(current)) return;
-    var rows =
+    List<Boolean> rows =
         jdbc.query(
-            "select role, active from staff_user where id = ? and clinic_id = ?",
-            (rs, i) -> "ADMINISTRATOR".equals(rs.getString("role")) && rs.getBoolean("active"),
+            "select u.active, (select count(*) from staff_role r where r.staff_id = u.id"
+                + " and r.role in ('OWNER', 'SENIOR_ADMINISTRATOR', 'ADMINISTRATOR')) as admin"
+                + " from staff_user u where u.id = ? and u.clinic_id = ?",
+            (rs, i) -> rs.getLong("admin") > 0 && rs.getBoolean("active"),
             staffId,
             clinicId());
     if (rows.isEmpty()) throw notFound("STAFF_NOT_FOUND", "Staff member not found");
@@ -93,15 +134,32 @@ class PatientService {
 
   @Transactional(readOnly = true)
   List<PatientView> search(String query) {
-    requireRole("ADMINISTRATOR", "DOCTOR", "NURSE", "CASHIER", "MANAGER");
-    var index = phoneIndex();
-    var staff = clinicStaff();
-    var result =
-        (query.isBlank()
-                ? patients.findByClinicIdOrderByFullName(clinicId())
-                : patients.findTop20ByClinicIdAndFullNameContainingIgnoreCaseOrderByFullName(
-                    clinicId(), query))
-            .stream().map(p -> view(p, index, staff)).toList();
+    requirePermission(Permission.PATIENT_READ, Permission.PATIENT_READ_CARE);
+    PhoneIndex index = phoneIndex();
+    Map<UUID, AssignedStaffView> staff = clinicStaff();
+    Set<UUID> care = can(Permission.PATIENT_READ) ? null : carePatients();
+    Map<UUID, Patient> matches = new LinkedHashMap<>();
+    if (query.isBlank()) {
+      patients.findByClinicIdOrderByFullName(clinicId()).forEach(p -> matches.put(p.id, p));
+    } else {
+      patients
+          .findTop20ByClinicIdAndFullNameContainingIgnoreCaseOrderByFullName(
+              clinicId(), query.trim())
+          .forEach(p -> matches.put(p.id, p));
+      // HMAC префикса ищет без открытого номера; старый индекс охватывает ещё не мигрированные
+      // строки.
+      patients
+          .findAllById(tokens.phoneMatches(clinicId(), query))
+          .forEach(p -> matches.putIfAbsent(p.id, p));
+      index.matching(query).forEach(p -> matches.putIfAbsent(p.id, p));
+    }
+    matches.values().forEach(privacy::decrypt);
+    List<PatientView> result =
+        matches.values().stream()
+            .sorted(Comparator.comparing((Patient p) -> p.fullName, String.CASE_INSENSITIVE_ORDER))
+            .filter(p -> visible(p, care))
+            .map(p -> view(p, index, staff))
+            .toList();
     // Одно событие на просмотр списка, а не по событию на каждого пациента: иначе журнал из
     // последних 100 событий целиком забивается одним открытием списка.
     audit.record(
@@ -116,32 +174,40 @@ class PatientService {
 
   @Transactional
   PatientView create(CreatePatientRequest request) {
-    requireRole("ADMINISTRATOR");
+    requirePermission(Permission.PATIENT_WRITE);
     checkAssignable(request.assignedStaffId(), null);
-    var patient = new Patient(request.fullName().trim(), request.birthDate());
+    Patient patient = new Patient(request.fullName().trim(), request.birthDate());
     patient.clinicId = clinicId();
     patient.update(request.details());
     patient.consents.add(new Consent(patient, request.consentVersion(), request.consentBasis()));
-    patients.save(patient);
+    privacy.encrypt(patient);
+    patients.saveAndFlush(patient);
+    tokens.rebuild(patient);
     audit.record(actorId(), "PATIENT_CREATED", "PATIENT", patient.id, "ALLOWED", "registration");
     return view(patient);
   }
 
   @Transactional(readOnly = true)
   PatientView get(UUID id) {
-    requireRole("ADMINISTRATOR", "DOCTOR", "NURSE", "CASHIER", "MANAGER");
-    var patient = find(id);
+    requirePermission(Permission.PATIENT_READ, Permission.PATIENT_READ_CARE);
+    Patient patient = find(id);
+    if (!visible(patient, can(Permission.PATIENT_READ) ? null : carePatients())) {
+      audit.record(actorId(), "PATIENT_ADMIN_READ", "PATIENT", patient.id, "DENIED", "no-care");
+      throw notFound("PATIENT_NOT_FOUND", "Patient not found");
+    }
     audit.record(actorId(), "PATIENT_ADMIN_READ", "PATIENT", patient.id, "ALLOWED", "card");
     return view(patient);
   }
 
   @Transactional
   PatientView update(UUID id, UpdatePatientRequest request) {
-    requireRole("ADMINISTRATOR");
-    var patient = find(id);
+    requirePermission(Permission.PATIENT_WRITE);
+    Patient patient = find(id);
     checkAssignable(request.assignedStaffId(), patient.assignedStaffId);
-    var changed = patient.update(request.details());
-    patients.save(patient);
+    List<String> changed = patient.update(request.details());
+    privacy.encrypt(patient);
+    patients.saveAndFlush(patient);
+    tokens.rebuild(patient);
     // В аудит пишутся только имена изменённых полей, без значений.
     audit.record(
         actorId(),
@@ -156,9 +222,9 @@ class PatientService {
   /** В аудит — факт и id согласия, без текста основания. */
   @Transactional
   PatientView grantConsent(UUID id, ConsentRequest request) {
-    requireRole("ADMINISTRATOR");
-    var patient = find(id);
-    var consent = patient.grantConsent(request.version(), request.basis());
+    requirePermission(Permission.PATIENT_WRITE);
+    Patient patient = find(id);
+    Consent consent = patient.grantConsent(request.version(), request.basis());
     patients.saveAndFlush(patient);
     audit.record(actorId(), "PATIENT_CONSENT_CHANGED", "CONSENT", consent.id, "ALLOWED", "granted");
     return view(patient);
@@ -166,9 +232,9 @@ class PatientService {
 
   @Transactional
   PatientView revokeConsent(UUID id, UUID consentId) {
-    requireRole("ADMINISTRATOR");
-    var patient = find(id);
-    var consent = patient.revokeConsent(consentId);
+    requirePermission(Permission.PATIENT_WRITE);
+    Patient patient = find(id);
+    Consent consent = patient.revokeConsent(consentId);
     patients.saveAndFlush(patient);
     audit.record(actorId(), "PATIENT_CONSENT_CHANGED", "CONSENT", consent.id, "ALLOWED", "revoked");
     return view(patient);
@@ -177,18 +243,20 @@ class PatientService {
   /** Источник и заметка регистратуры. В аудит — имена изменённых полей, без текста заметки. */
   @Transactional
   PatientView updateRegistry(UUID id, RegistryRequest request) {
-    requireRole("ADMINISTRATOR");
-    var source = request.referralSource();
+    requirePermission(Permission.PATIENT_WRITE);
+    String source = request.referralSource();
     if (source != null && !source.isBlank() && !ReferralSources.ALL.contains(source)) {
       throw conflict("INVALID_REFERRAL_SOURCE", "Unknown referral source");
     }
-    var patient = find(id);
-    var changed = new ArrayList<>(patient.updateRegistry(source, request.registryNote()));
+    Patient patient = find(id);
+    List<String> changed = new ArrayList<>(patient.updateRegistry(source, request.registryNote()));
     if (patient.updateTelegram(
         request.telegramChatId(), Boolean.TRUE.equals(request.removeTelegram()))) {
       changed.add("telegram");
     }
+    privacy.encrypt(patient);
     patients.saveAndFlush(patient);
+    tokens.rebuild(patient);
     audit.record(
         actorId(),
         "PATIENT_REGISTRY_UPDATED",
@@ -200,8 +268,11 @@ class PatientService {
   }
 
   private Patient find(UUID id) {
-    return patients
-        .findByIdAndClinicId(id, clinicId())
-        .orElseThrow(() -> notFound("PATIENT_NOT_FOUND", "Patient not found"));
+    Patient patient =
+        patients
+            .findByIdAndClinicId(id, clinicId())
+            .orElseThrow(() -> notFound("PATIENT_NOT_FOUND", "Patient not found"));
+    privacy.decrypt(patient);
+    return patient;
   }
 }

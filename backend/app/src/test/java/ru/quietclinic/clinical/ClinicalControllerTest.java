@@ -41,7 +41,7 @@ class ClinicalControllerTest {
   }
 
   private String arrivedAppointment(String startsAt, String endsAt) throws Exception {
-    var body =
+    String body =
         mvc.perform(
                 post("/api/v1/appointments")
                     .with(staff.role("ADMINISTRATOR"))
@@ -85,7 +85,7 @@ class ClinicalControllerTest {
 
   @Test
   void startsOnlyFromOwnArrivedAppointmentAndReusesEncounter() throws Exception {
-    var appointment = arrivedAppointment("2026-11-17T09:00:00Z", "2026-11-17T09:30:00Z");
+    String appointment = arrivedAppointment("2026-11-17T09:00:00Z", "2026-11-17T09:30:00Z");
 
     start(appointment, DMITRY, LEBEDEVA)
         .andExpect(status().isConflict())
@@ -95,7 +95,7 @@ class ClinicalControllerTest {
         .andExpect(jsonPath("$.code").value("APPOINTMENT_MISMATCH"));
     start("00000000-0000-0000-0000-000000009999", DMITRY, PETROV).andExpect(status().isNotFound());
 
-    var first =
+    String first =
         start(appointment, DMITRY, PETROV)
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.appointmentId").value(appointment))
@@ -110,7 +110,7 @@ class ClinicalControllerTest {
   }
 
   private String bookedAppointment(String startsAt, String endsAt) throws Exception {
-    var body =
+    String body =
         mvc.perform(
                 post("/api/v1/appointments")
                     .with(staff.role("ADMINISTRATOR"))
@@ -144,14 +144,14 @@ class ClinicalControllerTest {
   @Test
   void doctorStartsSeveralVisitsInARowFromBookedOrConfirmed() throws Exception {
     // Свой день (четверг): 24.11 уже занимают записи BillingControllerTest, база H2 общая.
-    var booked = bookedAppointment("2026-11-26T09:00:00Z", "2026-11-26T09:30:00Z");
-    var confirmed = bookedAppointment("2026-11-26T10:00:00Z", "2026-11-26T10:30:00Z");
+    String booked = bookedAppointment("2026-11-26T09:00:00Z", "2026-11-26T09:30:00Z");
+    String confirmed = bookedAppointment("2026-11-26T10:00:00Z", "2026-11-26T10:30:00Z");
     setStatus(confirmed, "CONFIRMED", "ADMINISTRATOR").andExpect(status().isOk());
 
     // Старт из «Ожидает» и «Подтверждён» переводит запись в IN_PROGRESS.
     start(booked, DMITRY, PETROV).andExpect(status().isCreated());
     // Второй пациент — не дожидаясь завершения и подписи первого.
-    var second =
+    String second =
         start(confirmed, DMITRY, PETROV)
             .andExpect(status().isCreated())
             .andReturn()
@@ -180,10 +180,10 @@ class ClinicalControllerTest {
 
   @Test
   void cancelledAndNoShowAppointmentsCannotBeStarted() throws Exception {
-    var cancelled = bookedAppointment("2026-11-24T12:00:00Z", "2026-11-24T12:30:00Z");
+    String cancelled = bookedAppointment("2026-11-24T12:00:00Z", "2026-11-24T12:30:00Z");
     mvc.perform(post("/api/v1/appointments/" + cancelled + "/cancel").with(staff.admin()))
         .andExpect(status().isOk());
-    var missed = bookedAppointment("2026-11-24T13:00:00Z", "2026-11-24T13:30:00Z");
+    String missed = bookedAppointment("2026-11-24T13:00:00Z", "2026-11-24T13:30:00Z");
     setStatus(missed, "NO_SHOW", "ADMINISTRATOR").andExpect(status().isOk());
 
     start(cancelled, DMITRY, PETROV)
@@ -196,10 +196,11 @@ class ClinicalControllerTest {
 
   @Test
   void savesDraftSignsFromNoteAndAmendsSignedDocument() throws Exception {
-    var appointment = arrivedAppointment("2026-11-17T10:00:00Z", "2026-11-17T10:30:00Z");
-    var started = start(appointment, DMITRY, PETROV).andReturn().getResponse().getContentAsString();
+    String appointment = arrivedAppointment("2026-11-17T10:00:00Z", "2026-11-17T10:30:00Z");
+    String started =
+        start(appointment, DMITRY, PETROV).andReturn().getResponse().getContentAsString();
     String encounterId = JsonPath.read(started, "$.encounterId");
-    var documents = "/api/v1/clinical/encounters/" + encounterId + "/documents";
+    String documents = "/api/v1/clinical/encounters/" + encounterId + "/documents";
 
     doctor(post(documents).contentType(MediaType.APPLICATION_JSON).content(TEMPLATE))
         .andExpect(status().isConflict())
@@ -216,7 +217,7 @@ class ClinicalControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.diagnosis").value("Synthetic diagnosis"));
 
-    var draft =
+    String draft =
         doctor(post(documents).contentType(MediaType.APPLICATION_JSON).content(TEMPLATE))
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.state").value("DRAFT"))
@@ -259,7 +260,7 @@ class ClinicalControllerTest {
 
   @Test
   void historyRequiresActiveCareRelationship() throws Exception {
-    var created =
+    String created =
         mvc.perform(
                 post("/api/v1/patients")
                     .with(staff.role("ADMINISTRATOR"))

@@ -3,6 +3,10 @@ package ru.quietclinic.scheduling;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * Запись в расписании. patientId пуст для ролей без доступа к пациентам (техподдержка видит
+ * расписание с маской: время, врач, статус). При свободной цене amountMinor пуст, priceMode = OPEN.
+ */
 record AppointmentView(
     UUID id,
     UUID patientId,
@@ -13,7 +17,10 @@ record AppointmentView(
     String status,
     Long amountMinor,
     String currency,
-    long version) {
+    long version,
+    UUID serviceId,
+    String priceMode,
+    Long estimateMinor) {
 
   static AppointmentView of(Appointment a) {
     return new AppointmentView(
@@ -26,6 +33,27 @@ record AppointmentView(
         a.status,
         a.amountMinor,
         a.currency,
-        a.version);
+        a.version,
+        a.serviceId,
+        a.priceMode,
+        a.estimateMinor);
+  }
+
+  /** Без идентификатора пациента — для маски расписания. */
+  AppointmentView masked() {
+    return new AppointmentView(
+        id,
+        null,
+        practitionerId,
+        startsAt,
+        endsAt,
+        serviceName,
+        status,
+        amountMinor,
+        currency,
+        version,
+        serviceId,
+        priceMode,
+        estimateMinor);
   }
 }

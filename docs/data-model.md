@@ -2,7 +2,7 @@
 
 Документ описывает, где и как AlphaCRM хранит данные: таблицы, связи, ограничения, что шифруется, что попадает в журнал аудита и как схема меняется. Общая схема проекта — в [architecture.md](architecture.md).
 
-Источник истины — миграции Liquibase в `backend/app/src/main/resources/db/changelog/` (`db.changelog-master.yaml` → `001-core.sql` … `008-outbox-delivery.sql`). JPA работает с `ddl-auto: validate`: Hibernate только сверяет сущности со схемой и ничего не создаёт сам. Если таблица в этом документе расходится с миграциями, правы миграции.
+Источник истины — миграции Liquibase в `backend/app/src/main/resources/db/changelog/` (`db.changelog-master.yaml` → `001-core.sql` … `025-messenger-integrations.sql`). JPA работает с `ddl-auto: validate`: Hibernate только сверяет сущности со схемой и ничего не создаёт сам. Если таблица в этом документе расходится с миграциями, правы миграции.
 
 ## Содержание
 
@@ -45,12 +45,18 @@ erDiagram
     practitioner ||--o| staff_user : "practitioner_id (только DOCTOR)"
     practitioner ||--o{ practitioner_schedule : "смены по дням недели"
 
-    patient ||--o{ patient_contact : "телефоны, e-mail, Telegram"
+    patient ||--o{ patient_contact : "телефоны, e-mail, Telegram, MAX"
+    patient ||--o{ patient_contact_token : "HMAC-индексы контактов"
+    patient ||--o{ messenger_link_token : "одноразовые ссылки привязки"
     staff_user |o--o{ patient : "assigned_staff_id (постоянный администратор)"
     patient ||--o{ patient_file : "PDF"
     appointment |o--o{ patient_file : "appointment_id (необязателен)"
     staff_user ||--o{ patient_file : "uploaded_by, signed_by"
     patient ||--o{ patient_consent : "версии согласия"
+    clinic ||--o{ contract_template : "версии DOCX"
+    clinic ||--|| contract_counter : "номера договоров"
+    patient ||--o{ patient_contract : "неизменяемые договоры"
+    contract_template ||--o{ patient_contract : "template_id"
 
     patient ||--o{ appointment : "patient_id"
     practitioner ||--o{ appointment : "practitioner_id"
@@ -68,11 +74,16 @@ erDiagram
 
     staff_user ||--o{ registry_task : "assignee_id"
     patient |o--o{ registry_task : "patient_id (необязателен)"
+    staff_user ||--o{ workspace_item : "owner_id"
+    staff_user ||--o{ workspace_saved_view : "owner_id"
 
     patient ||--o{ waitlist_entry : ""
     practitioner ||--o{ waitlist_entry : ""
     clinic_service ||--o{ waitlist_entry : "service_id"
     appointment |o--o{ waitlist_entry : "appointment_id после записи"
+
+    clinic_service ||--o{ clinic_service_norm : "нормы расхода"
+    clinic ||--o{ domain_event_outbox : "clinic_id"
 
     audit_event }o--|| staff_user : "actor_id (логически)"
     outbox_message }o--|| appointment : "aggregate_id (логически)"
@@ -88,7 +99,7 @@ erDiagram
 4. **Клиника на каждой строке, которую видит сотрудник.** Прямо — `staff_user`, `practitioner`, `patient`, `clinic_service`, `registry_task`. Через родителя — запись (через врача), приём и документы (через запись), счёт (через запись), контакты и согласия (через пациента). Сессия знает клинику сотрудника (`PlatformConfig.clinicId()`), и каждая выборка ограничена ею. Строку чужой клиники API отдаёт как несуществующую (`404`).
 5. **Снимки, а не ссылки, там, где важна история.** Запись хранит название услуги и цену на момент записи (`appointment.service_name`, `amount_minor`, `currency`), подписанный документ — снимок текста (`medical_document.snapshot_encrypted`). Смена цены, выключение услуги или правка заметки не переписывают прошлое.
 6. **Не удалять, а выключать или закрывать.** Сотрудник — `active = false`, услуга — `active = false`, согласие — `revoked_at`, задача — `status = 'DONE'`, ожидание — `CANCELLED`. Физическое удаление есть только в миграции 016 для прежних демо-логинов.
-7. **Статусы и коды — английские машинные значения** (`BOOKED`, `SIGNED_LOCKED`, `ADMINISTRATOR`, `with-patient`) с `CHECK`-ограничениями, где набор закрыт. Русские надписи живут только в интерфейсе. Русский текст в базе — это данные: ФИО, названия услуг и задач, заметки, которые ввёл сотрудник.
+7. **Статусы и коды — английские машинные значения** (`BOOKED`, `SIGNED_LOCKED`, `ADMINISTRATOR`, `with-patient`) с `CHECK`-ограничениями, где набор закрыт. Русские надписи живут только в интерфейсе. Исключение — личное пространство: `type` и `status` там свободные пользовательские данные. Русский текст в базе — это данные: ФИО, названия услуг и задач, заметки, которые ввёл сотрудник.
 8. **Оптимистичная блокировка** — колонка `version` у `appointment`, `clinical_note`, `medical_document` (`@Version` в JPA): одновременная правка одной строки даёт конфликт, а не тихую потерю данных.
 
 ## Таблицы по модулям
@@ -116,13 +127,32 @@ erDiagram
 | `full_name` | VARCHAR(255) | NN | ФИО — данные, как ввёл администратор |
 | `username` | VARCHAR(80) | NN, U | логин, уникален во всей установке, хранится в нижнем регистре |
 | `password_hash` | VARCHAR(100) | NN | bcrypt со своей солью. Пароля в открытом виде нет нигде |
-| `role` | VARCHAR(40) | NN, CHECK | `ADMINISTRATOR`, `DOCTOR`, `MANAGER`, `CASHIER` |
+| `role` | VARCHAR(40) | NN, CHECK | основная роль: `OWNER`, `SENIOR_ADMINISTRATOR`, `ADMINISTRATOR`, `MANAGER`, `DOCTOR`, `NURSE`, `SENIOR_NURSE`, `CASHIER`, `SUPPORT`; у врача — `DOCTOR`, иначе старшая из ролей. Все роли — в `staff_role`. Разрешения ролей в базе не хранятся — они в коде (`RolePermissions`) |
 | `practitioner_id` | UUID | FK → `practitioner`, U | только у `DOCTOR`, у остальных `NULL` (CHECK) |
 | `active` | BOOLEAN | NN | `false` — войти нельзя, открытые сессии перестают действовать |
 | `must_change_password` | BOOLEAN | NN, default `false` | временный пароль: до смены API отвечает `403 PASSWORD_CHANGE_REQUIRED` |
 | `created_at` | TIMESTAMPTZ | NN | |
 
 Сессии хранятся в памяти backend (Spring Session не используется): перезапуск backend завершает все сессии.
+
+#### `staff_role` — роли сотрудника
+
+`(staff_id, role)` — PK, `staff_id` → `staff_user`, `role` — CHECK тем же списком. Сотрудник может иметь несколько ролей, права складываются; роли меняются только `PUT /staff/{id}/roles`. Сессия пересчитывает права на следующем запросе, если роли поменялись.
+
+#### `hr_contract` — условия работы и ставка
+
+| Колонка | Тип | | Смысл |
+|---|---|---|---|
+| `id` | UUID | PK | |
+| `clinic_id`, `staff_id` | UUID | FK, NN | клиника и сотрудник |
+| `position` | VARCHAR(160) | NN | должность — данные, как ввёл владелец |
+| `rate_minor` | BIGINT | NN, CHECK ≥ 0 | ставка в копейках |
+| `rate_unit` | VARCHAR(10) | NN, CHECK | `MONTH`, `HOUR`, `VISIT` |
+| `currency` | VARCHAR(3) | NN | |
+| `valid_from`, `valid_to` | DATE | `valid_from` NN | период; `valid_to` пусто — действуют сейчас. Новые условия закрывают прежние днём раньше |
+| `created_by`, `created_at` | | NN | кто внёс |
+
+Чужие условия читает и меняет только владелец, свои — каждый сотрудник. Суммы в аудит не пишутся.
 
 ### patients — пациенты
 
@@ -138,6 +168,8 @@ erDiagram
 | `registry_note` | VARCHAR(1000) | | заметка регистратуры; в клинический контур и врачу не попадает |
 | `assigned_staff_id` | UUID | FK → `staff_user` | постоянный администратор. Новым назначается только активный `ADMINISTRATOR` своей клиники (приложение); отключённый остаётся привязанным, пока карточку не поправят |
 | `created_at` | TIMESTAMPTZ | NN | |
+| `profile` | TEXT | | AES-GCM шифртекст расширенной карточки: документы, адрес, работа, договор, представители, СНИЛС, ИНН и настройки уведомлений |
+| `preferred_messenger` | VARCHAR(16) | CHECK | `TELEGRAM`, `MAX` или `NULL` — автоматический выбор доступного канала |
 
 #### `patient_contact`
 
@@ -145,8 +177,32 @@ erDiagram
 |---|---|---|---|
 | `id` | UUID | PK | |
 | `patient_id` | UUID | FK → `patient`, NN | |
-| `type` | VARCHAR(40) | NN | `PHONE` (основной), `SECOND_PHONE`, `EMAIL`, `TELEGRAM`; каждого типа — не больше одного на пациента (приложение) |
-| `contact_value` | VARCHAR(255) | NN | как ввели, без пробелов по краям; пустое значение не хранится — контакт удаляется. Дубли телефонов ищутся по цифрам среди `PHONE` и `SECOND_PHONE` (`PhoneIndex`: `8…` = `+7…`), отдельной нормализованной колонки нет |
+| `type` | VARCHAR(40) | NN | `PHONE` (основной), `SECOND_PHONE`, `EMAIL`, `TELEGRAM`, `MAX`; каждого типа — не больше одного на пациента (приложение) |
+| `contact_value` | VARCHAR(2048) | NN | AES-GCM шифртекст контакта с AAD клиники, пациента, контакта и типа; открытое значение не хранится. Пустое значение удаляет контакт |
+
+#### `patient_contact_token`
+
+| Колонка | Тип | | Смысл |
+|---|---|---|---|
+| `contact_id` | UUID | PK, FK → `patient_contact` | контакт, для которого построен индекс |
+| `patient_id`, `clinic_id` | UUID | NN | область поиска; `patient_id` также FK → `patient` |
+| `kind` | VARCHAR(40) | NN | `PHONE`, `PHONE_EXACT`, `TELEGRAM` или `MAX` |
+| `token` | CHAR(64) | PK | HMAC-SHA256 префикса или точного нормализованного телефона либо точного внешнего id мессенджера; составной PK — `(contact_id, token)` |
+
+Для каждого телефона хранятся HMAC всех префиксов: поиск по части номера не требует открытого телефона или детерминированного шифрования. Для Telegram и MAX хранится только точный HMAC внешнего id. Ключ HMAC отделён от ключа содержимого и не меняется при ротации версий шифрования.
+
+#### `messenger_link_token` — одноразовая привязка мессенджера
+
+| Колонка | Тип | | Смысл |
+|---|---|---|---|
+| `id` | UUID | PK | |
+| `patient_id`, `clinic_id` | UUID | NN | карточка и её клиника; `patient_id` — FK → `patient` |
+| `channel` | VARCHAR(16) | NN, CHECK | `TELEGRAM` или `MAX` |
+| `token_hash` | CHAR(64) | NN, U | HMAC-SHA256 одноразового токена; сам токен в базе не хранится |
+| `created_at`, `expires_at` | TIMESTAMPTZ | NN | выдача и срок действия (10 минут) |
+| `consumed_at` | TIMESTAMPTZ | | когда ссылку погасил бот; повторное использование отклоняется |
+
+Новая ссылка для того же пациента и канала отзывает прежние непогашенные. Погашение атомарно отмечает токен и привязывает внешний id именно к выбранной сотрудником карточке, не создавая дубль.
 
 #### `patient_consent` — версии согласия
 
@@ -194,11 +250,24 @@ erDiagram
 | `clinic_id` | UUID | FK → `clinic`, NN | услуги своей клиники |
 | `name` | VARCHAR(255) | NN | название — данные, как ввёл администратор. В PostgreSQL уникально внутри клиники (`clinic_service_clinic_name_unique`), в H2 — во всей базе |
 | `duration_minutes` | INTEGER | NN, CHECK > 0 | API принимает 1–720 |
-| `price_minor` | BIGINT | NN, CHECK ≥ 0 | цена в копейках |
+| `price_mode` | VARCHAR(10) | NN, CHECK, default `FIXED` | `FIXED` — фиксированная цена, `OPEN` — свободная: сумму вводят в кассе |
+| `price_minor` | BIGINT | CHECK ≥ 0 | цена в копейках; у `OPEN` — `NULL` (CHECK `clinic_service_pricing_valid`) |
+| `min_minor`, `max_minor` | BIGINT | | пределы свободной цены; у `OPEN` обязательны, `0 ≤ min ≤ max` |
 | `currency` | VARCHAR(3) | NN | `RUB` |
 | `active` | BOOLEAN | NN, default `true` | `false` — не предлагается в новой записи и листе ожидания; строка остаётся |
 
-Цена и выключение действуют только на новые записи. Запись не ссылается на услугу по id — она хранит снимок.
+Цена и выключение действуют только на новые записи: запись хранит снимок цены, а `service_id` — только чтобы найти нормы расхода и пределы свободной цены при завершении.
+
+#### `clinic_service_norm` — нормы расхода услуги
+
+| Колонка | Тип | | Смысл |
+|---|---|---|---|
+| `id` | UUID | PK | |
+| `service_id` | UUID | FK → `clinic_service`, NN | |
+| `item_id` | UUID | NN | позиция склада (`inventory.item`) — по id, без внешнего ключа в чужую схему |
+| `quantity` | NUMERIC(14,3) | NN, CHECK > 0 | количество на один приём |
+
+Уникальность `(service_id, item_id)`.
 
 #### `appointment` — запись на приём
 
@@ -209,7 +278,10 @@ erDiagram
 | `practitioner_id` | UUID | FK → `practitioner`, NN | клиника записи — клиника врача |
 | `starts_at`, `ends_at` | TIMESTAMPTZ | NN, CHECK `ends_at > starts_at` | |
 | `service_name` | VARCHAR(255) | NN | **снимок** названия услуги на момент записи |
-| `amount_minor` | BIGINT | | **снимок** цены; `NULL` у записей, сделанных до появления цен |
+| `service_id` | UUID | | услуга записи (логическая ссылка; у старых записей заполнена по названию) |
+| `price_mode` | VARCHAR(10) | | снимок режима цены: `FIXED`, `OPEN` |
+| `amount_minor` | BIGINT | | **снимок** цены; `NULL` у свободной цены и у записей, сделанных до появления цен |
+| `estimate_minor` | BIGINT | | предварительная оценка свободной цены (в пределах услуги), необязательна |
 | `currency` | VARCHAR(3) | | снимок валюты |
 | `status` | VARCHAR(40) | NN | `BOOKED`, `CONFIRMED`, `ARRIVED`, `IN_PROGRESS`, `COMPLETED`, `NO_SHOW`, `CANCELLED` |
 | `created_at` | TIMESTAMPTZ | NN | |
@@ -310,6 +382,19 @@ erDiagram
 
 Индекс `medical_document_signed_idx (state, signed_by, signed_at)` — архив подписанных документов. Архив читает текст из `snapshot_encrypted`, а не из текущей заметки.
 
+#### `break_glass_grant` — экстренный доступ владельца
+
+| Колонка | Тип | | Смысл |
+|---|---|---|---|
+| `id` | UUID | PK | |
+| `clinic_id`, `patient_id` | UUID | FK, NN | один пациент своей клиники |
+| `owner_id` | UUID | NN | учётная запись владельца |
+| `reason_code` | VARCHAR(40) | NN, CHECK | `PATIENT_COMPLAINT`, `LEGAL_REQUEST`, `DOCTOR_UNAVAILABLE`, `QUALITY_REVIEW`, `OTHER` |
+| `reason_text_encrypted` | VARCHAR(4000) | NN | пояснение, AES-GCM; в аудит не попадает |
+| `granted_at`, `expires_at` | TIMESTAMPTZ | NN, CHECK `expires_at > granted_at` | 60 минут |
+
+Пока доступ действует, владелец читает клиническую историю пациента; каждое чтение — `CLINICAL_HISTORY_READ` с основанием `break-glass`.
+
 #### `patient_file` — PDF пациента
 
 | Колонка | Тип | | Смысл |
@@ -330,6 +415,16 @@ erDiagram
 
 CHECK `patient_file_signed_complete`: у `SIGNED_LOCKED` заполнены хеш, подписант и время. Индексы `patient_file_patient_idx (clinic_id, patient_id, uploaded_at)` — блок карточки, `patient_file_signed_idx (clinic_id, state, signed_by)` — архив. Список файлов читается без столбца `ciphertext`. Удаления нет: замена — новый файл.
 
+#### Договоры: `contract_template`, `contract_counter`, `patient_contract`
+
+| Таблица | Что хранит |
+|---|---|
+| `contract_template` | клиника, название, номер версии, список переменных, исходное имя и DOCX в `docx_ciphertext` (BYTEA, AES-GCM), автор и время |
+| `contract_counter` | один счётчик последнего номера на клинику; приложение блокирует строку `FOR UPDATE` и атомарно выдаёт следующий номер |
+| `patient_contract` | клиника, пациент, версия шаблона, услуга, уникальный в клинике номер, снимок названия услуги, зашифрованные `snapshot_values`, `docx_ciphertext`, необязательный `pdf_ciphertext`, SHA-256 открытых DOCX/PDF, автор и время |
+
+Договор — исторический снимок: ссылка на версию шаблона сохраняется, а позднейшие версии, правка пациента или изменение цены не меняют готовый документ. `snapshot_values` шифруется строкой AES-GCM с AAD `patient-contract:<clinic>:<id>:snapshot`; DOCX/PDF — бинарным форматом той же версии ключей. Удаления и редактирования через API нет.
+
 ### billing — касса
 
 #### `charge` — счёт
@@ -338,10 +433,13 @@ CHECK `patient_file_signed_complete`: у `SIGNED_LOCKED` заполнены хе
 |---|---|---|---|
 | `id` | UUID | PK | |
 | `appointment_id` | UUID | FK → `appointment`, NN, U (`charge_appointment_unique`) | один счёт на приём |
-| `amount_minor` | BIGINT | NN | из снимка цены записи |
+| `amount_minor` | BIGINT | | из снимка цены записи; у свободной цены — `NULL`, пока сумму не ввели (CHECK `charge_amount_present`) |
+| `price_mode` | VARCHAR(10) | NN, default `FIXED` | снимок режима цены |
+| `min_minor`, `max_minor`, `estimate_minor` | BIGINT | | снимок пределов и оценки свободной цены на момент приёма |
 | `currency` | VARCHAR(3) | NN | |
-| `status` | VARCHAR(40) | NN | `PENDING` → `PAID` |
+| `status` | VARCHAR(40) | NN, CHECK | `AWAITING_AMOUNT` → `PENDING` → `PAID` → `REFUNDED`; неоплаченный — `VOIDED`; фиксированная цена начинает с `PENDING` |
 | `created_at` | TIMESTAMPTZ | NN | |
+| `voided_at`, `voided_by`, `void_reason` | | | аннулирование: когда, кто, код причины (`DUPLICATE`, `ERROR`, `PATIENT_DECLINED`, `OTHER`) |
 
 #### `payment_record` — оплата
 
@@ -350,10 +448,108 @@ CHECK `patient_file_signed_complete`: у `SIGNED_LOCKED` заполнены хе
 | `id` | UUID | PK | |
 | `idempotency_key` | VARCHAR(255) | NN, U | повтор с тем же ключом не создаёт второй платёж |
 | `charge_id` | UUID | FK → `charge`, NN | |
-| `provider_ref` | VARCHAR(255) | NN | ссылка платёжного адаптера (сейчас — безопасный mock) |
-| `payment_status` | VARCHAR(40) | NN | ответ адаптера |
+| `provider_ref` | VARCHAR(255) | NN, U | ссылка платёжного адаптера или терминала |
+| `payment_status` | VARCHAR(40) | NN | терминал: `PENDING` → `SUCCEEDED` / `CANCELLED` / `FAILED` / `TIMEOUT`; ручная отметка — `MOCK_NO_PROVIDER` |
 | `fiscal_status` | VARCHAR(40) | NN | `QUEUED` — чек ждёт онлайн-кассу; `SENT_TO_CASHBOX` — передан в кассу (`CLINIC_CASHBOX_URL`). Сама CRM чек не печатает |
-| `created_at` | TIMESTAMPTZ | NN | |
+| `method` | VARCHAR(16) | NN, default `MANUAL` | `CARD`, `SBP` или `MANUAL` |
+| `created_at`, `updated_at` | TIMESTAMPTZ | NN | создание и последний ответ |
+| `completed_at` | TIMESTAMPTZ | | финальный ответ терминала; используется как время оплаты |
+| `failure_reason` | VARCHAR(255) | | машинная причина отмены/ошибки без данных карты |
+
+#### `terminal_payment_event` — принятые ответы терминала
+
+`provider + event_id` уникальны; `payment_id` ссылается на `payment_record`, `received_at` фиксирует получение. Этот журнал не содержит PAN, QR-пayload или персональных данных.
+
+#### `refund_record` — возврат оплаты
+
+| Колонка | Тип | | Смысл |
+|---|---|---|---|
+| `id` | UUID | PK | |
+| `payment_id` | UUID | FK → `payment_record`, NN, U | один возврат на платёж (полный) |
+| `charge_id` | UUID | FK → `charge`, NN | |
+| `idempotency_key` | VARCHAR(255) | NN, U | повтор не делает второй возврат |
+| `amount_minor`, `currency` | | NN | вся сумма оплаты |
+| `reason` | VARCHAR(40) | NN | код: `PATIENT_REQUEST`, `SERVICE_NOT_PROVIDED`, `ERROR`, `OTHER` |
+| `fiscal_status` | VARCHAR(40) | NN | чек возврата: `QUEUED` → `SENT_TO_CASHBOX` |
+| `created_by`, `created_at` | | NN | |
+
+Отчёт о продажах (`GET /finance/sales`) учитывает только успешные/вручную подтверждённые оплаты по `coalesce(payment_record.completed_at, payment_record.created_at)` и вычитает возвраты по `refund_record.created_at`. Ожидание, отмена, ошибка и таймаут терминала в выручку не попадают.
+
+### platform — доменные события
+
+#### `domain_event_outbox`
+
+Конверт события пишется в той же транзакции, что изменение; после фиксации раздаётся обработчикам, не раздавшееся повторяет `DomainEventScheduler`.
+
+| Колонка | Тип | | Смысл |
+|---|---|---|---|
+| `id` | UUID | PK | `eventId` |
+| `type`, `version` | VARCHAR(80), INTEGER | NN | `AppointmentCompleted`, `StockShortage`; версия схемы полезной нагрузки |
+| `clinic_id` | UUID | FK → `clinic`, NN | |
+| `occurred_at` | TIMESTAMPTZ | NN | |
+| `actor_id` | UUID | NN | кто вызвал изменение |
+| `correlation_id` | VARCHAR(80) | | из заголовка запроса |
+| `payload` | VARCHAR(8000) | NN | JSON: id и числа, без ФИО, телефонов и клинического текста |
+| `status` | VARCHAR(20) | NN, CHECK | `PENDING`, `PUBLISHED`, `FAILED` |
+| `attempts`, `next_attempt_at`, `last_error`, `published_at` | | | повторы; `last_error` — класс ошибки, без текста |
+
+#### `domain_event_inbox`
+
+`(consumer, event_id)` — PK; строка пишется в транзакции обработчика. Есть строка — событие этим потребителем уже обработано, повтор ничего не делает. Потребители: `billing.charge-on-completed`, `inventory.consumption-on-completed`, `registry.stock-shortage-task`.
+
+### inventory — склад (схема `inventory`)
+
+Таблицы склада лежат в своей схеме; пациентов в ней нет — расход по приёму хранит только `appointment_id`. Каждая таблица с данными клиники несёт `clinic_id`.
+
+| Таблица | Что хранит |
+|---|---|
+| `item_category` | категории номенклатуры (`kind`: `DRUG`, `MEDICAL_DEVICE`, `CONSUMABLE`, `GOODS`), вложенность через `parent_id` |
+| `item` | номенклатура: название, единица, `gtin`, `marked` и `marking_system` (`NONE`, `MDLP`, `GIS_MT`; маркируемому нужен GTIN — CHECK), `rx_only`, `active` |
+| `warehouse` | склады клиники, `is_default` — основной (для расхода по нормам) |
+| `stock_document` | документ движения: `type` (`RECEIPT`, `CONSUMPTION`, `WRITE_OFF`, `TRANSFER`, `RETURN_TO_SUPPLIER`), `status` (`DRAFT`, `POSTED`, `CANCELLED`), склады, поставщик, `appointment_id` для расхода по приёму, `idempotency_key` (уникален в клинике — повтор события не создаёт второй документ), кто и когда провёл |
+| `stock_line` | строки: товар, количество (NUMERIC(14,3) > 0), партия, срок годности |
+| `stock_line_code` | марки (SGTIN), отсканированные в строке |
+| `stock_balance` | остаток по `(item_id, warehouse_id, batch)` со сроком годности; меняется только проведением; может уйти в минус только при расходе с разрешением или по нормам приёма |
+| `marking_code` | марка упаковки: SGTIN, GTIN, серийный номер, партия, срок, статус (`PENDING_ACCEPTANCE`, `IN_STOCK`, `WITHDRAWAL_PENDING`, `WITHDRAWN`, `WRITE_OFF_PENDING`, `WRITTEN_OFF`, …), склад. Уникальна в клинике; криптохвост кода не хранится |
+| `marking_operation` | очередь операций к оператору маркировки (`ACCEPTANCE`, `WITHDRAW_MEDICAL_USE`, `WRITE_OFF`, `RETURN_TO_SUPPLIER`): статус `PENDING`/`DONE`/`ERROR`, попытки, ответ оператора, код причины |
+| `marking_operation_code` | марки операции |
+
+### drive — корпоративный диск (схема `drive`)
+
+| Таблица | Что хранит |
+|---|---|
+| `drive_node` | папка или файл (`kind`): клиника, родитель, имя, владелец, размер, текущая версия; `deleted_at`/`deleted_by` — в корзине |
+| `drive_version` | версия файла: номер, `object_key` (шифртекст в `CLINIC_DRIVE_STORAGE_DIR`, ключ `clinicId/uuid`), размер, SHA-256 исходного содержимого, тип, кто и когда загрузил |
+| `drive_share` | право на узел: кому (`USER`, `ROLE`, `CLINIC`, `LINK`), что (`VIEW`, `EDIT`, `MANAGE`), срок; у ссылки — только SHA-256 токена (уникален) и обязательный срок |
+| `drive_quota` | занято и предел байтов клиники |
+
+Имя файла есть только в `drive_node`, в аудит оно не пишется. Клинические PDF пациента сюда не попадают — они в `patient_file`.
+
+### workspace — личное пространство (схема `workspace`)
+
+#### `item` — задачи, заметки и записи произвольных типов
+
+| Колонка | Тип | | Смысл |
+|---|---|---|---|
+| `id` | UUID | PK | запись |
+| `clinic_id`, `owner_id` | UUID | FK, NN | клиника и сотрудник-владелец; все чтения и изменения ограничены обоими значениями |
+| `type`, `status` | VARCHAR(60), VARCHAR(80) | NN | свободные значения пользователя, без закрытого справочника |
+| `title`, `body` | VARCHAR(240), VARCHAR(30000) | `title` NN | название и произвольный текст |
+| `color`, `completed` | VARCHAR(20), BOOLEAN | NN | цвет карточки и отдельный признак завершения: смена статуса сама по себе задачу не закрывает |
+| `due_at`, `remind_at` | TIMESTAMPTZ | | срок и время показа напоминания в списке; push-уведомлений нет |
+| `patient_id`, `appointment_id` | UUID | | необязательные логические связи; приложение проверяет клинику, права и соответствие записи пациенту |
+| `tags`, `fields`, `checklist` | VARCHAR | NN | JSON: теги, пары «имя — значение» и пункты чек-листа; новые поля не требуют миграции |
+| `created_at`, `updated_at`, `completed_at`, `archived_at` | TIMESTAMPTZ | | создание, изменение, завершение и архив; архивирование не удаляет запись |
+
+Индексы покрывают список владельца, архив, сроки и связь с пациентом. Это личные рабочие записи, а не клиническая история: медицинские заметки остаются в зашифрованном клиническом контуре.
+
+#### `saved_view` — сохранённые представления
+
+`id`, `clinic_id`, `owner_id`, `name`, `filter_json`, `created_at`. В JSON сохраняются поиск, тип, статус, тег, срок, сортировка и режим «список/доска». Имя представления уникально для владельца; строки других сотрудников и клиник недоступны.
+
+### commercial и assistant — исторические схемы
+
+Миграция `018-assistant-commercial.sql` создала схемы `commercial` (`subscription`, `payment`) и `assistant` (`usage_counter`) для ранее существовавших отдельных ИИ-тарифов и месячного учёта обращений. Текущее приложение эти таблицы не читает и не изменяет: продажи ИИ-тарифов, платёжные endpoint-ы и месячные лимиты удалены. Миграция сохранена без изменений для совместимости checksum Liquibase и сохранения исторических данных уже развёрнутых баз; автоматического удаления таблиц нет. Вопросы пользователей, каталог страниц и ответы модели не хранятся.
 
 ### communications — outbox
 
@@ -374,16 +570,16 @@ CHECK `patient_file_signed_complete`: у `SIGNED_LOCKED` заполнены хе
 | `next_attempt_at` | TIMESTAMPTZ | | не раньше: напоминание — за 24 часа до приёма, повтор — после паузы; `NULL` — больше не пробовать |
 | `last_attempt_at`, `sent_at` | TIMESTAMPTZ | | последняя попытка и доставка |
 | `attempts` | INTEGER | NN | неудачные попытки (до 5) |
-| `channel` | VARCHAR(40) | | `WEBHOOK`, `TELEGRAM`, `CASHBOX`, `MOCK` |
-| `last_error` | VARCHAR(80) | | машинный код причины: `CHANNEL_NOT_CONFIGURED`, `NO_TELEGRAM_CONTACT`, `NO_CONSENT`, `RESCHEDULED`, `APPOINTMENT_CANCELLED`, `NO_SHOW`, `EXPIRED`, `HTTP_503`, `NETWORK_ERROR`, `FISCAL_NOT_CONFIGURED`… |
+| `channel` | VARCHAR(40) | | `WEBHOOK`, `TELEGRAM`, `MAX`, `CASHBOX`, `MOCK` |
+| `last_error` | VARCHAR(80) | | машинный код причины: `CHANNEL_NOT_CONFIGURED`, `NO_TELEGRAM_CONTACT`, `NO_MAX_CONTACT`, `NO_CONSENT`, `RESCHEDULED`, `APPOINTMENT_CANCELLED`, `NO_SHOW`, `EXPIRED`, `HTTP_503`, `NETWORK_ERROR`, `FISCAL_NOT_CONFIGURED`… |
 | `version` | BIGINT | NN | оптимистичная блокировка: два доставщика не возьмут одну строку |
 | `created_at` | TIMESTAMPTZ | NN | |
 
 Индексы: `outbox_message_due_idx (status, next_attempt_at)` — очередь доставщика; `outbox_message_clinic_idx (clinic_id, created_at)` — экран; `outbox_message_aggregate_idx (aggregate_id)`.
 
-Строка пишется в той же транзакции, что и событие (запись, отмена, оплата). **Текста сообщения, ФИО, телефона, chat id, жалоб, диагноза, заметки и снимка документа в строке нет** — текст собирается из записи в момент доставки и в базу не сохраняется. Как работает доставка и что уходит наружу — README, раздел «Внешние выводы».
+Строка пишется в той же транзакции, что и событие (запись, отмена, оплата). **Текста сообщения, ФИО, телефона, внешнего id мессенджера, жалоб, диагноза, заметки и снимка документа в строке нет** — текст собирается из записи в момент доставки и в базу не сохраняется. Как работает доставка и что уходит наружу — README, раздел «Внешние выводы».
 
-Контакт Telegram пациента — строка `patient_contact` с `type = 'TELEGRAM'` и chat id в `contact_value`; один на пациента, вводит администратор. API отдаёт только признак `telegramConnected`.
+Контакты Telegram и MAX — строки `patient_contact` с соответствующим `type` и зашифрованным внешним id; по одному на канал. Подключение выполняется одноразовой ссылкой из карточки, а не ручным вводом id. API отдаёт только `telegramConnected`, `maxConnected` и `preferredMessenger`; доставщик сначала выбирает предпочтительный доступный канал, затем второй подключённый.
 
 ### audit — журнал
 
@@ -418,14 +614,17 @@ CHECK `patient_file_signed_complete`: у `SIGNED_LOCKED` заполнены хе
 
 ## Шифрование
 
-Клинический текст (четыре поля заметки и снимок документа) и PDF пациента хранятся только в зашифрованном виде.
+Клинический текст, PDF пациента, расширенный профиль и все контакты пациента хранятся только в зашифрованном виде.
 
 - Алгоритм — AES-256-GCM, случайный 96-битный nonce на каждое значение, 128-битный тег (`AesGcmEncryptionService`).
-- Формат значения в колонке: `<версия ключа>.<base64url(nonce ‖ шифртекст)>`, например `dev-v1.AbC…`. Версия ключа позволит позже перешифровать данные новым ключом.
-- PDF (`patient_file.ciphertext`, BYTEA) — тот же ключ и та же схема nonce, но в байтах: `длина версии ключа (1 байт) ‖ версия ключа (UTF-8) ‖ nonce ‖ шифртекст с тегом`.
-- Ключ даёт порт `KmsPort`. Сейчас это `DevKmsAdapter`: SHA-256 от `CLINIC_DEV_KMS_KEY` (в Docker — `CLINIC_KMS_KEY` из `.env`). Для промышленной эксплуатации порт заменяется адаптером настоящего KMS без изменения таблиц.
-- **Потеря или смена ключа делает клинические тексты нечитаемыми.** Ключ хранится вместе с резервной копией базы, но отдельно от неё.
-- Не шифруются: ФИО, телефоны, e-mail, даты рождения, имя и размер PDF, расписание, суммы, заметка регистратуры, названия задач. Их защищают доступ по ролям, ограничение клиникой и то, что база слушает только localhost.
+- Формат значения в колонке: `<версия ключа>.<base64url(nonce ‖ шифртекст)>`, например `dev-v1.AbC…`. При расшифровке выбирается ключ именно этой версии.
+- Профиль и контакты используют AAD: шифртекст криптографически привязан к клинике, пациенту и назначению поля, поэтому перенос значения в чужую запись не пройдёт проверку.
+- PDF (`patient_file.ciphertext`, BYTEA) — та же схема nonce, но в байтах: `длина версии ключа (1 байт) ‖ версия ключа (UTF-8) ‖ nonce ‖ шифртекст с тегом`.
+- DOCX-шаблоны и DOCX/PDF договоров используют тот же бинарный формат; снимок значений договора — строковый AES-GCM с AAD клиники и конкретного договора.
+- Ключ даёт порт `KmsPort`. Сейчас это `DevKmsAdapter`: SHA-256 от `CLINIC_DEV_KMS_KEY` (в Docker — `CLINIC_KMS_KEY` из `.env`). Дополнительные версии задаются в `CLINIC_KMS_KEYS`, активная — в `CLINIC_KMS_KEY_VERSION`. Для промышленной эксплуатации порт можно заменить адаптером настоящего KMS без изменения таблиц.
+- **Потеря исходного или дополнительного ключа делает записи соответствующей версии нечитаемыми.** Все ключи хранятся отдельно от резервной копии базы.
+- При старте после миграции 022 `PatientPrivacyMigration` переводит прежние открытые профили и контакты в шифртекст и перестраивает HMAC-индексы.
+- Пока не шифруются: ФИО, даты рождения, имя и размер PDF, расписание, суммы, заметка регистратуры, названия задач. Их защищают доступ по ролям, ограничение клиникой и то, что база слушает только localhost.
 
 ## Журнал аудита: что пишется и что нет
 
@@ -435,7 +634,7 @@ CHECK `patient_file_signed_complete`: у `SIGNED_LOCKED` заполнены хе
 
 `PDF_UPLOADED`, `PDF_SIGNED`, `PDF_READ` — объект `PATIENT_FILE` с id файла, без основания.
 
-Не пишется никогда: клинический текст, текст документа, имя и содержимое PDF, e-mail, значения полей пациента, телефоны, ФИО, текст задачи регистратуры, заметка регистратуры, пароли и хеши. Русскую подпись к коду выбирает интерфейс (`src/features/audit/auditLabels.ts`).
+Не пишется никогда: клинический текст, текст документа, имя и содержимое PDF, e-mail, значения полей пациента, телефоны, ФИО, текст задачи регистратуры и личной записи, значения её произвольных полей, заметка регистратуры, пароли и хеши. Для личного пространства аудит содержит только действие и id записи. Русскую подпись к коду выбирает интерфейс (`src/features/audit/auditLabels.ts`).
 
 ## Начальные данные
 
@@ -473,10 +672,26 @@ CHECK `patient_file_signed_complete`: у `SIGNED_LOCKED` заполнены хе
 | | 026 | `patient.assigned_staff_id` — постоянный администратор; e-mail и второй телефон — контакты `EMAIL`, `SECOND_PHONE` без новых колонок |
 | | 027 | `patient_file` — зашифрованные PDF пациента |
 | | 028 (PostgreSQL) | trigger `patient_file_immutable` |
+| `010-roles-pricing-events.sql` | 029 | роли целевой архитектуры в CHECK `staff_user.role`; начальный `admin` становится владельцем, если владельца нет |
+| | 030 | свободная цена: `clinic_service.price_mode/min/max`, снимок в `appointment` (`service_id`, `price_mode`, `estimate_minor`) и в `charge`; статус `AWAITING_AMOUNT` |
+| | 031 | `domain_event_outbox`, `domain_event_inbox` |
+| `011-inventory.sql` | 032 | `clinic_service_norm` — нормы расхода |
+| | 033 | схема `inventory`: номенклатура, склады, документы, остатки, марки и операции маркировки |
+| `012-drive.sql` | 034 | схема `drive`: узлы, версии, права и ссылки, квота |
+| `013-finance.sql` | 035 | аннулирование счёта (`VOIDED`), `refund_record`, статус `REFUNDED` |
+| `014-break-glass.sql` | 036 | `break_glass_grant` — экстренный доступ владельца |
+| `015-staff-roles.sql` | 037 | `staff_role`: несколько ролей на сотрудника (заполняется из `staff_user.role`) |
+| `016-hr.sql` | 038 | `hr_contract`: условия работы и ставки |
+| `017-workspace.sql` | 039 | схема `workspace`: личные записи со свободной структурой и сохранённые представления |
+| `018-assistant-commercial.sql` | 040 | исторические схемы `commercial` и `assistant`; текущее приложение их не использует, миграция сохранена для совместимости |
+| `022-patient-privacy.sql` | 092, 093 | профиль пациента переведён в TEXT для шифртекста, расширено хранение контактов, добавлены HMAC-индексы `patient_contact_token` |
+| `023-patient-contracts.sql` | 094 | версии DOCX-шаблонов, счётчик номеров и неизменяемые зашифрованные договоры пациентов |
+| `024-senior-nurse.sql` | 095 | роль `SENIOR_NURSE` в CHECK `staff_user.role` и `staff_role.role` |
+| `025-messenger-integrations.sql` | 096, 097 | `patient.preferred_messenger`, одноразовые `messenger_link_token` и CHECK для каналов `TELEGRAM`/`MAX` |
 
 Как добавить изменение:
 
-1. Новый changeset в конце последнего файла или новый файл `010-….sql`, подключённый в `db.changelog-master.yaml`.
+1. Новый changeset в конце последнего файла или новый файл с следующим номером, подключённый в `db.changelog-master.yaml`.
 2. Идентификаторы таблиц, колонок, индексов и ограничений — на английском, `snake_case`. Русский допустим только в значениях данных и в комментариях `--`.
 3. Если колонка становится `NOT NULL`, сначала добавьте её nullable, заполните `UPDATE`, затем `SET NOT NULL` — так миграция пройдёт на базе с данными.
 4. Разницу PostgreSQL/H2 оформляйте отдельными changeset-ами с `dbms:postgresql` / `dbms:h2`.
@@ -506,10 +721,10 @@ CHECK `patient_file_signed_complete`: у `SIGNED_LOCKED` заполнены хе
 
 **Почему запись хранит название услуги строкой, а не `service_id`?** Это снимок: переименование, смена цены или выключение услуги не должны менять прошлые записи, счёт и кассу.
 
-**Как убрать услугу?** Выключить (`POST /api/v1/services/{id}/deactivate` или кнопка «Выключить» на странице «График и цены»). Строка остаётся: на неё могут ссылаться ожидания, и её можно включить снова.
+**Как убрать услугу?** Через API выключить (`POST /api/v1/services/{id}/deactivate`). Строка остаётся: на неё могут ссылаться ожидания, и её можно включить снова. Кнопок включения и выключения в интерфейсе услуг нет.
 
 **Куда делась колонка `registry_task.kind`?** Миграция 021 перенесла её значения в `title` («Перезвонить», «Обновить согласие») и удалила колонку. Задачи не потерялись.
 
 **Где хранятся сессии?** В памяти backend. Таблицы сессий нет; перезапуск backend выводит всех сотрудников.
 
-**Где хранится выбор темы и дня расписания?** В браузере сотрудника, `localStorage`: ключи `alphacrm-color-mode` и `alphacrm-schedule-date`. Если нового ключа ещё нет, интерфейс читает прежний `quiet-clinic-*` и дальше пишет под новым. В базу это не попадает.
+**Где хранятся выбор темы, день расписания и демо-пространство?** В браузере сотрудника, `localStorage`: ключи `alphacrm-color-mode`, `alphacrm-schedule-date` и `alphacrm.workspace.<staffId>`. Если нового ключа настройки ещё нет, интерфейс читает прежний `quiet-clinic-*` и дальше пишет под новым. В живом режиме личное пространство хранится в базе; локальный ключ используется только песочницей.

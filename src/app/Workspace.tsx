@@ -1,40 +1,25 @@
 import { useMemo, useState } from 'react'
-import { Box, Drawer, Snackbar, Typography } from '@mui/material'
+import { CloseRounded } from '@mui/icons-material'
+import { Alert, Box, Button, Drawer, IconButton, Snackbar, Typography } from '@mui/material'
 import { changePassword } from '../api/auth'
-import { PETROV_ID } from '../api/client'
 import type { AssignedStaff, EncounterView, PatientItem, ScheduleItem, StaffItem, WaitlistItem } from '../api/types'
-import { Analytics } from '../features/analytics/Analytics'
-import { AuditLog } from '../features/audit/AuditLog'
-import { PasswordDialog } from '../features/auth/PasswordDialog'
-import { Cashier } from '../features/cashier/Cashier'
-import { SignedDocuments } from '../features/documents/SignedDocuments'
-import { PatientFiles } from '../features/files/PatientFiles'
-import { OutboxPage } from '../features/outbox/OutboxPage'
-import { PatientCard } from '../features/patients/PatientCard'
-import { PatientDialog } from '../features/patients/PatientDialog'
-import { PatientsList } from '../features/patients/PatientsList'
-import { RegistryPanel } from '../features/patients/RegistryPanel'
+import type { NavigationDestination, WorkspaceNavigationIntent } from '../features/assistant/navigationCatalog'
+import type { BookingDraft } from '../features/schedule/booking'
 import { filterPatients } from '../features/patients/search'
 import { phoneSharedWith } from '../features/registry/registry'
-import { RegistryPage } from '../features/registry/RegistryPage'
 import { useRegistry } from '../features/registry/useRegistry'
-import { WaitlistMatchesDialog } from '../features/registry/WaitlistMatchesDialog'
-import { BookingDialog } from '../features/schedule/BookingDialog'
-import { RescheduleDialog } from '../features/schedule/RescheduleDialog'
-import { Schedule } from '../features/schedule/Schedule'
-import { SettingsPage } from '../features/settings/SettingsPage'
-import { StaffPage } from '../features/staff/StaffPage'
-import { TodayPage } from '../features/today/TodayPage'
-import { Visit } from '../features/visit/Visit'
-import type { VisitTarget } from '../features/visit/visit'
+import { useStaffChat } from '../features/messages/useStaffChat'
+import type { VisitTarget } from '../features/visit/visitRules'
 import { formatDay, localToday } from '../shared/dates'
-import { greeting } from '../shared/greeting'
-import { canManageClinic, canSeeRegistry } from '../shared/roles'
+import { administratorRoles, staffRolesOf } from '../shared/roles'
 import { Landscape } from './Landscape'
-import { canOpen, pageTitles, startPage, type Page } from './pages'
+import { canOpen, firstPageOf, pageTitles, sectionsFor, serviceOf, servicesFor, startPage, type Page, type Service } from './pages'
 import { Sidebar } from './Sidebar'
 import { Topbar } from './Topbar'
 import { useClinicData } from './useClinicData'
+import { rolesOf } from '../shared/permissions'
+import { WorkspaceContent } from './WorkspaceContent'
+import { WorkspaceDialogs } from './WorkspaceDialogs'
 
 type WorkspaceProps = {
   staff: StaffItem
@@ -45,21 +30,28 @@ type WorkspaceProps = {
 
 /** Рабочее место сотрудника. Роль и врач берутся из учётной записи — переключить их нельзя. */
 export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
-  const role = staff.role
+  const role = rolesOf(staff)
   // Для врача автор действия — его карточка врача: тот же id, что actorId() на сервере.
   const doctorId = staff.practitionerId ?? ''
   const clinic = useClinicData(doctorId, live)
   const registry = useRegistry(staff, live, clinic.apiOnline, clinic.notify)
-  const [page, setPage] = useState<Page>(() => startPage(role))
+  // Ссылка на файл диска (…?drive-link=…) открывает диск сразу после входа.
+  const [page, setPage] = useState<Page>(() => (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('drive-link') && canOpen('drive', role) ? 'drive' : startPage(role)))
+  const staffChat = useStaffChat(clinic.apiOnline, page === 'messages', () => setPage('messages'))
+  // Последняя открытая страница каждого сервиса: вкладка сверху возвращает туда, где остановились.
+  const [lastPages, setLastPages] = useState<Partial<Record<Service, Page>>>({})
   const [query, setQuery] = useState('')
   const [drawer, setDrawer] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [doctorFilter, setDoctorFilter] = useState('all')
-  const [booking, setBooking] = useState<{ date: string; practitionerId?: string } | null>(null)
+  const [booking, setBooking] = useState<{ date: string; practitionerId?: string; time?: string; patientId?: string } | null>(null)
   const [bookingKey, setBookingKey] = useState(0)
   const [bookingError, setBookingError] = useState('')
+  const [pendingBookingPatient, setPendingBookingPatient] = useState<{ draft: BookingDraft; fullName: string; patient?: PatientItem } | null>(null)
   const [moving, setMoving] = useState<ScheduleItem | null>(null)
   const [moveError, setMoveError] = useState('')
   const [patientDialog, setPatientDialog] = useState(false)
+  const [patientImport, setPatientImport] = useState(false)
   const [editPatient, setEditPatient] = useState<PatientItem | null>(null)
   const [editError, setEditError] = useState('')
   const [createError, setCreateError] = useState('')
@@ -71,20 +63,40 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
   const [passwordError, setPasswordError] = useState('')
   const [waitSlot, setWaitSlot] = useState<ScheduleItem | null>(null)
   const [waitError, setWaitError] = useState('')
+  const [assistant, setAssistant] = useState(false)
+  const [settings, setSettings] = useState(false)
+  const [workspaceIntent, setWorkspaceIntent] = useState<({ key: number } & WorkspaceNavigationIntent) | null>(null)
 
   const { patientItems, scheduleItems, practitioners, scheduleDate } = clinic
   const visiblePatients = useMemo(() => filterPatients(patientItems, query), [patientItems, query])
   const selectedPatient = patientItems.find((patient) => patient.id === clinic.selectedPatientId) ?? patientItems[0]
 
   const navigate = (next: Page) => {
-    setPage(canOpen(next, role) ? next : startPage(role))
+    const target = canOpen(next, role) ? next : startPage(role)
+    if (target !== 'messages') staffChat.clearConversation()
+    setPage(target)
+    setLastPages((pages) => ({ ...pages, [serviceOf(target)]: target }))
     setDrawer(false)
   }
 
-  const openBooking = (date = scheduleDate, practitionerId?: string) => {
+  const navigateFromAssistant = (destination: NavigationDestination) => {
+    if (destination.page === 'workspace') {
+      setWorkspaceIntent({ key: Date.now(), ...destination.workspaceIntent })
+    }
+    navigate(destination.page)
+  }
+
+  const service = serviceOf(page)
+  const openService = (next: Service) => {
+    const remembered = lastPages[next]
+    const target = remembered && canOpen(remembered, role) ? remembered : firstPageOf(next, role)
+    if (target) navigate(target)
+  }
+
+  const openBooking = (date = scheduleDate, practitionerId?: string, time?: string, patientId?: string) => {
     setBookingError('')
     setBookingKey((value) => value + 1)
-    setBooking({ date, practitionerId })
+    setBooking({ date, practitionerId, time, patientId })
   }
 
   const openPatient = (patient: PatientItem) => {
@@ -161,7 +173,7 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
   }
 
   // Постоянный администратор выбирается из активных администраторов клиники.
-  const administrators = registry.staffList.filter((item) => item.role === 'ADMINISTRATOR')
+  const administrators = registry.staffList.filter((item) => staffRolesOf(item).some((itemRole) => administratorRoles.includes(itemRole)))
   const assignedOf = (id: string | null, current?: AssignedStaff | null): AssignedStaff | null => {
     if (!id) return null
     if (current?.id === id) return current
@@ -171,84 +183,172 @@ export function Workspace({ staff, live, onSignOut }: WorkspaceProps) {
 
   const sharedPhone = (patient: PatientItem) => clinic.apiOnline ? patient.phoneSharedWith ?? [] : phoneSharedWith([patient.phone, patient.secondPhone], patientItems, patient.id)
 
+  const saveBooking = async (draft: Parameters<typeof clinic.book>[0]) => {
+    const result = await clinic.book(draft)
+    if (result.status === 'error') setBookingError(result.message)
+    if (result.status === 'done') {
+      setBooking(null)
+      setBookingError('')
+    }
+  }
+
+  const prepareBookingPatient = (draft: BookingDraft, fullName: string) => {
+    setBooking(null)
+    setBookingError('')
+    setCreateError('')
+    setPendingBookingPatient({ draft, fullName })
+  }
+
+  /** Сначала полная карточка проходит серверные проверки, затем создаётся связанная запись. */
+  const saveBookingPatient = async (input: Parameters<typeof clinic.createPatient>[0]) => {
+    const pending = pendingBookingPatient
+    if (!pending) return
+    let patient = pending.patient
+    if (patient) {
+      const error = await clinic.updatePatient(patient, input, assignedOf(input.assignedStaffId, patient.assignedStaff))
+      if (error) {
+        setCreateError(error)
+        return
+      }
+      patient = { ...patient, name: input.fullName }
+    } else {
+      const error = await clinic.createPatient(input, assignedOf(input.assignedStaffId), (created) => { patient = created })
+      if (error || !patient) {
+        setCreateError(error ?? 'Не удалось сохранить пациента')
+        return
+      }
+    }
+    const result = await clinic.book({ ...pending.draft, patientId: patient.id }, patient)
+    if (result.status === 'error') {
+      setPendingBookingPatient({ ...pending, patient })
+      setCreateError(`Карточка пациента сохранена, но запись не создана: ${result.message}`)
+      return
+    }
+    if (result.status === 'done') {
+      setPendingBookingPatient(null)
+      setCreateError('')
+    }
+  }
+
+  const saveMoving = async (draft: Parameters<typeof clinic.reschedule>[1]) => {
+    if (!moving) return
+    const result = await clinic.reschedule(moving, draft)
+    if (result.status === 'error') setMoveError(result.message)
+    if (result.status === 'done') setMoving(null)
+  }
+
+  const createPatient = async (input: Parameters<typeof clinic.createPatient>[0]) => {
+    const error = await clinic.createPatient(input, assignedOf(input.assignedStaffId))
+    if (error) {
+      setCreateError(error)
+      return
+    }
+    setPatientDialog(false)
+    setCreateError('')
+  }
+
+  const updatePatient = async (input: Parameters<typeof clinic.updatePatient>[1]) => {
+    if (!editPatient) return
+    const error = await clinic.updatePatient(editPatient, input, assignedOf(input.assignedStaffId, editPatient.assignedStaff))
+    if (error) {
+      setEditError(error)
+      return
+    }
+    setEditPatient(null)
+    setEditError('')
+  }
+
+  const savePassword = async (input: { currentPassword: string; newPassword: string }) => {
+    try {
+      await changePassword(input.currentPassword, input.newPassword)
+      setPassword(false)
+      clinic.notify('Пароль изменён')
+    } catch (error) {
+      setPasswordError((error as Error).message)
+    }
+  }
+
+  const openChatNotification = () => {
+    const target = staffChat.notification
+    if (!target) return
+    staffChat.dismissNotification()
+    navigate('messages')
+    void staffChat.openConversation(target.conversationId)
+  }
+
   const eyebrow = page === 'today'
     ? `РАБОЧИЙ ДЕНЬ · ${formatDay(localToday()).toLocaleUpperCase('ru-RU')}`
     : page === 'visit'
     ? 'КЛИНИЧЕСКИЙ КОНТУР · ДОСТУП ПО СВЯЗИ С ЛЕЧЕНИЕМ'
-    : page === 'documents' ? 'КЛИНИЧЕСКИЙ АРХИВ · ТОЛЬКО ЧТЕНИЕ' : page === 'analytics' || page === 'audit' || page === 'cashier' || page === 'settings' || page === 'staff' || page === 'outbox'
-      ? 'УПРАВЛЕНИЕ КЛИНИКОЙ'
-      : page === 'registry' ? 'АДМИНИСТРАТИВНЫЙ КОНТУР' : page === 'patients' || page === 'patient' ? 'КАРТОТЕКА ПАЦИЕНТОВ' : formatDay(scheduleDate).toLocaleUpperCase('ru-RU')
+    : page === 'documents' ? 'КЛИНИЧЕСКИЙ АРХИВ · ТОЛЬКО ЧТЕНИЕ'
+    : service === 'inventory' ? 'СКЛАД И МАРКИРОВКА'
+    : service === 'drive' ? 'КОРПОРАТИВНЫЙ ДИСК'
+    : service === 'finance' ? 'ФИНАНСЫ'
+    : service === 'management' ? 'УПРАВЛЕНИЕ КЛИНИКОЙ'
+    : service === 'dashboards' ? 'РАБОЧЕЕ ПРОСТРАНСТВО'
+    : page === 'registry' ? 'АДМИНИСТРАТИВНЫЙ КОНТУР' : page === 'hours' ? 'НАСТРОЙКИ РАСПИСАНИЯ' : page === 'patients' || page === 'patient' ? 'КАРТОТЕКА ПАЦИЕНТОВ' : formatDay(scheduleDate).toLocaleUpperCase('ru-RU')
 
   return (
     <Box className="app-shell">
-      <Box className="desktop-sidebar"><Sidebar className="sidebar" page={page} staff={staff} live={live} visits={visits} activeVisit={page === 'visit' ? visit : null} onNavigate={navigate} onVisit={openVisit} /></Box>
-      <Drawer open={drawer} onClose={() => setDrawer(false)}><Sidebar className="sidebar sidebar-in-drawer" page={page} staff={staff} live={live} visits={visits} activeVisit={page === 'visit' ? visit : null} onNavigate={navigate} onVisit={(target) => { openVisit(target); setDrawer(false) }} /></Drawer>
+      <Box className={`desktop-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}><Sidebar className="sidebar" service={service} services={servicesFor(role)} staff={staff} live={live} visits={visits} activeVisit={page === 'visit' ? visit : null} unreadMessages={staffChat.unreadCount} collapsed={sidebarCollapsed} onService={openService} onNavigate={navigate} onVisit={openVisit} onSettings={() => setSettings(true)} onToggleCollapse={() => setSidebarCollapsed((value) => !value)} /></Box>
+      <Drawer open={drawer} onClose={() => setDrawer(false)}><Sidebar className="sidebar sidebar-in-drawer" service={service} services={servicesFor(role)} staff={staff} live={live} visits={visits} activeVisit={page === 'visit' ? visit : null} unreadMessages={staffChat.unreadCount} onService={openService} onNavigate={navigate} onVisit={(target) => { openVisit(target); setDrawer(false) }} onSettings={() => { setDrawer(false); setSettings(true) }} /></Drawer>
       <Box component="main" className="main">
         <Landscape />
-        <Topbar eyebrow={eyebrow} title={page === 'today' ? '' : pageTitles[page]} live={live} clinicName={staff.clinicName} onPassword={() => { setPasswordError(''); setPassword(true) }} onSignOut={onSignOut} onMenu={() => setDrawer(true)} />
+        <Topbar eyebrow={eyebrow} title={page === 'today' ? '' : pageTitles[page]} pages={sectionsFor(service, role).flatMap((section) => section.pages)} page={page} unreadMessages={staffChat.unreadCount} onNavigate={navigate} live={live} clinicName={staff.clinicName} onAssistant={() => setAssistant(true)} onSignOut={onSignOut} onMenu={() => setDrawer(true)} />
         <Box className="content">
-          {page === 'today' && <TodayPage role={role} selfName={staff.fullName} onNewAppointment={() => openBooking(localToday())} onNewPatient={() => { setCreateError(''); setPatientDialog(true) }} apiOnline={clinic.apiOnline} practitioners={practitioners} patients={patientItems} localAppointments={scheduleItems} localCharges={clinic.localCharges} dueTasks={registry.todayTasks} tasksError={registry.error} staffName={registry.staffName} onPatient={openPatientOf} onOpen={navigate} />}
-          {/* Врача встречают на расписании; остальных — на «Сегодня». */}
-          {page === 'schedule' && role === 'DOCTOR' && <Typography className="greeting" sx={{ mb: 1.5 }}>{greeting(staff.fullName)}</Typography>}
-          {page === 'schedule' && <Schedule role={role} doctorId={doctorId} date={scheduleDate} view={clinic.scheduleView} appointments={scheduleItems} practitioners={practitioners} doctorFilter={doctorFilter} onDoctorFilter={setDoctorFilter} apiOnline={clinic.apiOnline} onDate={clinic.setScheduleDate} onView={clinic.setScheduleView} onBooking={openBooking} onStatus={(item, to) => clinic.changeStatus(item, to, role)} onPatient={openPatientOf} onStartVisit={startVisit} onReschedule={(item) => { setMoveError(''); setMoving(item) }} onCancel={(item) => clinic.cancelBooking(item, role)} waitlistCount={(item) => registry.matches(item.practitionerId, item.date).length} onWaitlist={(item) => { setWaitError(''); setWaitSlot(item) }} />}
-          {page === 'patients' && <PatientsList query={query} setQuery={setQuery} patients={visiblePatients} onPatient={openPatient} onCreate={() => setPatientDialog(true)} />}
-          {page === 'patient' && selectedPatient && <PatientCard key={selectedPatient.id} patient={selectedPatient} role={role} doctorId={doctorId} apiOnline={clinic.apiOnline} appointments={scheduleItems} practitioners={practitioners} revision={clinic.revision}
-            files={<PatientFiles key={selectedPatient.id} patientId={selectedPatient.id} role={role} apiOnline={clinic.apiOnline} notify={clinic.notify} />}
-            registry={canSeeRegistry(role) ? <RegistryPanel patient={selectedPatient} sharedWith={sharedPhone(selectedPatient)} admin={canManageClinic(role)} selfId={staff.id} registry={registry} onOpenPatient={openPatientById} onSave={(input) => clinic.updateRegistry(selectedPatient, input)} /> : undefined}
-            onEdit={() => { setEditError(''); setEditPatient(selectedPatient) }} onBack={() => navigate('patients')} onCancel={(item) => clinic.cancelBooking(item, role)} onReschedule={(item) => { setMoveError(''); setMoving(item) }} onOpenEncounter={(encounter) => openEncounter(selectedPatient, encounter)} onGrantConsent={(input) => clinic.grantConsent(selectedPatient, input)} onRevokeConsent={(consentId) => clinic.revokeConsent(selectedPatient, consentId)} />}
-          {page === 'documents' && <SignedDocuments role={role} apiOnline={clinic.apiOnline} practitioners={practitioners} />}
-          {page === 'registry' && <RegistryPage staff={staff} registry={registry} patients={patientItems} practitioners={practitioners} services={clinic.services} />}
-          {page === 'analytics' && <Analytics apiOnline={clinic.apiOnline} anchor={scheduleDate} practitioners={practitioners} scheduleItems={scheduleItems} />}
-          {page === 'audit' && <AuditLog apiOnline={clinic.apiOnline} />}
-          {page === 'cashier' && <Cashier role={role} apiOnline={clinic.apiOnline} practitioners={practitioners} localAppointments={scheduleItems} localCharges={clinic.localCharges} onLocalCharge={clinic.addLocalCharge} onLocalPay={clinic.payLocalCharge} notify={clinic.notify} />}
-          {page === 'settings' && <SettingsPage practitioners={practitioners} services={clinic.services} onSaveHours={clinic.saveHours} onSaveCard={clinic.saveCard} onSavePrice={clinic.savePrice} onCreateService={clinic.addService} onToggleService={clinic.toggleService} />}
-          {page === 'outbox' && <OutboxPage apiOnline={clinic.apiOnline} />}
-          {page === 'staff' && <StaffPage self={staff} live={live} practitioners={practitioners} notify={clinic.notify} onPractitionerAdded={clinic.practitionerAdded} />}
-          {page === 'visit' && visit && <Visit key={visitKey} target={visit} doctorName={doctorName} apiOnline={clinic.apiOnline} notify={clinic.notify} appointmentStatus={visitAppointment?.statusCode} onStarted={() => { if (visitAppointment) void clinic.visitStarted(visitAppointment) }} onComplete={() => { if (visitAppointment) void clinic.changeStatus(visitAppointment, 'COMPLETED', role) }} onBack={() => navigate('schedule')} />}
+          <WorkspaceContent
+            page={page} staff={staff} role={role} doctorId={doctorId} live={live} clinic={clinic} registry={registry} staffChat={staffChat}
+            query={query} visiblePatients={visiblePatients} selectedPatient={selectedPatient} doctorFilter={doctorFilter}
+            workspaceIntent={workspaceIntent} visit={visit} visitKey={visitKey} visitAppointment={visitAppointment} doctorName={doctorName}
+            sharedPhone={sharedPhone} onQuery={setQuery} onDoctorFilter={setDoctorFilter} onNavigate={navigate} onOpenBooking={openBooking}
+            onNewPatient={() => { setCreateError(''); setPatientDialog(true) }} onCreatePatient={() => setPatientDialog(true)}
+            onImportPatients={() => setPatientImport(true)} onEditPatient={(patient, addRepresentative = false) => {
+              setEditError('')
+              setEditPatient(addRepresentative ? { ...patient, profile: { ...patient.profile, representatives: [...(patient.profile?.representatives ?? []), { fullName: '', relationship: '', primary: false }] } } : patient)
+            }}
+            onOpenPatient={openPatient} onOpenPatientById={openPatientById} onOpenPatientOf={openPatientOf} onOpenEncounter={openEncounter}
+            onStartVisit={startVisit} onReschedule={(item) => { setMoveError(''); setMoving(item) }} onWaitlist={(item) => { setWaitError(''); setWaitSlot(item) }}
+          />
         </Box>
       </Box>
 
-      <BookingDialog key={bookingKey} checkPast={clinic.apiOnline} open={Boolean(booking)} patients={patientItems} practitioners={practitioners} services={clinic.services} defaultPractitionerId={booking?.practitionerId ?? (doctorFilter === 'all' ? practitioners[0]?.id ?? PETROV_ID : doctorFilter)} error={bookingError} initialDate={booking?.date ?? scheduleDate} onClose={() => { setBooking(null); setBookingError('') }} onSave={async (draft) => {
-        const result = await clinic.book(draft)
-        if (result.status === 'error') setBookingError(result.message)
-        if (result.status === 'done') {
-          setBooking(null)
-          setBookingError('')
-        }
-      }} />
-      {moving && <RescheduleDialog key={moving.id} item={moving} practitioners={practitioners} error={moveError} onClose={() => setMoving(null)} onSave={async (draft) => {
-        const result = await clinic.reschedule(moving, draft)
-        if (result.status === 'error') setMoveError(result.message)
-        if (result.status === 'done') setMoving(null)
-      }} />}
-      {waitSlot && <WaitlistMatchesDialog slot={waitSlot} matches={registry.matches(waitSlot.practitionerId, waitSlot.date)} patients={patientItems} services={clinic.services} error={waitError} onClose={() => setWaitSlot(null)} onBook={(entry) => void bookWaiting(waitSlot, entry)} />}
-      {patientDialog && <PatientDialog open patients={patientItems} administrators={administrators} error={createError} onClose={() => { setPatientDialog(false); setCreateError('') }} onSave={async (input) => {
-        const error = await clinic.createPatient(input, assignedOf(input.assignedStaffId))
-        if (error) {
-          setCreateError(error)
-          return
-        }
-        setPatientDialog(false)
-        setCreateError('')
-      }} />}
-      {editPatient && <PatientDialog key={editPatient.id} open mode="edit" initial={{ fullName: editPatient.name, birthDate: editPatient.birthDate, phone: editPatient.phone, secondPhone: editPatient.secondPhone ?? '', email: editPatient.email ?? '', assignedStaffId: editPatient.assignedStaff?.id ?? null }} patients={patientItems} selfId={editPatient.id} administrators={administrators} currentAssigned={editPatient.assignedStaff} error={editError} onClose={() => { setEditPatient(null); setEditError('') }} onSave={async (input) => {
-        const error = await clinic.updatePatient(editPatient, input, assignedOf(input.assignedStaffId, editPatient.assignedStaff))
-        if (error) {
-          setEditError(error)
-          return
-        }
-        setEditPatient(null)
-        setEditError('')
-      }} />}
-      {password && <PasswordDialog requireCurrent title="Смена пароля" error={passwordError} onClose={() => setPassword(false)} onSave={async (input) => {
-        try {
-          await changePassword(input.currentPassword, input.newPassword)
-          setPassword(false)
-          clinic.notify('Пароль изменён')
-        } catch (error) {
-          setPasswordError((error as Error).message)
-        }
-      }} />}
+      <WorkspaceDialogs
+        staff={staff} role={role} live={live} page={page} clinic={clinic} registry={registry} administrators={administrators}
+        doctorFilter={doctorFilter} booking={booking} bookingKey={bookingKey} bookingError={bookingError} pendingBookingPatient={pendingBookingPatient}
+        moving={moving} moveError={moveError} waitSlot={waitSlot} waitError={waitError}
+        patientDialog={patientDialog} createError={createError} patientImport={patientImport}
+        editPatient={editPatient} editError={editError} settings={settings} password={password} passwordError={passwordError} assistant={assistant}
+        onBookingClose={() => { setBooking(null); setBookingError('') }} onBookingSave={saveBooking} onBookingNewPatient={prepareBookingPatient}
+        onBookingPatientClose={() => { setPendingBookingPatient(null); setCreateError('') }} onBookingPatientSave={saveBookingPatient}
+        onMovingClose={() => setMoving(null)} onMovingSave={saveMoving}
+        onWaitlistClose={() => setWaitSlot(null)} onBookWaiting={(entry) => { if (waitSlot) void bookWaiting(waitSlot, entry) }}
+        onPatientCreateClose={() => { setPatientDialog(false); setCreateError('') }} onPatientCreate={createPatient}
+        onPatientImportClose={() => setPatientImport(false)}
+        onPatientEditClose={() => { setEditPatient(null); setEditError('') }} onPatientEdit={updatePatient}
+        onSettingsClose={() => setSettings(false)} onPasswordOpen={() => { setSettings(false); setPasswordError(''); setPassword(true) }}
+        onPasswordClose={() => setPassword(false)} onPasswordSave={savePassword}
+        onAssistantClose={() => setAssistant(false)} onAssistantNavigate={navigateFromAssistant}
+      />
+      <Snackbar
+        key={staffChat.notification?.key ?? 0}
+        open={staffChat.notification !== null}
+        autoHideDuration={7000}
+        onClose={(_event, reason) => { if (reason !== 'clickaway') staffChat.dismissNotification() }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert
+          severity="info"
+          variant="filled"
+          sx={{ maxWidth: 420 }}
+          action={<>
+            <Button color="inherit" size="small" onClick={openChatNotification}>Открыть</Button>
+            <IconButton color="inherit" size="small" aria-label="Закрыть уведомление" onClick={staffChat.dismissNotification}><CloseRounded fontSize="small" /></IconButton>
+          </>}
+        >
+          <Typography component="span" sx={{ display: 'block', fontWeight: 750 }}>{staffChat.notification?.message.senderName} · {staffChat.notification?.conversationTitle}</Typography>
+          <Typography component="span" noWrap sx={{ display: 'block', maxWidth: 300, fontSize: 13 }}>{staffChat.notification?.message.body}</Typography>
+        </Alert>
+      </Snackbar>
       <Snackbar open={clinic.notice.open} autoHideDuration={2500} onClose={clinic.closeNotice} message={clinic.notice.message} />
     </Box>
   )

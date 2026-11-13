@@ -10,11 +10,14 @@ describe('color theme', () => {
     renderApp()
     await enterDemo(user)
 
-    await user.click(screen.getByRole('button', { name: 'Включить тёмную тему' }))
+    await user.click(screen.getByRole('button', { name: 'Настройки' }))
+    const darkMode = screen.getByRole('switch', { name: 'Тёмная тема' })
+    expect(darkMode).not.toBeChecked()
+    await user.click(darkMode)
 
     await waitFor(() => expect(document.documentElement).toHaveAttribute('data-theme', 'dark'))
     expect(localStorage.getItem('alphacrm-color-mode')).toBe('dark')
-    expect(screen.getByRole('button', { name: 'Включить светлую тему' })).toBeInTheDocument()
+    expect(screen.getByRole('switch', { name: 'Тёмная тема' })).toBeChecked()
   })
 
   it('uses the system dark theme on first start', async () => {

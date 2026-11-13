@@ -2,7 +2,7 @@ import { ChevronRightRounded, MoreHorizRounded, PlaylistAddCheckRounded } from '
 import { Box, Button, Chip, IconButton, Stack, Typography } from '@mui/material'
 import { CANCELLABLE } from '../../api/schedule'
 import type { ScheduleItem } from '../../api/types'
-import type { Role } from '../../shared/roles'
+import { canWriteAppointments, type Role } from '../../shared/roles'
 import { RESCHEDULABLE, availableActions, canStartVisit } from './statusActions'
 
 type AppointmentRowProps = {
@@ -22,7 +22,8 @@ type AppointmentRowProps = {
 }
 
 export function AppointmentRow({ item, role, doctorId, compact = false, waitlistCount, onMenu, onPatient, onStartVisit, onReschedule, onCancel, onWaitlist }: AppointmentRowProps) {
-  const admin = role === 'ADMINISTRATOR'
+  // Перенос, отмена и лист ожидания — у регистратуры (schedule.appointment.write).
+  const admin = canWriteAppointments(role)
   const freed = item.statusCode === 'CANCELLED' || item.statusCode === 'NO_SHOW'
   return (
     <Box className={`appointment ${compact ? 'compact' : ''}`}>

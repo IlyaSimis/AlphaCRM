@@ -9,6 +9,5 @@ interface ContactRepository extends JpaRepository<Contact, UUID> {
   /** Контакты карточек одной клиники: совпадение телефона с чужой клиникой не показывается. */
   List<Contact> findByTypeInAndPatientClinicId(Collection<String> types, UUID clinicId);
 
-  /** Контакты одного типа и значения в клинике: например, все карточки с этим chat id Telegram. */
-  List<Contact> findByTypeAndValueAndPatientClinicId(String type, String value, UUID clinicId);
+  List<Contact> findByPatientIdAndType(UUID patientId, String type);
 }

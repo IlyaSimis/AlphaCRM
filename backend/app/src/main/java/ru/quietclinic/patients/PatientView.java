@@ -16,7 +16,17 @@ record PatientView(
     List<PatientRef> phoneSharedWith,
     String email,
     String secondPhone,
-    AssignedStaffView assignedStaff) {
+    AssignedStaffView assignedStaff,
+    PatientProfile profile,
+    boolean maxConnected,
+    String preferredMessenger) {
+
+  /** Только ФИО — для кассира: ни даты рождения, ни контактов, ни согласий, ни реквизитов. */
+  PatientView nameOnly() {
+    return new PatientView(
+        id, fullName, null, List.of(), List.of(), null, null, false, List.of(), null, null, null,
+        null, false, null);
+  }
 
   static PatientView of(
       Patient patient, List<PatientRef> phoneSharedWith, AssignedStaffView assignedStaff) {
@@ -24,9 +34,9 @@ record PatientView(
         patient.id,
         patient.fullName,
         patient.birthDate,
-        // Chat id Telegram на экран не отдаётся: только признак, что контакт есть.
+        // Внешние id на экран не отдаются: только признаки подключения каналов.
         patient.contacts.stream()
-            .filter(c -> !Patient.TELEGRAM.equals(c.type))
+            .filter(c -> !Patient.TELEGRAM.equals(c.type) && !Patient.MAX.equals(c.type))
             .map(c -> new ContactView(c.type, c.value))
             .toList(),
         patient.consents.stream()
@@ -38,6 +48,9 @@ record PatientView(
         phoneSharedWith,
         patient.email(),
         patient.secondPhone(),
-        assignedStaff);
+        assignedStaff,
+        patient.profile,
+        patient.messengerConnected(MessengerChannel.MAX),
+        patient.preferredMessenger);
   }
 }

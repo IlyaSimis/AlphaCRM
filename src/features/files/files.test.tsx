@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { PatientFileItem } from '../../api/types'
-import { anna, jsonResponse, renderApp, withAuth } from '../../test/helpers'
+import { anna, jsonResponse, renderApp, withAuth, openPage } from '../../test/helpers'
 import { fileRights, SIGN_NOTICE } from './fileRules'
 
 const file = (patch: Partial<PatientFileItem> = {}): PatientFileItem => ({
@@ -14,7 +14,7 @@ const signed = file({ id: '00000000-0000-0000-0000-0000000f0002', originalName: 
 
 async function openAnna(user: ReturnType<typeof userEvent.setup>) {
   expect(await screen.findByText('API подключён')).toBeInTheDocument()
-  await user.click(screen.getByRole('button', { name: 'Пациенты' }))
+  await openPage(user, 'Пациенты')
   await user.click(screen.getByText('Анна Михайлова'))
   return screen.findByRole('region', { name: 'Документы PDF' })
 }
@@ -27,6 +27,10 @@ describe('PDF пациента', () => {
     expect(fileRights('MANAGER').sign(file())).toBe(false)
     expect(fileRights('DOCTOR').sign(file())).toBe(true)
     expect(fileRights('ADMINISTRATOR').sign(signed)).toBe(false)
+    // Медперсонал и техподдержка PDF пациента не видят (раздел C).
+    expect(fileRights('NURSE').visible).toBe(false)
+    expect(fileRights('SUPPORT').visible).toBe(false)
+    expect(fileRights('OWNER')).toMatchObject({ visible: true, upload: true, download: true })
   })
 
   it('the administrator uploads only a PDF and signs it after the notice', async () => {
@@ -36,8 +40,11 @@ describe('PDF пациента', () => {
     const fetchMock = withAuth((address, init) => {
       const method = init?.method ?? 'GET'
       if (address.endsWith(`/patients/${anna.id}/files`) && method === 'POST') {
-        sent.file = (init?.body as FormData).get('file') as File
-        rows = [file({ originalName: sent.file.name }), ...rows]
+        const body = init?.body
+        const uploaded = body instanceof FormData ? body.get('file') : null
+        if (!(uploaded instanceof File)) return jsonResponse({}, 400)
+        sent.file = uploaded
+        rows = [file({ originalName: uploaded.name }), ...rows]
         return jsonResponse(rows[0], 201)
       }
       if (address.endsWith(`/patients/${anna.id}/files`)) return jsonResponse(rows)
@@ -66,8 +73,9 @@ describe('PDF пациента', () => {
     await waitFor(() => expect(sent.file).not.toBeNull())
     expect(sent.file?.name).toBe('заключение.pdf')
     const post = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith('/files') && init?.method === 'POST')
+    const headers = post?.[1]?.headers as Record<string, string> | undefined
     // FormData уходит без JSON-заголовка: границу multipart ставит браузер.
-    expect((post?.[1]?.headers as Record<string, string>)['Content-Type']).toBeUndefined()
+    expect(headers?.['Content-Type']).toBeUndefined()
 
     await user.click(await within(block).findByRole('button', { name: 'Подписать заключение.pdf' }))
     const dialog = screen.getByRole('dialog')
@@ -93,7 +101,7 @@ describe('PDF пациента', () => {
     expect(within(block).queryByRole('button', { name: 'Загрузить' })).not.toBeInTheDocument()
     expect(within(block).queryByRole('button', { name: /^Подписать/ })).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Подписанные документы' }))
+    await openPage(user, 'Подписанные документы')
     const archive = await screen.findByRole('region', { name: 'Подписанные PDF' })
     expect(await within(archive).findByText('Анна Михайлова · выписка.pdf')).toBeInTheDocument()
     expect(within(archive).getByText('Все подписанные файлы клиники.')).toBeInTheDocument()
@@ -116,7 +124,7 @@ describe('PDF пациента', () => {
       if (address.endsWith('/clinical/encounters') && method === 'POST') return jsonResponse(encounter, 201)
       if (address.includes('/clinical/patients/')) return jsonResponse([encounter])
       if (address.includes('/patients')) return jsonResponse([anna])
-      if (address.includes('/appointments')) return jsonResponse([{ id: appointmentId, patientId: anna.id, practitionerId: '00000000-0000-0000-0000-000000000201', startsAt: '2026-10-20T09:00:00Z', endsAt: '2026-10-20T09:50:00Z', serviceName: 'Первичный приём', status: 'ARRIVED' }])
+      if (address.includes('/appointments')) return jsonResponse([{ id: appointmentId, patientId: anna.id, practitionerId: '00000000-0000-0000-0000-000000000201', startsAt: '2026-10-20T09:00:00Z', endsAt: '2026-10-20T09:50:00Z', serviceName: 'Серверный приём', status: 'ARRIVED' }])
       return jsonResponse({}, 404)
     }, 't.petrov')
     const tab = { addEventListener: vi.fn(), focus: vi.fn(), print: vi.fn() }
@@ -124,6 +132,7 @@ describe('PDF пациента', () => {
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
+    expect(await screen.findByText('Серверный приём')).toBeInTheDocument()
     await user.click(await screen.findByRole('button', { name: 'Начать приём 09:00 Анна Михайлова' }))
     const block = await screen.findByRole('region', { name: 'Заключения и файлы приёма' })
     // Файлы других приёмов здесь не показываются — они в карточке пациента.
@@ -151,7 +160,7 @@ describe('PDF пациента', () => {
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Пациенты' }))
+    await openPage(user, 'Пациенты')
     await user.click(screen.getByText('Анна Михайлова'))
     expect(screen.getByRole('heading', { name: 'Анна Михайлова' })).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: 'Документы PDF' })).not.toBeInTheDocument()

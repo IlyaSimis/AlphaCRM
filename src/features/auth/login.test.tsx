@@ -1,7 +1,7 @@
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { anna, enterDemo, jsonResponse, menu, renderApp, signIn, TEST_CSRF, withAuth } from '../../test/helpers'
+import { anna, enterDemo, jsonResponse, renderApp, signIn, TEST_CSRF, withAuth, openPage, menuHas } from '../../test/helpers'
 
 const api = (address: string) => {
   if (address.includes('/patients')) return jsonResponse([anna])
@@ -43,7 +43,7 @@ describe('staff sign-in', () => {
     expect(screen.queryByText('ADMINISTRATOR')).not.toBeInTheDocument()
     expect(screen.getByText('AlphaCRM', { selector: '.topbar *' })).toBeInTheDocument()
     expect(screen.queryByText(/временным паролем/)).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Сотрудники' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Управление' })).toBeInTheDocument()
     expect(screen.queryByLabelText('Роль пользователя')).not.toBeInTheDocument()
     expect(screen.queryByText(/Демо-песочница/)).not.toBeInTheDocument()
 
@@ -59,6 +59,15 @@ describe('staff sign-in', () => {
     expect(screen.getByLabelText('Логин')).toBeInTheDocument()
   })
 
+  it('explains when another sign-in replaced the current session', async () => {
+    withAuth((address) => (address.includes('/appointments')
+      ? new Response(JSON.stringify({ code: 'SESSION_REPLACED' }), { status: 401 })
+      : api(address)))
+    renderApp()
+    expect(await screen.findByText('Выполнен вход на другом устройстве. Войдите снова.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Логин')).toBeInTheDocument()
+  })
+
   it('without a server opens a per-role sandbox with no people and no requests on behalf of a role', async () => {
     const fetchMock = vi.fn().mockRejectedValue(new Error('offline'))
     vi.stubGlobal('fetch', fetchMock)
@@ -66,13 +75,16 @@ describe('staff sign-in', () => {
     renderApp()
     expect(await screen.findByText(/Сервер недоступен/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^Демо: / })).not.toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: /^Песочница: / }).map((button) => button.textContent)).toEqual(['Песочница: Администратор', 'Песочница: Врач', 'Песочница: Менеджер', 'Песочница: Кассир'])
+    expect(screen.getAllByRole('button', { name: /^Песочница: / }).map((button) => button.textContent)).toEqual(['Песочница: Администратор', 'Песочница: Врач', 'Песочница: Менеджер', 'Песочница: Кассир', 'Песочница: Медперсонал', 'Песочница: Старший медперсонал', 'Песочница: Техподдержка'])
     await enterDemo(user, 'CASHIER')
-    expect(screen.getByText('Кассир песочницы')).toBeInTheDocument()
-    expect(screen.getByText('Демо-песочница: данные не сохраняются')).toBeInTheDocument()
-    expect(menu().getByRole('button', { name: 'Касса' })).toBeInTheDocument()
+    expect(screen.getAllByText('Кассир песочницы').length).toBeGreaterThan(0)
+    expect(screen.getByText('Демо: общие данные в памяти, пространство — локально')).toBeInTheDocument()
+    expect(await menuHas(user, 'Касса')).toBe(true)
+    await user.click(screen.getByRole('button', { name: 'Настройки' }))
     expect(screen.queryByRole('button', { name: 'Сменить пароль' })).not.toBeInTheDocument()
-    await user.click(menu().getByRole('button', { name: 'Касса' }))
+    await user.click(screen.getByRole('button', { name: 'Готово' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await openPage(user, 'Касса')
     expect(fetchMock.mock.calls.every(([url]) => String(url).endsWith('/auth/me'))).toBe(true)
   })
 
@@ -81,6 +93,7 @@ describe('staff sign-in', () => {
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Настройки' }))
     await user.click(screen.getByRole('button', { name: 'Сменить пароль' }))
     await user.type(screen.getByLabelText('Текущий пароль'), 'test-password-1')
     await user.type(screen.getByLabelText('Новый пароль'), 'short')

@@ -11,8 +11,10 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 /**
@@ -40,14 +42,41 @@ public final class StaffSessions {
           "t.manager", List.of("Test Manager", "MANAGER", ""),
           "t.cashier", List.of("Test Cashier", "CASHIER", ""),
           "t.petrov", List.of("Александр Петров", "DOCTOR", PETROV),
-          "t.lebedeva", List.of("Ольга Лебедева", "DOCTOR", LEBEDEVA));
+          "t.lebedeva", List.of("Ольга Лебедева", "DOCTOR", LEBEDEVA),
+          "t.senior", List.of("Test Senior Administrator", "SENIOR_ADMINISTRATOR", ""),
+          "t.admin", List.of("Test Administrator", "ADMINISTRATOR", ""),
+          "t.nurse", List.of("Test Nurse", "NURSE", ""),
+          "t.senior-nurse", List.of("Test Senior Nurse", "SENIOR_NURSE", ""),
+          "t.support", List.of("Test Support", "SUPPORT", ""));
 
+  /**
+   * Роль → сотрудник. ADMINISTRATOR — начальная учётная запись admin (она владелец клиники и может
+   * всё, что администратор), как в тестах до появления роли OWNER.
+   */
   private static final Map<String, String> BY_ROLE =
       Map.of(
+          "OWNER", ADMIN,
           "ADMINISTRATOR", ADMIN,
+          "SENIOR_ADMINISTRATOR", "t.senior",
           "MANAGER", "t.manager",
           "CASHIER", "t.cashier",
-          "DOCTOR", "t.petrov");
+          "DOCTOR", "t.petrov",
+          "NURSE", "t.nurse",
+          "SENIOR_NURSE", "t.senior-nurse",
+          "SUPPORT", "t.support");
+
+  /** Сотрудник ровно этой роли — для матрицы RBAC (ADMINISTRATOR — t.admin, а не владелец). */
+  private static final Map<String, String> EXACT =
+      Map.of(
+          "OWNER", ADMIN,
+          "SENIOR_ADMINISTRATOR", "t.senior",
+          "ADMINISTRATOR", "t.admin",
+          "MANAGER", "t.manager",
+          "CASHIER", "t.cashier",
+          "DOCTOR", "t.petrov",
+          "NURSE", "t.nurse",
+          "SENIOR_NURSE", "t.senior-nurse",
+          "SUPPORT", "t.support");
 
   private final MockMvc mvc;
   private final Map<String, Login> sessions = new HashMap<>();
@@ -60,16 +89,23 @@ public final class StaffSessions {
   public RequestPostProcessor as(String username) {
     // Не computeIfAbsent: вход тестового сотрудника сам открывает сессию администратора,
     // а вложенное изменение HashMap внутри computeIfAbsent даёт ConcurrentModificationException.
-    var existing = sessions.get(username);
+    Login existing = sessions.get(username);
     if (existing != null) return existing;
-    var login = signIn(username);
+    Login login = signIn(username);
     sessions.put(username, login);
     return login;
   }
 
-  /** ADMINISTRATOR → admin, MANAGER → t.manager, CASHIER → t.cashier, DOCTOR → t.petrov. */
+  /** ADMINISTRATOR и OWNER → admin, MANAGER → t.manager, CASHIER → t.cashier, DOCTOR → t.petrov. */
   public RequestPostProcessor role(String role) {
     return as(BY_ROLE.get(role));
+  }
+
+  /** Сотрудник ровно с этой ролью (матрица RBAC). */
+  public RequestPostProcessor exactly(String role) {
+    String username = EXACT.get(role);
+    if (username == null) throw new IllegalArgumentException("Unknown role " + role);
+    return as(username);
   }
 
   public RequestPostProcessor doctor(String practitionerId) {
@@ -88,7 +124,7 @@ public final class StaffSessions {
   /** Id учётной записи сотрудника (для назначения задач и проверок аудита). */
   public String userId(String username) {
     try {
-      var body =
+      String body =
           mvc.perform(get("/api/v1/auth/me").with(as(username)))
               .andExpect(status().isOk())
               .andReturn()
@@ -102,7 +138,7 @@ public final class StaffSessions {
 
   /** Только CSRF без сессии: для проверок «без входа». */
   public RequestPostProcessor anonymous() {
-    var token = csrfToken();
+    String token = csrfToken();
     return request -> {
       request.setCookies(new Cookie("XSRF-TOKEN", token));
       request.addHeader("X-XSRF-TOKEN", token);
@@ -112,7 +148,7 @@ public final class StaffSessions {
 
   public String csrfToken() {
     try {
-      var cookie =
+      Cookie cookie =
           mvc.perform(get("/api/v1/auth/csrf")).andReturn().getResponse().getCookie("XSRF-TOKEN");
       if (cookie == null) throw new IllegalStateException("Server did not issue XSRF-TOKEN");
       return cookie.getValue();
@@ -123,12 +159,12 @@ public final class StaffSessions {
 
   private Login signIn(String username) {
     if (ADMIN.equals(username)) return login(ADMIN, ADMIN_PASSWORD);
-    var person = PEOPLE.get(username);
+    List<String> person = PEOPLE.get(username);
     if (person == null) throw new IllegalArgumentException("Unknown test staff member");
     if (!create(username, person.get(0), person.get(1), person.get(2), TEMPORARY_PASSWORD)) {
       return login(username, PASSWORD);
     }
-    var first = login(username, TEMPORARY_PASSWORD);
+    Login first = login(username, TEMPORARY_PASSWORD);
     changePassword(first, TEMPORARY_PASSWORD, PASSWORD);
     return first;
   }
@@ -140,8 +176,8 @@ public final class StaffSessions {
   public boolean create(
       String username, String fullName, String role, String practitionerId, String password) {
     try {
-      var practitioner = practitionerId.isEmpty() ? "null" : "\"" + practitionerId + "\"";
-      var response =
+      String practitioner = practitionerId.isEmpty() ? "null" : "\"" + practitionerId + "\"";
+      MockHttpServletResponse response =
           mvc.perform(
                   post("/api/v1/staff")
                       .with(admin())
@@ -178,8 +214,8 @@ public final class StaffSessions {
 
   public Login login(String username, String password) {
     try {
-      var token = csrfToken();
-      var result =
+      String token = csrfToken();
+      MvcResult result =
           mvc.perform(
                   post("/api/v1/auth/login")
                       .cookie(new Cookie("XSRF-TOKEN", token))
@@ -189,9 +225,9 @@ public final class StaffSessions {
                           "{\"username\":\"" + username + "\",\"password\":\"" + password + "\"}"))
               .andExpect(status().isOk())
               .andReturn();
-      var session = (MockHttpSession) result.getRequest().getSession(false);
-      var rotated = result.getResponse().getCookie("XSRF-TOKEN");
-      var csrf = rotated != null && !rotated.getValue().isEmpty() ? rotated.getValue() : token;
+      MockHttpSession session = (MockHttpSession) result.getRequest().getSession(false);
+      Cookie rotated = result.getResponse().getCookie("XSRF-TOKEN");
+      String csrf = rotated != null && !rotated.getValue().isEmpty() ? rotated.getValue() : token;
       return new Login(session, csrf);
     } catch (Exception ex) {
       throw new IllegalStateException("Could not sign in as " + username, ex);

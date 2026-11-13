@@ -41,6 +41,7 @@ import ru.quietclinic.StaffSessions;
 class BotControllerTest {
   static final String TOKEN = "test-bot-token-0123456789abcdef0123456789";
   static final String PETROV = "00000000-0000-0000-0000-000000000201";
+
   /** «Сейчас» тестов (clinic.fixed-time) плюс запас min-lead в два часа. */
   static final Instant EARLIEST = Instant.parse("2026-10-19T02:00:00Z");
 
@@ -64,7 +65,7 @@ class BotControllerTest {
   }
 
   private List<String> slots(String practitionerId) throws Exception {
-    var body =
+    String body =
         mvc.perform(get("/api/v1/bot/practitioners/" + practitionerId + "/slots").with(bot()))
             .andExpect(status().isOk())
             .andReturn()
@@ -74,7 +75,7 @@ class BotControllerTest {
   }
 
   private ResultActions book(String chatId, String lastName, String startsAt) throws Exception {
-    var body =
+    String body =
         """
         {"telegramChatId":"%s","lastName":"%s","firstName":"Анна","patronymic":"Сергеевна",
          "birthDate":"1990-05-17","phone":"+7 999 123-45-67","practitionerId":"%s",
@@ -131,10 +132,10 @@ class BotControllerTest {
 
   @Test
   void slotsLieInsideShiftsAndAfterTheLead() throws Exception {
-    var starts = slots(PETROV);
+    List<String> starts = slots(PETROV);
     assertThat(starts).isNotEmpty();
-    for (var raw : starts) {
-      var start = OffsetDateTime.parse(raw);
+    for (String raw : starts) {
+      OffsetDateTime start = OffsetDateTime.parse(raw);
       // Петров работает по вторникам и четвергам 09:00–18:00; первичный приём — 50 минут.
       assertThat(start.getDayOfWeek()).isIn(DayOfWeek.TUESDAY, DayOfWeek.THURSDAY);
       assertThat(start.toLocalTime()).isBetween(LocalTime.of(9, 0), LocalTime.of(17, 10));
@@ -144,9 +145,9 @@ class BotControllerTest {
 
   @Test
   void booksAndOnlyTheOwnChatConfirmsOrCancels() throws Exception {
-    var chat = chat();
-    var slot = slots(PETROV).get(2);
-    var booked =
+    String chat = chat();
+    String slot = slots(PETROV).get(2);
+    ResultActions booked =
         book(chat, "Ботова", slot)
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.status").value("BOOKED"))
@@ -154,7 +155,7 @@ class BotControllerTest {
             .andExpect(jsonPath("$.practitionerName").value("Александр Петров"))
             .andExpect(jsonPath("$.patient.fullName").value("Ботова Анна Сергеевна"))
             .andExpect(jsonPath("$.patient.phone").value("+7 999 123-45-67"));
-    var appointment = id(booked);
+    String appointment = id(booked);
     assertThat(slots(PETROV)).doesNotContain(slot);
     book(chat(), "Другая", slot)
         .andExpect(status().isConflict())
@@ -186,9 +187,9 @@ class BotControllerTest {
 
   @Test
   void samePersonKeepsOneCardLinkedToTelegram() throws Exception {
-    var chat = chat();
-    var all = slots(PETROV);
-    var first =
+    String chat = chat();
+    List<String> all = slots(PETROV);
+    Object first =
         JsonPath.read(
             book(chat, "Повторова", all.get(all.size() - 1))
                 .andExpect(status().isCreated())
@@ -196,9 +197,9 @@ class BotControllerTest {
                 .getResponse()
                 .getContentAsString(),
             "$.patient.id");
-    var second =
+    Object second =
         JsonPath.read(
-            book(chat, "повторова", all.get(all.size() - 2))
+            book(chat, "повторова", slots(PETROV).get(slots(PETROV).size() - 1))
                 .andExpect(status().isCreated())
                 .andReturn()
                 .getResponse()
@@ -212,9 +213,9 @@ class BotControllerTest {
 
   @Test
   void onlineBookingSkipsTheConfirmationMessage() throws Exception {
-    var all = slots(PETROV);
-    var appointment = id(book(chat(), "Очередева", all.get(all.size() / 2)));
-    var body =
+    List<String> all = slots(PETROV);
+    String appointment = id(book(chat(), "Очередева", all.get(all.size() / 2)));
+    String body =
         mvc.perform(get("/api/v1/outbox").with(staff.admin()))
             .andExpect(status().isOk())
             .andReturn()
@@ -233,7 +234,7 @@ class BotControllerTest {
 
   @Test
   void operatorRequestBecomesRegistryTask() throws Exception {
-    var created =
+    ResultActions created =
         mvc.perform(
                 post("/api/v1/bot/operator-requests")
                     .with(bot())
@@ -244,7 +245,7 @@ class BotControllerTest {
                             + "\",\"title\":\"Telegram: пациент просит оператора\"}"))
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.patientId").doesNotExist());
-    var task = id(created);
+    String task = id(created);
     mvc.perform(get("/api/v1/registry/tasks").param("dueTo", "2026-12-31").with(staff.admin()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[*].id", hasItem(task)))

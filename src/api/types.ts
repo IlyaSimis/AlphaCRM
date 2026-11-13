@@ -14,9 +14,55 @@ export type ScheduleItem = {
   practitionerId: string
   patientId: string
   minutes: number
-  /** Снимок цены услуги на момент записи, в копейках. */
+  /** Снимок цены услуги на момент записи, в копейках; при свободной цене пуст. */
   amountMinor?: number | null
   currency?: string | null
+  /** FIXED — фиксированная цена, OPEN — свободная: сумму вводят в кассе. */
+  priceMode?: PriceMode | null
+  /** Предварительная оценка свободной цены, в копейках. */
+  estimateMinor?: number | null
+}
+
+export type PriceMode = 'FIXED' | 'OPEN'
+
+export type PatientRepresentative = { fullName?: string | null; relationship?: string | null; primary?: boolean | null }
+
+/** Расширенные административные реквизиты; клинические записи хранятся отдельно. */
+export type PatientProfile = {
+  lastName?: string | null
+  firstName?: string | null
+  middleName?: string | null
+  gender?: 'MALE' | 'FEMALE' | 'UNSPECIFIED' | null
+  addressType?: string | null
+  region?: string | null
+  locality?: string | null
+  street?: string | null
+  house?: string | null
+  apartment?: string | null
+  employer?: string | null
+  professionCompany?: string | null
+  professionNsi?: string | null
+  workStartDate?: string | null
+  bonusCard?: string | null
+  documentType?: string | null
+  documentSeriesNumber?: string | null
+  documentIssueDate?: string | null
+  documentDepartmentCode?: string | null
+  documentIssuedBy?: string | null
+  contractNumber?: string | null
+  contractFrom?: string | null
+  contractTo?: string | null
+  representatives?: PatientRepresentative[]
+  snils?: string | null
+  inn?: string | null
+  referralAgent?: string | null
+  tags?: string[]
+  ambulatoryNumber?: string | null
+  ambulatoryNotes?: string | null
+  emailNotifications?: boolean | null
+  smsNotifications?: boolean | null
+  messengerNotifications?: boolean | null
+  pushNotifications?: boolean | null
 }
 
 export type PatientItem = {
@@ -27,6 +73,7 @@ export type PatientItem = {
   phone: string
   consent: ConsentState
   consents: ConsentItem[]
+  profile?: PatientProfile | null
   /** Откуда пришёл пациент — код из справочника регистратуры. */
   referralSource?: string | null
   /** Административная заметка регистратуры: в клинический контур не попадает. */
@@ -35,6 +82,9 @@ export type PatientItem = {
   phoneSharedWith?: Array<{ id: string; fullName: string }>
   /** Есть контакт Telegram (chat id). Сам chat id сервер на экран не отдаёт. */
   telegramConnected?: boolean
+  /** Подключён MAX и выбранный основной канал; внешние id сервер не отдаёт. */
+  maxConnected?: boolean
+  preferredMessenger?: 'TELEGRAM' | 'MAX' | null
   email?: string | null
   /** Второй телефон — отдельный контакт, основной телефон — phone. */
   secondPhone?: string | null
@@ -62,26 +112,54 @@ export type PatientFileItem = {
   signedAt?: string | null
 }
 
+export type ContractTemplateItem = {
+  id: string
+  name: string
+  originalName: string
+  version: number
+  placeholders: string[]
+  createdAt: string
+}
+
+export type ContractPatientItem = { id: string; name: string }
+
+export type PatientContractItem = {
+  id: string
+  patientId: string
+  contractNumber: string
+  templateName: string
+  serviceName?: string | null
+  pdfAvailable: boolean
+  createdAt: string
+  createdByName?: string | null
+}
+
 /** Поля регистратуры. telegramChatId: пусто — не менять; removeTelegram — отключить Telegram. */
 export type RegistryInput = { referralSource: string | null; registryNote: string | null; telegramChatId?: string | null; removeTelegram?: boolean }
 
 /** Состояние согласия пациента; надпись на экране — consentLabels. */
 export type ConsentState = 'ACTIVE' | 'NEEDS_UPDATE'
 
-export type StaffRole = 'ADMINISTRATOR' | 'DOCTOR' | 'MANAGER' | 'CASHIER'
+export type StaffRole = 'OWNER' | 'SENIOR_ADMINISTRATOR' | 'ADMINISTRATOR' | 'MANAGER' | 'DOCTOR' | 'NURSE' | 'SENIOR_NURSE' | 'CASHIER' | 'SUPPORT'
 
 /** Сотрудник без хеша пароля. mustChangePassword — вошёл с временным паролем. */
 export type StaffItem = {
   id: string
   fullName: string
   username: string
+  /** Основная роль; у врача — DOCTOR. */
   role: StaffRole
+  /** Все роли сотрудника: права складываются (раздел C). */
+  roles?: StaffRole[]
   practitionerId?: string | null
   active: boolean
   mustChangePassword?: boolean
   clinicName?: string | null
   /** Часовой пояс клиники (IANA), в нём интерфейс показывает время. */
   timeZone?: string | null
+  /** Коды разрешений роли (раздел C целевой архитектуры): по ним интерфейс прячет кнопки. */
+  permissions?: string[]
+  permissionsVersion?: string | null
 }
 
 /** Подписанный документ из архива: текст — из снимка подписи, а не из текущей заметки. */
@@ -111,18 +189,56 @@ export type WaitlistItem = { id: string; patientId: string; practitionerId: stri
 
 export type ConsentItem = { id: string; version: string; basis: string; grantedAt: string; revokedAt?: string | null }
 
-/** Услуга справочника. Выключенная (active: false) не предлагается в новой записи. */
-export type ServiceItem = { id: string; name: string; durationMinutes: number; priceMinor: number; currency: string; active: boolean }
+/**
+ * Услуга справочника. Выключенная (active: false) не предлагается в новой записи. Свободная цена
+ * (priceMode: OPEN) — без priceMinor, с пределами minMinor–maxMinor.
+ */
+export type ServiceItem = { id: string; name: string; durationMinutes: number; priceMinor: number | null; currency: string; active: boolean; priceMode?: PriceMode; minMinor?: number | null; maxMinor?: number | null }
+
+/** Норма расхода услуги: позиция склада и количество на один приём. */
+export type ServiceNorm = { itemId: string; quantity: number }
+
+export type TerminalPaymentMethod = 'CARD' | 'SBP'
 
 export type ChargeItem = {
   chargeId: string
   appointmentId: string
-  amountMinor: number
+  /** Пусто, пока сумма свободной цены не введена (status: AWAITING_AMOUNT). */
+  amountMinor: number | null
   currency: string
-  status: 'PENDING' | 'PAID' | string
+  status: 'AWAITING_AMOUNT' | 'PENDING' | 'PAID' | 'VOIDED' | 'REFUNDED' | string
   createdAt: string
   paymentId?: string | null
-  paymentStatus?: string | null
+  paymentStatus?: 'PENDING' | 'SUCCEEDED' | 'CANCELLED' | 'FAILED' | 'TIMEOUT' | 'MOCK_NO_PROVIDER' | string | null
+  paymentMethod?: 'CARD' | 'SBP' | 'MANUAL' | string | null
+  failureReason?: string | null
+  priceMode?: PriceMode
+  minMinor?: number | null
+  maxMinor?: number | null
+  estimateMinor?: number | null
+  paidAt?: string | null
+  /** Аннулирование: код причины и время. */
+  voidReason?: string | null
+  voidedAt?: string | null
+  /** Возврат оплаты: код причины, статус чека возврата, время. */
+  refundId?: string | null
+  refundReason?: string | null
+  refundFiscalStatus?: string | null
+  refundedAt?: string | null
+}
+
+export type VoidReason = 'DUPLICATE' | 'ERROR' | 'PATIENT_DECLINED' | 'OTHER'
+export type RefundReason = 'PATIENT_REQUEST' | 'SERVICE_NOT_PROVIDED' | 'ERROR' | 'OTHER'
+
+export type SalesGroup = 'day' | 'weekday' | 'service' | 'practitioner'
+export type SalesLine = { key: string; label: string; payments: number; amountMinor: number; refunds: number; refundedMinor: number; netMinor: number; openPriceMinor: number }
+export type SalesReport = {
+  from: string
+  to: string
+  groupBy: SalesGroup
+  currency: string
+  lines: SalesLine[]
+  totals: Omit<SalesLine, 'key' | 'label'>
 }
 
 export type DocumentState = 'DRAFT' | 'SIGNED_LOCKED'
@@ -147,6 +263,22 @@ export type EncounterView = {
   documents: DocumentSummary[]
 }
 
+export type BreakGlassReason = 'PATIENT_COMPLAINT' | 'LEGAL_REQUEST' | 'DOCTOR_UNAVAILABLE' | 'QUALITY_REVIEW' | 'OTHER'
+
+/** Экстренный доступ владельца к истории пациента; текст причины — только в журнале доступов. */
+export type BreakGlassGrant = {
+  grantId: string | null
+  patientId: string
+  patientName?: string | null
+  ownerId?: string | null
+  ownerName?: string | null
+  reasonCode?: BreakGlassReason | null
+  reasonText?: string | null
+  grantedAt?: string | null
+  expiresAt?: string | null
+  active: boolean
+}
+
 export type Practitioner = {
   id: string
   fullName: string
@@ -157,6 +289,96 @@ export type Practitioner = {
 }
 
 export type StatRow = { date: string; practitionerId: string; status: AppointmentStatus; count: number }
+
+export type AnalyticsLoad = { id: string; label: string; specialty: string | null; occupiedMinutes: number; availableMinutes: number }
+export type AnalyticsWeek = { weekStart: string; appointments: number; attended: number; noShow: number; cancelled: number; revenueMinor: number; occupiedMinutes: number; availableMinutes: number }
+export type AnalyticsOverview = {
+  from: string
+  to: string
+  currency: string
+  totals: {
+    appointments: number; attended: number; noShow: number; cancelled: number
+    revenueMinor: number; payments: number; averageCheckMinor: number | null
+    debtMinor: number; unpaidCharges: number; openPriceMinor: number; refundedMinor: number
+    newPatients: number; returningPatients: number; completedPatients: number; withoutNextVisit: number
+    occupiedMinutes: number; availableMinutes: number
+    waitlistActive: number; waitlistBooked: number; waitlistPeriodTotal: number
+  }
+  weeks: AnalyticsWeek[]
+  practitioners: AnalyticsLoad[]
+  rooms: AnalyticsLoad[]
+  nextSlots: Array<{ specialty: string; practitioners: number; averageHours: number; nextAvailableAt: string }>
+  funnel: { contacts: number; booked: number; visited: number; paid: number }
+  queues: { unclosedEncounters: number; unsignedDocuments: number; unpaidCharges: number }
+}
+
+export type AcquisitionAnalytics = {
+  from: string
+  to: string
+  currency: string
+  referralSources: Array<{
+    source: string
+    contacts: number
+    booked: number
+    visited: number
+    paid: number
+    revenueMinor: number
+  }>
+  web: {
+    state: 'NOT_CONFIGURED' | 'DISABLED' | 'READY' | 'ERROR' | string
+    detail: string | null
+    traffic: {
+      visits: number
+      users: number
+      pageviews: number
+      newVisitorsPercent: number
+      bounceRate: number
+      pageDepth: number
+      averageVisitDurationSeconds: number
+      goalReaches: number
+      goalConversionRate: number
+    } | null
+    daily: Array<{ date: string; visits: number; users: number; goalReaches: number }>
+    sources: Array<{ source: string; visits: number; users: number; goalReaches: number }>
+  }
+}
+
+export type WorkQueueKind = 'CONFIRMATION' | 'PAYMENT' | 'REBOOK' | 'NO_SHOW' | 'DELIVERY'
+export type WorkQueueItem = {
+  id: string
+  kind: WorkQueueKind
+  appointmentId: string
+  patientId: string
+  patientName: string
+  practitionerId: string
+  practitionerName: string
+  startsAt: string
+  serviceName: string
+  appointmentStatus: AppointmentStatus
+  chargeId: string | null
+  amountMinor: number | null
+  currency: string | null
+  reason: string
+}
+export type RegistryWorkQueue = { date: string; items: WorkQueueItem[] }
+
+export type ServiceAnalyticsTotals = {
+  appointments: number; visits: number; uniquePatients: number; newPatients: number; returningPatients: number
+  noShow: number; cancelled: number; withoutNextVisit: number; revenueMinor: number; payments: number; averageCheckMinor: number | null
+}
+export type ServiceAnalyticsRow = Omit<ServiceAnalyticsTotals, 'cancelled'> & {
+  serviceKey: string; serviceName: string; cancelled: number; previousVisits: number; previousRevenueMinor: number
+}
+export type ServiceAnalyticsReport = {
+  from: string; to: string; previousFrom: string; previousTo: string; currency: string
+  totals: ServiceAnalyticsTotals; previousTotals: ServiceAnalyticsTotals; rows: ServiceAnalyticsRow[]
+}
+export type ServiceAppointment = {
+  appointmentId: string; patientId: string; patientName: string; practitionerId: string; practitionerName: string
+  startsAt: string; status: AppointmentStatus; chargeId: string | null; chargeStatus: string | null
+  amountMinor: number | null; currency: string | null; withoutNextVisit: boolean
+}
+export type ServiceAppointmentDetails = { from: string; to: string; serviceKey: string; serviceName: string; appointments: ServiceAppointment[] }
 
 export type AuditItem = {
   id: string
@@ -192,3 +414,162 @@ export type OutboxItem = {
   nextAttemptAt: string | null
   sentAt: string | null
 }
+
+/** Виджет персонального дашборда: подпись выбирает интерфейс по code. */
+export type DashboardWidget = { code: string; scope: 'OWN' | 'CLINIC'; value: number; secondary: number | null; unit: 'count' | 'money' | 'bytes' | 'percent'; items: string[] }
+
+export type Dashboard = { role: string | null; monthStart: string; today: string; generatedAt: string; widgets: DashboardWidget[] }
+
+export type ItemKind = 'DRUG' | 'MEDICAL_DEVICE' | 'CONSUMABLE' | 'GOODS'
+export type MarkingSystem = 'NONE' | 'MDLP' | 'GIS_MT'
+
+export type InventoryCategory = { id: string; name: string; parentId: string | null; kind: ItemKind }
+
+export type InventoryItem = {
+  id: string
+  categoryId: string
+  categoryName: string
+  kind: ItemKind | null
+  name: string
+  unit: string
+  gtin: string | null
+  marked: boolean
+  markingSystem: MarkingSystem
+  rxOnly: boolean
+  active: boolean
+  stock: number
+  minStock: number
+}
+
+export type Warehouse = { id: string; name: string; isDefault: boolean }
+
+export type StockDocumentType = 'RECEIPT' | 'CONSUMPTION' | 'WRITE_OFF' | 'TRANSFER' | 'RETURN_TO_SUPPLIER'
+
+export type StockLine = { id?: string; itemId: string; itemName?: string; unit?: string; marked?: boolean; quantity: number; batch: string; expiresOn: string | null; codes: string[] }
+
+export type StockDocument = {
+  id: string
+  type: StockDocumentType
+  status: 'DRAFT' | 'POSTED' | 'CANCELLED'
+  documentDate: string
+  supplier: string | null
+  appointmentId: string | null
+  fromWarehouseId: string | null
+  toWarehouseId: string | null
+  note: string | null
+  createdAt: string
+  postedAt: string | null
+  lines: StockLine[]
+  shortages: Array<{ itemId: string; itemName: string; missing: number }>
+}
+
+export type StockBalance = {
+  itemId: string
+  itemName: string
+  categoryId: string
+  categoryName: string
+  kind: ItemKind
+  unit: string
+  marked: boolean
+  warehouseId: string
+  warehouseName: string
+  batch: string
+  expiresOn: string | null
+  quantity: number
+  codesInStock: number
+}
+
+export type StockMetricRow = {
+  itemId: string
+  itemName: string
+  unit: string
+  stock: number
+  minStock: number
+  received: number
+  consumption: number
+  writeOff: number
+  turnover: number | null
+  daysStock: number | null
+}
+
+export type StockMetrics = { from: string; to: string; rows: StockMetricRow[] }
+
+export type ScannedCode = { sgtin: string; gtin: string; serial: string; batch: string; expiresOn: string | null; itemId: string | null; itemName: string | null; codeStatus: string | null; warehouseId: string | null }
+
+export type MarkingCodeItem = { sgtin: string; itemId: string; itemName: string; batch: string; expiresOn: string | null; status: string; warehouseId: string | null; updatedAt: string }
+
+export type MarkingOperationItem = { id: string; type: string; status: 'PENDING' | 'DONE' | 'ERROR'; codes: number; attempts: number; operatorRef: string | null; lastError: string | null; documentId: string; createdAt: string; updatedAt: string }
+
+export type MarkingStatus = { adapter: string; pending: number; errors: number }
+
+export type DrivePermission = 'VIEW' | 'EDIT' | 'MANAGE'
+
+export type DriveNode = {
+  id: string
+  parentId: string | null
+  kind: 'FILE' | 'FOLDER'
+  name: string
+  ownerId: string
+  ownerName: string | null
+  sizeBytes: number
+  currentVersion: number
+  createdAt: string
+  updatedAt: string
+  deletedAt: string | null
+  permission: DrivePermission | null
+  shared: boolean
+}
+
+export type DriveListing = { node: DriveNode | null; path: Array<{ id: string; name: string }>; children: DriveNode[] }
+
+export type DriveVersion = { version: number; sizeBytes: number; sha256: string; contentType: string | null; uploadedBy: string; uploadedByName: string | null; uploadedAt: string }
+
+export type DriveShare = { id: string; principalType: 'USER' | 'ROLE' | 'CLINIC' | 'LINK'; principalId: string | null; label: string | null; permission: DrivePermission; expiresAt: string | null; createdAt: string; token: string | null }
+
+export type DriveQuota = { bytesUsed: number; bytesLimit: number; maxFileBytes: number }
+
+export type DrivePrincipal = { id: string; fullName: string; role: StaffRole }
+
+/** Личная запись рабочего пространства. Тип и статус — свободные строки, а не закрытый справочник. */
+export type WorkspaceField = { name: string; value: string }
+export type ChecklistItem = { text: string; done: boolean }
+export type WorkspaceAssignee = { id: string; fullName: string; role: StaffRole; active?: boolean }
+
+export type WorkspaceItemInput = {
+  title: string
+  type: string
+  body: string
+  status: string
+  color: 'green' | 'blue' | 'orange' | 'red' | 'purple' | 'gray'
+  completed: boolean
+  dueAt: string | null
+  remindAt: string | null
+  patientId: string | null
+  appointmentId: string | null
+  tags: string[]
+  fields: WorkspaceField[]
+  checklist: ChecklistItem[]
+  /** null у старых записей означает текущего пользователя. */
+  assigneeId: string | null
+}
+export type WorkspaceItem = WorkspaceItemInput & {
+  id: string
+  creatorId?: string
+  createdAt: string
+  updatedAt: string
+  completedAt: string | null
+  archivedAt: string | null
+}
+export type WorkspaceDueFilter = 'all' | 'today' | 'overdue' | 'week' | 'none'
+export type WorkspaceFilter = {
+  query: string
+  type: string
+  status: string
+  tag: string
+  /** null или отсутствие — все записи; id пользователя — только его задачи. */
+  assigneeId?: string | null
+  due: WorkspaceDueFilter
+  sort: 'due' | 'updated' | 'created' | 'title'
+  display: 'list' | 'board'
+}
+export type WorkspaceView = { id: string; name: string; filter: WorkspaceFilter; createdAt: string }

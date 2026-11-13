@@ -1,6 +1,6 @@
 # Архитектура AlphaCRM
 
-Документ описывает, из чего состоит проект, как части связаны между собой и по каким правилам писать код. Как устроена база — в [data-model.md](data-model.md); как запустить и какие есть маршруты API — в [README](../README.md).
+Документ описывает, из чего состоит проект, как части связаны между собой и по каким правилам писать код. Как устроена база — в [data-model.md](data-model.md); как запустить и какие есть маршруты API — в [README](../README.md). Во что система переходит дальше (сервисы, роли, план миграции) — в [target-architecture.md](target-architecture.md).
 
 ## Содержание
 
@@ -24,23 +24,23 @@ AlphaCRM — внутренняя система одной или нескол�
 flowchart LR
     subgraph Browser["Браузер сотрудника"]
         SPA["React 19 + MUI<br/>src/"]
-        LS[("localStorage<br/>alphacrm-*")]
+        LS[("localStorage<br/>../alphacrm-*")]
     end
     subgraph Docker["Docker Compose: quiet-clinic"]
         NGINX["frontend<br/>nginx: статика SPA + /api"]
         API["backend<br/>Spring Boot 4.1 · порт 8081"]
         PG[("postgres 18<br/>база quiet_clinic")]
     end
-    SPA -- "HTTPS/HTTP, cookie JSESSIONID + X-XSRF-TOKEN" --> NGINX
+    SPA -- "HTTPS/HTTP, cookie SESSION + X-XSRF-TOKEN" --> NGINX
     NGINX -- "/api/v1/* proxy" --> API
     API -- "JDBC, Liquibase" --> PG
     SPA --- LS
-    API -. "порты с mock-адаптерами" .-> EXT["платежи, уведомления, KMS"]
+    API -. "порты внешних систем" .-> EXT["ИИ, уведомления, KMS"]
 ```
 
 - Интерфейс и API работают на одном origin: nginx в Docker, прокси Vite при разработке. Поэтому cookie сессии и CSRF работают без CORS.
 - backend не публикует порт наружу, база слушает только `127.0.0.1`.
-- Внешние системы (платёжный шлюз, SMS/email, KMS) закрыты портами; сейчас за ними безопасные mock-адаптеры, которые ничего не отправляют.
+- Внешние системы закрыты портами. Обращения ИИ-навигации к модели выключены без ключа; остальные адаптеры по умолчанию безопасно не отправляют данные наружу.
 
 ## Развёртывание
 
@@ -49,7 +49,9 @@ flowchart LR
 | `postgres` | `postgres:18-alpine` | том `quiet-clinic-postgres`, healthcheck `pg_isready` |
 | `backend` | `deploy/backend.Dockerfile` | сборка Maven → слоёный образ на JRE 21, профиль `prod`, лимит памяти 768 МБ |
 | `frontend` | `deploy/frontend.Dockerfile` | `vite build` → `nginx-unprivileged`; `deploy/nginx.conf` (прокси `/api`, SPA-fallback, кэш, `/healthz`), `deploy/security-headers.conf` (CSP и др.) |
-| запуск | `scripts/start.sh`, `scripts/start.ps1` | создают `.env` со случайными секретами (`scripts/init-env.sh`) и поднимают стек |
+| `max-bot` (необязательный профиль) | `../alphacrm-max-bot/Dockerfile` | MAX webhook и вызовы приватного API МИС; запускается в РФ рядом с backend |
+| `../alphacrm-telegram-bot` | отдельный репозиторий и Compose | Telegram webhook и HMAC-relay на зарубежном VPS; связь с МИС через WireGuard |
+| запуск | `scripts/start.sh`, `scripts/start.ps1` | создают `.env` со случайными секретами (`scripts/init-env.sh`) и поднимают основной стек |
 
 Профили backend:
 
@@ -72,41 +74,56 @@ flowchart TB
     staff["staff<br/>клиники, вход, сотрудники, безопасность"]
     communications["communications<br/>outbox и доставщик, NotificationPort, FiscalPort"]
     audit["audit<br/>журнал"]
-    platform["platform<br/>ошибки, шифрование, KMS, clinicId()"]
+    inventory["inventory<br/>склад, партии, Честный знак"]
+    drive["drive<br/>корпоративный диск"]
+    insights["insights<br/>персональный дашборд"]
+    workspace["workspace<br/>личные задачи, заметки, произвольные поля и представления"]
+    assistant["assistant<br/>навигация по разрешённым страницам"]
+    telephony["telephony<br/>Mango callback, журнал звонков"]
+    platform["platform<br/>ошибки, шифрование, KMS, clinicId(),<br/>разрешения ролей, доменные события"]
 
     scheduling -->|"CareRelationshipService"| clinical
     scheduling -->|"реализует порт VisitAppointments"| clinical
     scheduling -->|"реализует порт PractitionerCards"| staff
-    scheduling -->|"ChargeService"| billing
+    scheduling -.->|"событие AppointmentCompleted"| billing
+    scheduling -.->|"событие AppointmentCompleted"| inventory
+    inventory -.->|"событие StockShortage"| registry
     scheduling -->|"OutboxService: запись создана, отменена"| communications
     billing -->|"OutboxService: оплата; реализует FiscalPort"| communications
     communications --> audit
-    bot["bot<br/>API Telegram-бота"]
+    bot["bot<br/>приватный API Telegram и MAX"]
     bot -->|"OnlineBooking"| scheduling
     bot -->|"TelegramPatients"| patients
     bot -->|"OperatorRequests"| registry
-    scheduling & clinical & billing & registry & patients & staff --> audit
-    scheduling & clinical & billing & registry & patients & staff & audit --> platform
+    scheduling & clinical & billing & registry & patients & staff & inventory & drive & workspace --> audit
+    scheduling & clinical & billing & registry & patients & staff & audit & inventory & drive & insights & workspace --> platform
+    assistant --> platform
 ```
 
 | Модуль | Отвечает за | Зависит от кода |
 |---|---|---|
-| `platform` | `DomainException` и `ApiExceptionHandler` (единый формат ошибок), `PlatformConfig` (`actorId()`, `clinicId()`, `requireRole`, фабрики ошибок), `EncryptionService`/`AesGcmEncryptionService`, `KmsPort`/`DevKmsAdapter`, `CorrelationIdFilter`, `ProductionReadinessCheck`, интерфейс `ClinicMember` | — |
+| `platform` | `DomainException` и `ApiExceptionHandler` (единый формат ошибок), `PlatformConfig` (`actorId()`, `clinicId()`, `staffId()`, `requirePermission`, `can`, фабрики ошибок), `Permission` и `RolePermissions` (матрица RBAC), `DomainEvents`/`DomainEventRelay`/`DomainEventHandler` (outbox и inbox доменных событий), `EncryptionService`/`AesGcmEncryptionService`, `KmsPort`/`DevKmsAdapter`, `CorrelationIdFilter`, `ProductionReadinessCheck`, интерфейсы `ClinicMember` и `PasswordConfirmation` (повторный ввод пароля, реализует `staff`) | — |
 | `audit` | `AuditService.record(...)`, `GET /audit` | platform |
-| `staff` | клиники, учётные записи, вход/выход/смена пароля, `SecurityConfig`, CSRF, `ActiveStaffFilter`, `ClinicBootstrap` (первый администратор); порт `PractitionerCards` — новая карточка врача вместе с учётной записью | platform, audit |
-| `patients` | карточка, контакты (телефон, второй телефон, e-mail, Telegram), постоянный администратор, согласия, поля регистратуры, поиск дублей телефона | platform, audit |
-| `scheduling` | врачи (карточка, кабинет) и графики, справочник услуг (`ServiceCatalog`), записи и статусы, аналитика | platform, audit, clinical, billing, communications, staff |
-| `registry` | задачи регистратуры (свободный текст, пациент по желанию), лист ожидания | platform, audit |
-| `clinical` | приём (`Encounter`), заметка, документы и подпись, дополнения, архив подписанных, связь с лечением, PDF пациента (`PatientFile`: шифрованное хранение, подпись, выгрузка) | platform, audit |
-| `billing` | счёт на завершённый приём, оплата с ключом идемпотентности, `PaymentGateway` (mock, `MOCK_NO_PROVIDER`), `CashboxFiscalAdapter` — реализация `FiscalPort` | platform, audit, communications |
-| `bot` | API Telegram-бота `/api/v1/bot/**`: своя цепочка Spring Security со входом по токену `X-Bot-Token` и сервисной учётной записью с ролью `BOT` (автор в аудите — клиника); сам ничего не хранит | scheduling (`OnlineBooking`), patients (`TelegramPatients`), registry (`OperatorRequests`), platform |
-| `communications` | `OutboxService` (постановка по событию), `OutboxDispatcher` (доставка, повторы, переносы), `NotificationPort` → вебхук клиники, Telegram или mock, порт кассы `FiscalPort`, экран `GET /outbox` | platform, audit |
+| `staff` | клиники, учётные записи и их роли (`staff_role`, несколько на сотрудника), вход/выход/смена пароля, `SecurityConfig`, CSRF, `ActiveStaffFilter` (пересчёт прав при смене ролей), `ClinicBootstrap` (первый сотрудник — владелец `OWNER`), запрет назначать роль выше своей, условия работы и ставки (`hr`), повторный ввод пароля (`PasswordConfirmation`); порт `PractitionerCards` — новая карточка врача вместе с учётной записью | platform, audit |
+| `patients` | карточка, контакты (телефон, второй телефон, e-mail, Telegram, MAX), предпочтительный мессенджер, одноразовые ссылки привязки, постоянный администратор, согласия, поля регистратуры, поиск дублей телефона | platform, audit |
+| `scheduling` | врачи (карточка, кабинет) и графики, справочник услуг (`ServiceCatalog`: фиксированная или свободная цена, нормы расхода), записи и статусы, событие `AppointmentCompleted`, аналитика | platform, audit, clinical, communications, staff |
+| `registry` | задачи регистратуры (свободный текст, пациент по желанию), лист ожидания; задача по событию `StockShortage` | platform, audit |
+| `clinical` | экстренный доступ владельца (`BreakGlassService`: причина, пароль через `platform.PasswordConfirmation`, 60 минут, только чтение), приём (`Encounter`), заметка, документы и подпись, дополнения, архив подписанных, связь с лечением, PDF пациента (`PatientFile`: шифрованное хранение, подпись, выгрузка) | platform, audit |
+| `billing` | счёт на завершённый приём (по событию `AppointmentCompleted`; свободная цена — `AWAITING_AMOUNT` до ввода суммы), аннулирование и возврат (`FinanceService`, чек возврата через `FiscalPort`), отчёт о продажах `GET /finance/sales`, оплата с ключом идемпотентности, `PaymentGateway` (mock, `MOCK_NO_PROVIDER`), `CashboxFiscalAdapter` — реализация `FiscalPort` | platform, audit, communications |
+| `bot` | общий приватный API `/api/v1/messenger/**` и совместимый `/api/v1/bot/**`: вход по `X-Bot-Token`, сервисная роль `BOT` (автор в аудите — клиника); привязка карточки, запись и действия с ней, обращение оператору; сам ничего не хранит | scheduling (`OnlineBooking`), patients (`TelegramPatients`, `PatientMessengerLinks`), registry (`OperatorRequests`), platform |
+| `inventory` | номенклатура, склады, документы движения и остатки по партиям (FIFO), расход по нормам услуги (по событию `AppointmentCompleted`), событие `StockShortage`; коды маркировки GS1, очередь операций Честного знака (`MarkingRelay`, порт `MarkingPort`: `UnconfiguredMarkingAdapter` или `MockMarkingAdapter`) | platform, audit |
+| `drive` | папки, файлы и версии, права с наследованием (`VIEW`/`EDIT`/`MANAGE`), ссылки только на просмотр после входа, корзина и квота; содержимое — шифрованные объекты в `ObjectStorage` (`LocalObjectStorage`) | platform, audit |
+| `insights` | `GET /me/dashboard`: виджеты по разрешениям роли, только агрегаты запросами к таблицам других модулей | platform |
+| `workspace` | личные задачи, заметки и записи произвольных типов; свободные статусы, теги, чек-листы и поля; сроки, связи, архив и сохранённые представления. Каждая строка ограничена `clinic_id + owner_id`; клинический текст сюда не переносится | platform, audit |
+| `assistant` | статус и переходы ИИ-навигатора без отдельных тарифов и месячных лимитов; OpenAI-compatible адаптер принимает вопрос и каталог разрешённых роли страниц, возвращает только `destinationId` из whitelist. Пациенты и содержимое страниц в запрос не попадают | platform |
+| `communications` | `OutboxService` (постановка по событию), `OutboxDispatcher` (доставка, повторы, переносы), `NotificationPort` → предпочтительный Telegram/MAX пациента, резервный подключённый канал, вебхук клиники или mock; Telegram доставляется через HMAC-relay на зарубежном VPS, MAX — напрямую из РФ; порт кассы `FiscalPort`, экран `GET /outbox` | platform, audit |
 
 Правила, на которых держатся границы:
 
 - **Клинический контур не зависит от расписания.** Данные записи и перевод её в `IN_PROGRESS` он получает через свой порт `clinical.VisitAppointments`; реализация — `scheduling.ClinicalAppointmentsAdapter`. `clinical` и `billing` не импортируют `scheduling`.
 - **«Сотрудники» не зависят от расписания.** Новую карточку врача `staff` создаёт через свой порт `staff.PractitionerCards` внутри транзакции создания сотрудника; реализация — `scheduling.StaffPractitionerCardsAdapter`.
 - **`staff` и `registry` не импортируют другие предметные модули.** Существование пациента, врача, сотрудника или услуги они проверяют запросом к таблице через `JdbcTemplate` (`select count(*) … where id = ? and clinic_id = ?`).
+- **Модули реагируют на события, а не вызывают друг друга.** `DomainEvents.publish` пишет конверт `{eventId, type, version, clinicId, occurredAt, payload}` в `domain_event_outbox` в транзакции изменения; после фиксации `DomainEventRelay` раздаёт его обработчикам (`DomainEventHandler`) от имени системного субъекта без прав сотрудника, каждый обработчик отмечает `(consumer, eventId)` в `domain_event_inbox` в своей транзакции — повтор ничего не задваивает. Не раздавшееся повторяет `DomainEventScheduler`. Полезная нагрузка — id и числа, без ФИО, телефонов и клинического текста. Так расписание не зависит от кассы и склада, а склад — от регистратуры.
 - **Наружу — только через outbox.** Расписание сообщает о создании и отмене записи, касса — об оплате; что и куда отправить, решает `communications`. Запись, пациента, врача и клинику доставщик читает запросами к таблицам (`NoticeSource`) — без зависимости от их кода и без доступа к заметкам и документам. Регистратура и клинический контур наружу ничего не отправляют.
 
 ### Слои внутри модуля
@@ -117,7 +134,7 @@ flowchart TB
 |---|---|---|
 | сущность и репозиторий | `ClinicService`, `ClinicServiceRepository` | поля package-private, конструктор задаёт инвариант; выборки — с `clinicId` |
 | запрос и ответ API | `CreateServiceRequest`, `ServiceView` | `record`, Bean Validation на входе; ответ не отдаёт хеши, шифртексты и лишние поля |
-| сервис и политика | `ServiceCatalog`, `AppointmentStatusPolicy`, `WorkingHoursPolicy` | вся логика и проверка прав (`requireRole`), запись в аудит, `@Transactional` |
+| сервис и политика | `ServiceCatalog`, `AppointmentStatusPolicy`, `WorkingHoursPolicy` | вся логика и проверка прав (`requirePermission` и атрибуты: своя клиника, своя запись, связь с лечением), запись в аудит, `@Transactional` |
 | контроллер | `ServiceCatalogController` | только HTTP: путь, статус ответа, `@Valid`; логики нет |
 
 ## Как проходит запрос
@@ -136,12 +153,12 @@ sequenceDiagram
     participant A as AuditService
 
     UI->>C: setServiceActive(id, false)
-    C->>N: POST /api/v1/services/{id}/deactivate<br/>cookie JSESSIONID, X-XSRF-TOKEN
+    C->>N: POST /api/v1/services/{id}/deactivate<br/>cookie SESSION, X-XSRF-TOKEN
     N->>S: proxy
     S->>S: сессия, CSRF, активен ли сотрудник,<br/>не нужна ли смена пароля
     S->>Ctl: deactivate(id)
     Ctl->>Svc: setActive(id, false)
-    Svc->>Svc: requireRole("ADMINISTRATOR"), clinicId()
+    Svc->>Svc: requirePermission(SERVICE_MANAGE), clinicId()
     Svc->>DB: select … where id = ? and clinic_id = ?
     Svc->>DB: update clinic_service set active = false
     Svc->>A: SERVICE_DEACTIVATED, SERVICE, id, ALLOWED
@@ -155,9 +172,14 @@ sequenceDiagram
 
 - **Вход** — `POST /api/v1/auth/login`, логин и пароль из `staff_user` (bcrypt). Неверный логин и неверный пароль дают одинаковый `401 INVALID_CREDENTIALS`. Серия неудач закрывает вход с адреса на 15 минут (`LoginThrottle`, `429 TOO_MANY_LOGIN_ATTEMPTS`). Внешнего OIDC/Keycloak нет.
 - **Время** — `platform.ClinicTime`: пояс клиники (`CLINIC_TIME_ZONE`) для дней, смен и экрана, моменты в базе — UTC; запись в прошлое отклоняется (`409 APPOINTMENT_IN_PAST`). Интерфейс берёт пояс из `/auth/me` (`shared/clinicTime.ts`).
-- **Сессия** — cookie `JSESSIONID`, `HttpOnly`, `SameSite=Lax`, 8 часов, `Secure` при `SESSION_COOKIE_SECURE=true`. Хранится в памяти backend.
+- **Сессия** — в production cookie `SESSION`, `HttpOnly`, `SameSite=Lax`, 8 часов, `Secure` при `SESSION_COOKIE_SECURE=true`; хранится в PostgreSQL через Spring Session JDBC. Один логин — одна активная сессия: новый вход вытесняет прежний с `401 SESSION_REPLACED`; выход старой сессии не отзывает новую, собственная смена пароля текущую сохраняет. Сброс пароля администратором и отключение сотрудника отзывают доступ.
 - **CSRF** — `CookieCsrfTokenRepository`: сервер кладёт `XSRF-TOKEN`, интерфейс отправляет его в `X-XSRF-TOKEN` на изменяющих запросах (`src/api/client.ts`).
-- **Роль и автор действия** сервер берёт только из сессии. Права проверяются в сервисах (`requireRole`), а не в интерфейсе: интерфейс лишь прячет недоступные кнопки.
+- **Мессенджеры** — `/api/v1/messenger/**` и совместимый `/api/v1/bot/**` имеют отдельную цепочку без сессии и CSRF, с `X-Bot-Token` и ролью `BOT`; nginx не публикует эти пути. Привязка возможна только по одноразовому HMAC-хешированному токену на 10 минут, внешние id пациентов зашифрованы, а подтвердить или отменить запись может лишь владелец связанного id. Telegram relay подписывает тело и timestamp через HMAC-SHA256; MAX webhook проверяет отдельный секрет.
+- **ИИ-навигатор** — ключ модели только на backend; внешний запрос содержит вопрос и безопасные метаданные страниц, но не пациентов или содержимое. Модель выбирает лишь id из серверного whitelist. Текст вопроса не сохраняется, учитываются только количество запросов и токенов.
+- **Оплата подписки** — данные карты вводятся на hosted checkout ЮKassa. Вебхук публичен и исключён из CSRF, но не считается доказательством оплаты: сервер повторно запрашивает платёк у провайдера и сверяет id, сумму и валюту.
+- **Роль и автор действия** сервер берёт только из сессии. Роль раскрывается в набор разрешений `<сервис>.<ресурс>.<действие>` (`platform.RolePermissions`, версия — `permissionsVersion`); сервис проверяет разрешение (`requirePermission`), затем атрибуты. Интерфейс получает список разрешений в `/auth/me` и лишь прячет недоступные кнопки (`src/shared/permissions.ts`). Матрицу ролей и маршрутов держит `RbacMatrixTest` + `rbac-matrix.csv`.
+- **Назначение ролей** — не выше своей: владельца и старшего администратора назначает только владелец, администратора и техподдержку — администраторы (`RolePermissions.mayAssign`, `403 ROLE_NOT_ASSIGNABLE`).
+- **Файлы диска** шифруются тем же `EncryptionService`, отдаются всегда вложением `application/octet-stream`; ссылка на файл — только после входа сотрудника этой клиники, в базе — хеш токена.
 - **Клиника** — `PlatformConfig.clinicId()` из сессии; каждая выборка ограничена ею. Строки чужой клиники выглядят как несуществующие.
 - **Временный пароль** — пока сотрудник его не сменил, `ActiveStaffFilter` отвечает `403 PASSWORD_CHANGE_REQUIRED` на всё, кроме `/auth/me`, `/auth/password`, `/auth/logout`.
 - **Клинический текст** — только врачу с активной связью с лечением; хранится зашифрованным (AES-256-GCM, ключ через `KmsPort`); подписанный документ неизменяем (доменный инвариант + trigger PostgreSQL).
@@ -191,7 +213,7 @@ flowchart TB
 
 | Папка | Что там |
 |---|---|
-| `src/app/` | `App.tsx` (вход, принудительная смена пароля или рабочее место), `useSession.ts`, `Workspace.tsx`, `Sidebar`/`Topbar` (бренд AlphaCRM, клиника, выход), `useClinicData.ts` (расписание, пациенты, врачи, услуги, касса: сервер или песочница), `demoData.ts`, `theme.tsx` |
+| `src/app/` | `App.tsx` (вход, принудительная смена пароля или рабочее место), `useSession.ts`, `Workspace.tsx`, `pages.ts` (сервисы верхней панели — Дашборды, Управление, База данных пациентов, Документы, Склад, Финансы, Диск — их разделы и доступ по разрешениям), `Topbar` (вкладки сервисов, клиника, выход), `Sidebar` (разделы выбранного сервиса, открытые приёмы), `useClinicData.ts` (расписание, пациенты, врачи, услуги, касса: сервер или песочница), `demoData.ts`, `theme.tsx` |
 | `src/api/` | по файлу на раздел API; `client.ts` — `apiFetch` (cookie, CSRF, 401 → вход) и `failure` (ошибка с фразой по коду); `errorMessages.ts`; `types.ts` — типы ответов |
 | `src/features/<раздел>/` | страница, диалоги, чистые функции раздела (`booking.ts`, `registry.ts`, `serviceDraft.ts`) и их тесты |
 | `src/shared/` | `roles.ts` (коды ролей `ADMINISTRATOR`… и их названия `roleLabels`, правила видимости страниц), `storage.ts` (ключи `localStorage`), `sandbox.ts`, `dates.ts`, `text.ts`, `ui.tsx` |
@@ -201,7 +223,7 @@ flowchart TB
 
 - Роль, статус, состояние согласия — машинные коды из API (`DOCTOR`, `COMPLETED`, `ACTIVE`). Надпись выбирается картой: `roleLabels`, `statusLabel`, `consentLabels`, `actionLabels`/`reasonLabel` в журнале.
 - Списки, которые ведёт администратор, приходят с сервера: услуги (`GET /services?all=true`, в записи — только `active`), сотрудники, врачи. В живом режиме зашитых списков нет.
-- `localStorage` — только удобства одного браузера: тема (`alphacrm-color-mode`) и день расписания (`alphacrm-schedule-date`). Чтение сначала нового ключа, затем прежнего `quiet-clinic-*`; запись — только под новым (`shared/storage.ts`, `public/theme-init.js`).
+- `localStorage` — удобства одного браузера: тема (`../alphacrm-color-mode`), день расписания (`../alphacrm-schedule-date`) и личное пространство в песочнице (`alphacrm.workspace.<staffId>`). В живом режиме записи пространства хранятся на сервере. Чтение старых настроек сначала пробует новый ключ, затем прежний `quiet-clinic-*`; запись — только под новым (`shared/storage.ts`, `public/theme-init.js`).
 
 ## Ошибки: код и фраза
 
@@ -236,7 +258,7 @@ flowchart LR
 
 ## Демо-песочница
 
-Если сервер недоступен, страница входа предлагает «Песочница: <роль>». Песочница работает без запросов от имени роли: данные из `app/demoData.ts` и `demoServices`, изменения живут в памяти вкладки (`shared/sandbox.ts`) до обновления страницы. В шапке висит «Демо-песочница: данные не сохраняются». Людей в песочнице нет — только учётные записи по ролям.
+Если сервер недоступен, страница входа предлагает «Песочница: <роль>». Песочница работает без запросов от имени роли: общие данные из `app/demoData.ts` и `demoServices`, их изменения живут в памяти вкладки (`shared/sandbox.ts`) до обновления страницы. Личное пространство — исключение: оно сохраняется локально в `alphacrm.workspace.<staffId>` и не отправляется на сервер. Шапка разделяет эти два режима хранения. Людей в песочнице нет — только учётные записи по ролям.
 
 ## Тесты
 
@@ -245,6 +267,7 @@ flowchart LR
 | Java, правила | `backend/app/src/test/java/...`, `FooTest` рядом с `Foo` | `AppointmentStatusPolicyTest`, `WorkingHoursPolicyTest`, `PatientTest`, `MedicalDocumentTest`, `ClinicBootstrapTest`… — без Spring |
 | Java, HTTP | там же | `*ControllerTest` на H2 с профилем `local`: вход как `admin`/`admin`, остальные сотрудники заводятся через API (`StaffSessions`), вторая клиника — `SecondClinic` |
 | Java, PostgreSQL | `PostgresAppointmentIntegrationTest` | exclusion constraint в настоящем PostgreSQL (Testcontainers, пропускается без Docker) |
+| Java, права | `RbacMatrixTest` + `src/test/resources/rbac-matrix.csv` | каждая строка — роль, метод, путь, ожидаемый ответ (`403` или «разрешено»); поменяли права — поменяйте строку |
 | Java, границы | `ModularityTest` | Spring Modulith |
 | TS, функции | `src/**/<имя>.test.ts` | `booking.test.ts`, `storage.test.ts`, `client.test.ts`… |
 | TS, сценарии | `src/features/<раздел>/<раздел>.test.tsx` | весь интерфейс с фальшивым сервером `withAuth` или песочницей |
@@ -254,8 +277,8 @@ flowchart LR
 ## Как добавить функцию
 
 1. **Схема.** Новый changeset Liquibase (см. [data-model.md](data-model.md#миграции)), английские имена, `clinic_id`, если строку видит сотрудник.
-2. **Backend.** Сущность и репозиторий с выборками по `clinicId`; `record`-запрос с валидацией; сервис с `requireRole`, записью в аудит без содержимого и ошибками с английским `code`; контроллер без логики. Если нужен другой модуль — через его публичный сервис или порт, не через его сущности.
-3. **Тесты backend.** `FooTest` для правил, `*ControllerTest` для HTTP и прав ролей, чужая клиника (`SecondClinic`) должна получать `404`.
+2. **Backend.** Сущность и репозиторий с выборками по `clinicId`; `record`-запрос с валидацией; сервис с `requirePermission` (новое действие — новое значение `Permission` и строка в `RolePermissions` и в `src/shared/permissions.ts`, версию `VERSION` поднять), записью в аудит без содержимого и ошибками с английским `code`; контроллер без логики. Если нужен другой модуль — через его публичный сервис или порт, не через его сущности; если другому модулю нужно знать о факте — доменное событие (`DomainEvents.publish`) и обработчик с уникальным именем потребителя.
+3. **Тесты backend.** `FooTest` для правил, `*ControllerTest` для HTTP, строки в `rbac-matrix.csv` для прав ролей, чужая клиника (`SecondClinic`) должна получать `404`.
 4. **Frontend.** Функция в `src/api/<раздел>.ts` через `apiFetch` и `failure`; фразы для новых кодов — в `errorMessages.ts`; подписи новых действий аудита — в `auditLabels.ts`; экран — в `src/features/<раздел>/`; поведение в песочнице — в `useClinicData` или хуке раздела.
 5. **Тесты frontend.** Чистые функции — `*.test.ts`, сценарий — в `<раздел>.test.tsx`, фальшивый сервер должен отвечать как настоящий: английские `message`, те же `code`.
 6. **Документация.** README (маршрут API), [data-model.md](data-model.md) (таблица), этот документ — если поменялись границы модулей.

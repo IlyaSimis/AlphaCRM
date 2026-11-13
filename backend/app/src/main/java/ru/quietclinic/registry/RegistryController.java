@@ -18,9 +18,16 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/registry")
 public class RegistryController {
   private final RegistryService registry;
+  private final RegistryWorkQueueService workQueue;
 
-  RegistryController(RegistryService registry) {
+  RegistryController(RegistryService registry, RegistryWorkQueueService workQueue) {
     this.registry = registry;
+    this.workQueue = workQueue;
+  }
+
+  @GetMapping("/work-queue")
+  RegistryWorkQueueView workQueue(@RequestParam(required = false) LocalDate date) {
+    return workQueue.queue(date);
   }
 
   @GetMapping("/tasks")

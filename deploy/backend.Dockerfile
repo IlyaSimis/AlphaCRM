@@ -15,7 +15,11 @@ RUN --mount=type=cache,target=/root/.m2 \
  && java -Djarmode=tools -jar /workspace/app.jar extract --layers --launcher --destination /workspace/extracted
 
 FROM eclipse-temurin:21-jre-alpine AS runtime
-RUN addgroup -S clinic && adduser -S -G clinic -H -s /sbin/nologin clinic
+# LibreOffice формирует PDF автозаполненных договоров и предпросмотр DOCX/XLSX локально.
+RUN apk add --no-cache libreoffice ttf-dejavu \
+ && addgroup -S clinic && adduser -S -G clinic -H -s /sbin/nologin clinic \
+ && mkdir -p /var/lib/alphacrm/drive /var/lib/alphacrm/staff-chat \
+ && chown clinic:clinic /var/lib/alphacrm/drive /var/lib/alphacrm/staff-chat
 WORKDIR /app
 COPY --from=build --chown=clinic:clinic /workspace/extracted/dependencies/ ./
 COPY --from=build --chown=clinic:clinic /workspace/extracted/spring-boot-loader/ ./

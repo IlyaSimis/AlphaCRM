@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -46,5 +47,11 @@ public class StaffController {
   @ResponseStatus(HttpStatus.NO_CONTENT)
   void resetPassword(@PathVariable UUID id, @Valid @RequestBody PasswordResetRequest request) {
     staff.resetPassword(id, request);
+  }
+
+  /** Все роли сотрудника: права складываются; менять — только роли не выше своих. */
+  @PutMapping("/{id}/roles")
+  StaffView setRoles(@PathVariable UUID id, @Valid @RequestBody StaffRolesRequest request) {
+    return staff.setRoles(id, request);
   }
 }

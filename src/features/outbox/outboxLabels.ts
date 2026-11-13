@@ -4,12 +4,14 @@ export const templateLabels: Record<string, string> = {
   'appointment-reminder': 'Напоминание за сутки',
   'appointment-cancelled': 'Отмена записи',
   receipt: 'Чек',
+  'refund-receipt': 'Чек возврата',
   unknown: 'Прежнее сообщение',
 }
 
 export const channelLabels: Record<string, string> = {
   WEBHOOK: 'Вебхук клиники',
   TELEGRAM: 'Telegram',
+  MAX: 'MAX',
   CASHBOX: 'Онлайн-касса',
   MOCK: 'Не настроен',
 }
@@ -27,6 +29,8 @@ export const reasonLabels: Record<string, string> = {
   CHANNEL_NOT_CONFIGURED: 'канал не настроен',
   WEBHOOK_SECRET_MISSING: 'не задан секрет вебхука',
   NO_TELEGRAM_CONTACT: 'у пациента нет Telegram',
+  NO_MAX_CONTACT: 'у пациента нет MAX',
+  TELEGRAM_RELAY_SECRET_MISSING: 'не задан секрет Telegram relay',
   FISCAL_NOT_CONFIGURED: 'касса не подключена',
   NO_CONSENT: 'нет действующего согласия',
   SHOWN_IN_BOT: 'подтверждение показано в боте',
@@ -38,6 +42,7 @@ export const reasonLabels: Record<string, string> = {
   EXPIRED: 'время записи прошло',
   APPOINTMENT_NOT_FOUND: 'запись не найдена',
   PAYMENT_NOT_FOUND: 'платёж не найден',
+  REFUND_NOT_FOUND: 'возврат не найден',
   NETWORK_ERROR: 'нет связи с получателем',
   DELIVERY_ERROR: 'ошибка доставки',
   DELIVERY_UNCERTAIN: 'неизвестно, дошло ли: без повтора',

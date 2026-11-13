@@ -19,11 +19,11 @@ public final class Signature {
   /** {@code sha256=<hex>} от HMAC-SHA256(secret, timestamp + "." + body). */
   public static String sign(String secret, long timestamp, String body) {
     try {
-      var mac = Mac.getInstance("HmacSHA256");
+      Mac mac = Mac.getInstance("HmacSHA256");
       mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-      var digest = mac.doFinal((timestamp + "." + body).getBytes(StandardCharsets.UTF_8));
-      var hex = new StringBuilder("sha256=");
-      for (var b : digest) hex.append(String.format("%02x", b));
+      byte[] digest = mac.doFinal((timestamp + "." + body).getBytes(StandardCharsets.UTF_8));
+      StringBuilder hex = new StringBuilder("sha256=");
+      for (byte b : digest) hex.append(String.format("%02x", b));
       return hex.toString();
     } catch (Exception ex) {
       throw new IllegalStateException("Signing failed", ex);

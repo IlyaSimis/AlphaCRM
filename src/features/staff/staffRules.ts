@@ -67,3 +67,8 @@ export function toCreateStaffInput(draft: StaffDraft): CreateStaffInput {
 
 /** Отключить себя нельзя — иначе клиника может остаться без администратора. */
 export const canDeactivate = (target: StaffItem, selfId: string) => target.active && target.id !== selfId
+
+/** Набор ролей после правки: хотя бы одна. */
+export function rolesChangeProblem(roles: readonly string[]) {
+  return roles.length === 0 ? 'Оставьте хотя бы одну роль' : null
+}

@@ -15,6 +15,12 @@ public record OnlineAppointment(
 
   static OnlineAppointment of(AppointmentView a) {
     return new OnlineAppointment(
-        a.id(), a.patientId(), a.practitionerId(), a.startsAt(), a.endsAt(), a.serviceName(), a.status());
+        a.id(),
+        a.patientId(),
+        a.practitionerId(),
+        a.startsAt(),
+        a.endsAt(),
+        a.serviceName(),
+        a.status());
   }
 }

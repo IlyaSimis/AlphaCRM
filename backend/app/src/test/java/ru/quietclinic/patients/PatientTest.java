@@ -4,11 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDate;
+import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class PatientTest {
   private static Patient patientWithPhone(String phone) {
-    var patient = new Patient("Anna Mikhailova", LocalDate.parse("1991-05-14"));
+    Patient patient = new Patient("Anna Mikhailova", LocalDate.parse("1991-05-14"));
     patient.contacts.add(new Contact(patient, "PHONE", phone));
     return patient;
   }
@@ -19,9 +21,9 @@ class PatientTest {
 
   @Test
   void reportsOnlyChangedFieldsAndTrimsInput() {
-    var patient = patientWithPhone("+79160000000");
+    Patient patient = patientWithPhone("+79160000000");
 
-    var changed =
+    List<String> changed =
         patient.update(
             details("  Anna Mikhailova-Orlova ", LocalDate.parse("1991-05-14"), "+79160000000"));
 
@@ -31,9 +33,9 @@ class PatientTest {
 
   @Test
   void updatesExistingPhoneInPlace() {
-    var patient = patientWithPhone("+79160000000");
+    Patient patient = patientWithPhone("+79160000000");
 
-    var changed =
+    List<String> changed =
         patient.update(details("Anna Mikhailova", LocalDate.parse("1991-05-15"), "+79990000000"));
 
     assertThat(changed).containsExactly("birthDate", "phone");
@@ -43,9 +45,9 @@ class PatientTest {
 
   @Test
   void addsPhoneWhenPatientHadNone() {
-    var patient = new Patient("Dmitry Volkov", LocalDate.parse("1985-11-02"));
+    Patient patient = new Patient("Dmitry Volkov", LocalDate.parse("1985-11-02"));
 
-    var changed =
+    List<String> changed =
         patient.update(details("Dmitry Volkov", LocalDate.parse("1985-11-02"), "+79030000000"));
 
     assertThat(changed).containsExactly("phone");
@@ -54,7 +56,7 @@ class PatientTest {
 
   @Test
   void noChangesGivesEmptyList() {
-    var patient = patientWithPhone("+79160000000");
+    Patient patient = patientWithPhone("+79160000000");
 
     assertThat(
             patient.update(
@@ -64,10 +66,10 @@ class PatientTest {
 
   @Test
   void emailAndSecondPhoneAreSeparateContactsAndBlankRemovesThem() {
-    var patient = patientWithPhone("+79160000000");
-    var staff = java.util.UUID.randomUUID();
+    Patient patient = patientWithPhone("+79160000000");
+    UUID staff = UUID.randomUUID();
 
-    var changed =
+    List<String> changed =
         patient.update(
             new PatientDetails(
                 "Anna Mikhailova",
@@ -86,7 +88,7 @@ class PatientTest {
         .extracting(c -> c.type)
         .containsExactlyInAnyOrder("PHONE", "EMAIL", "SECOND_PHONE");
 
-    var cleared =
+    List<String> cleared =
         patient.update(
             new PatientDetails(
                 "Anna Mikhailova", LocalDate.parse("1991-05-14"), "+79160000000", " ", "", null));
@@ -99,10 +101,10 @@ class PatientTest {
 
   @Test
   void grantsNewConsentAndRevokesOnlyOnce() {
-    var patient = patientWithPhone("+79160000000");
+    Patient patient = patientWithPhone("+79160000000");
     assertThat(patient.hasActiveConsent()).isFalse();
 
-    var consent = patient.grantConsent(" v1.3 ", "SIGNED_FORM");
+    Consent consent = patient.grantConsent(" v1.3 ", "SIGNED_FORM");
     assertThat(patient.hasActiveConsent()).isTrue();
     assertThat(consent.version).isEqualTo("v1.3");
 
@@ -111,13 +113,13 @@ class PatientTest {
     assertThat(patient.consents).hasSize(1);
     assertThatThrownBy(() -> patient.revokeConsent(consent.id))
         .hasMessageContaining("already revoked");
-    assertThatThrownBy(() -> patient.revokeConsent(java.util.UUID.randomUUID()))
+    assertThatThrownBy(() -> patient.revokeConsent(UUID.randomUUID()))
         .hasMessageContaining("not found");
   }
 
   @Test
   void registryUpdateReportsChangedFieldsAndClearsBlankValues() {
-    var patient = patientWithPhone("+79160000000");
+    Patient patient = patientWithPhone("+79160000000");
 
     assertThat(patient.updateRegistry("WEBSITE", " Call in the evening "))
         .containsExactly("referralSource", "registryNote");

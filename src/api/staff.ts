@@ -31,3 +31,10 @@ export async function resetStaffPassword(id: string, newPassword: string) {
   const response = await apiFetch(`/staff/${id}/password`, { method: 'POST', body: JSON.stringify({ newPassword }) })
   if (!response.ok) throw await failure(response, 'Не удалось задать пароль')
 }
+
+/** Все роли сотрудника: права складываются; менять можно роли не выше своих, свои — нельзя. */
+export async function setStaffRoles(id: string, roles: StaffRole[]): Promise<StaffItem> {
+  const response = await apiFetch(`/staff/${id}/roles`, { method: 'PUT', body: JSON.stringify({ roles }) })
+  if (!response.ok) throw await failure(response, 'Не удалось изменить роли')
+  return response.json()
+}

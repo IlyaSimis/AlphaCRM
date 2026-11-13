@@ -21,6 +21,10 @@ class DomainException extends RuntimeException {
     return new DomainException(code, message, HttpStatus.CONFLICT);
   }
 
+  static DomainException badRequest(String code, String message) {
+    return new DomainException(code, message, HttpStatus.BAD_REQUEST);
+  }
+
   static DomainException forbidden(String code, String message) {
     return new DomainException(code, message, HttpStatus.FORBIDDEN);
   }

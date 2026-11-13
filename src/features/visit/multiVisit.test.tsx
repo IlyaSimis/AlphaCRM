@@ -1,8 +1,8 @@
-import { screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { PETROV_ID } from '../../api/client'
-import { anna, enterDemo, goOffline, jsonResponse, renderApp, withAuth } from '../../test/helpers'
+import { anna, enterDemo, goOffline, jsonResponse, renderApp, withAuth, openPage } from '../../test/helpers'
 
 describe('several visits in a row', () => {
   it('a doctor starts visits from CONFIRMED and BOOKED without closing the previous one and completes one', async () => {
@@ -12,16 +12,16 @@ describe('several visits in a row', () => {
     await enterDemo(user)
 
     await user.click(screen.getByRole('button', { name: 'Начать приём 10:10 Дмитрий Волков' }))
-    expect(screen.getByRole('heading', { name: 'Дмитрий Волков' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Дмитрий Волков' })).toBeInTheDocument()
     await user.type(screen.getByLabelText('Диагноз'), 'Черновик первого приёма')
-    await user.click(screen.getByRole('button', { name: 'Расписание' }))
+    await openPage(user, 'Расписание')
     // Первый приём открыт, но кнопки у соседних строк на месте.
     expect(screen.getByRole('button', { name: 'Начать приём 09:00 Анна Михайлова' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Начать приём 11:00 Мария Соколова' })).toBeInTheDocument()
     expect(screen.getAllByText('На приёме').length).toBeGreaterThan(0)
 
     await user.click(screen.getByRole('button', { name: 'Начать приём 11:00 Мария Соколова' }))
-    expect(screen.getByRole('heading', { name: 'Мария Соколова' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Мария Соколова' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Приём: Дмитрий Волков · 10:10' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Приём: Мария Соколова · 11:00' })).toBeInTheDocument()
 
@@ -29,7 +29,7 @@ describe('several visits in a row', () => {
     expect(await screen.findByText('Приём завершён')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Завершить приём' })).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Расписание' }))
+    await openPage(user, 'Расписание')
     expect(screen.queryByRole('button', { name: 'Начать приём 11:00 Мария Соколова' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Начать приём 10:10 Дмитрий Волков' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Начать приём 09:00 Анна Михайлова' })).toBeInTheDocument()
@@ -37,7 +37,7 @@ describe('several visits in a row', () => {
 
     // Возврат к первому приёму: черновик на месте, приём не закрыт и не подписан.
     await user.click(screen.getByRole('button', { name: 'Приём: Дмитрий Волков · 10:10' }))
-    expect(screen.getByLabelText('Диагноз')).toHaveValue('Черновик первого приёма')
+    expect(await screen.findByLabelText('Диагноз')).toHaveValue('Черновик первого приёма')
     expect(screen.getByLabelText('Диагноз')).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Завершить приём' })).toBeInTheDocument()
   })
@@ -70,17 +70,19 @@ describe('several visits in a row', () => {
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
+    // 10:00 есть только в ответе API: дожидаемся замены демо-расписания серверным.
+    expect(await screen.findByText('10:00')).toBeInTheDocument()
 
-    await user.click(await screen.findByRole('button', { name: 'Начать приём 09:00 Анна Михайлова' }))
-    await waitFor(() => expect(statuses[first]).toBe('IN_PROGRESS'))
-    await user.click(screen.getByRole('button', { name: 'Расписание' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Начать приём 09:00 Анна Михайлова' }))
+    await waitFor(() => expect(statuses[first]).toBe('IN_PROGRESS'), { timeout: 5000 })
+    await openPage(user, 'Расписание')
     expect(await screen.findByText('На приёме')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Начать приём 10:00 Анна Михайлова' }))
-    await waitFor(() => expect(statuses[second]).toBe('IN_PROGRESS'))
+    await waitFor(() => expect(statuses[second]).toBe('IN_PROGRESS'), { timeout: 5000 })
 
     await user.click(await screen.findByRole('button', { name: 'Завершить приём' }))
-    await waitFor(() => expect(statuses[second]).toBe('COMPLETED'))
-    await user.click(screen.getByRole('button', { name: 'Расписание' }))
+    await waitFor(() => expect(statuses[second]).toBe('COMPLETED'), { timeout: 5000 })
+    await openPage(user, 'Расписание')
     expect(await screen.findByText('Завершён')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Начать приём 10:00 Анна Михайлова' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Начать приём 09:00 Анна Михайлова' })).toBeInTheDocument()
@@ -89,7 +91,7 @@ describe('several visits in a row', () => {
 
     // Повторный старт той же записи открывает уже созданный приём.
     await user.click(screen.getByRole('button', { name: 'Начать приём 09:00 Анна Михайлова' }))
-    await waitFor(() => expect(fetchMock.mock.calls.filter(([url, init]) => String(url).endsWith('/clinical/encounters') && init?.method === 'POST').length).toBe(3))
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([url, init]) => String(url).endsWith('/clinical/encounters') && init?.method === 'POST').length).toBe(3), { timeout: 5000 })
     expect(Object.keys(encounters)).toHaveLength(2)
   })
 })

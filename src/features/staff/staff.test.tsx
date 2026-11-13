@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { LEBEDEVA_ID, PETROV_ID } from '../../api/client'
 import type { StaffItem } from '../../api/types'
-import { anna, enterDemo, goOffline, jsonResponse, menu, renderApp, signIn, testAccounts, withAuth } from '../../test/helpers'
+import { anna, enterDemo, goOffline, jsonResponse, renderApp, signIn, testAccounts, withAuth, openPage, menuHas } from '../../test/helpers'
 
 describe('staff', () => {
   it('the sandbox has no people, only per-role accounts; you cannot deactivate yourself', async () => {
@@ -11,7 +11,7 @@ describe('staff', () => {
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user, 'ADMINISTRATOR')
-    await user.click(screen.getByRole('button', { name: 'Сотрудники' }))
+    await openPage(user, 'Сотрудники')
     expect(screen.getByText('Администратор песочницы (вы)')).toBeInTheDocument()
     expect(screen.queryByText(/Смирнова|Кузнецов|Орлова/)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Отключить Администратор песочницы' })).toBeDisabled()
@@ -57,7 +57,7 @@ describe('staff', () => {
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Сотрудники' }))
+    await openPage(user, 'Сотрудники')
     expect(await screen.findByText('Администратор (вы)')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Новый сотрудник' }))
@@ -102,11 +102,11 @@ describe('staff', () => {
     await user.type(screen.getByLabelText('Повторите пароль'), 'my-own-pass-1')
     await user.click(screen.getByRole('button', { name: 'Сменить пароль' }))
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
-    expect(menu().getByRole('button', { name: 'Касса' })).toBeInTheDocument()
+    expect(await menuHas(user, 'Касса')).toBe(true)
     await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/auth/password'))).toBe(true))
   })
 
-  it('a new doctor card with room and shift goes in the same request; an empty schedule only warns', async () => {
+  it('a manager creates a doctor and schedule card in one request; an empty schedule only warns', async () => {
     let posted: Record<string, unknown> | null = null
     let practitionerReads = 0
     const fetchMock = withAuth((address, init) => {
@@ -115,7 +115,7 @@ describe('staff', () => {
         posted = JSON.parse(String(init?.body))
         return jsonResponse({ id: '00000000-0000-0000-0000-0000000a0777', fullName: 'Врач Новый', username: 'new.doctor', role: 'DOCTOR', practitionerId: '00000000-0000-0000-0000-0000000a0777', active: true, mustChangePassword: true }, 201)
       }
-      if (address.endsWith('/staff')) return jsonResponse([testAccounts().admin, testAccounts()['t.petrov']])
+      if (address.endsWith('/staff')) return jsonResponse([testAccounts()['t.manager'], testAccounts()['t.petrov']])
       if (address.endsWith('/practitioners')) {
         practitionerReads += 1
         return jsonResponse([
@@ -126,11 +126,11 @@ describe('staff', () => {
       if (address.includes('/patients')) return jsonResponse([anna])
       if (address.includes('/appointments')) return jsonResponse([])
       return jsonResponse({}, 404)
-    }, 'admin')
+    }, 't.manager')
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Сотрудники' }))
+    await openPage(user, 'Сотрудники')
     // Кабинет виден в списке врачей; пустой кабинет — без подписи.
     expect(await screen.findByText('t.petrov · Врач · Психиатр · кабинет 101')).toBeInTheDocument()
 
@@ -145,6 +145,7 @@ describe('staff', () => {
     await user.keyboard('{Escape}')
     await user.click(screen.getByRole('button', { name: 'Новая карточка' }))
 
+    expect(screen.getByText(/Врач сразу появится в расписании/)).toBeInTheDocument()
     expect(screen.getByText(/Смен нет: карточка создастся/)).toBeInTheDocument()
     await user.type(screen.getByLabelText('ФИО'), 'Врач Новый')
     await user.type(screen.getByLabelText('Специальность'), 'Психотерапевт')

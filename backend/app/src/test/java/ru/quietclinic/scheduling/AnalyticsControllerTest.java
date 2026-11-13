@@ -48,8 +48,18 @@ class AnalyticsControllerTest {
             get("/api/v1/analytics/appointments")
                 .param("from", "2026-10-01")
                 .param("to", "2026-10-31")
-                .with(staff.role("DOCTOR")))
+                .with(staff.role("CASHIER")))
         .andExpect(status().isForbidden());
+    // Врач видит аналитику только своих приёмов (insights.analytics.read-own).
+    mvc.perform(
+            get("/api/v1/analytics/appointments")
+                .param("from", "2026-10-01")
+                .param("to", "2026-10-31")
+                .param("practitionerId", StaffSessions.LEBEDEVA)
+                .with(staff.role("DOCTOR")))
+        .andExpect(status().isOk())
+        .andExpect(
+            jsonPath("$.rows[?(@.practitionerId == '" + StaffSessions.LEBEDEVA + "')]").isEmpty());
     mvc.perform(
             get("/api/v1/analytics/appointments")
                 .param("from", "2026-10-31")

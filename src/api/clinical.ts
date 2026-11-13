@@ -1,5 +1,5 @@
 import { failure, apiFetch } from './client'
-import type { DocumentSummary, EncounterView, NoteFields, SignedDocumentItem } from './types'
+import type { BreakGlassGrant, BreakGlassReason, DocumentSummary, EncounterView, NoteFields, SignedDocumentItem } from './types'
 
 export const TEMPLATE_VERSION = 'v2.4'
 
@@ -65,4 +65,25 @@ export async function amendDocument(documentId: string): Promise<DocumentSummary
   const response = await apiFetch(`/clinical/documents/${documentId}/amendments`, { method: 'POST', body: JSON.stringify({ templateVersion: TEMPLATE_VERSION }) })
   if (!response.ok) throw await failure(response, 'Не удалось создать дополнение')
   return toSummary(await response.json())
+}
+
+/** Действующий экстренный доступ владельца к пациенту (active = false — нет). */
+export async function loadBreakGlass(patientId: string): Promise<BreakGlassGrant> {
+  const response = await apiFetch(`/patients/${patientId}/break-glass`)
+  if (!response.ok) throw await failure(response, 'Не удалось проверить экстренный доступ')
+  return response.json()
+}
+
+/** Экстренный доступ: причина, пояснение и повторный ввод пароля — на 60 минут, только чтение. */
+export async function requestBreakGlass(patientId: string, input: { reasonCode: BreakGlassReason; reasonText: string; password: string }): Promise<BreakGlassGrant> {
+  const response = await apiFetch(`/patients/${patientId}/break-glass`, { method: 'POST', body: JSON.stringify(input) })
+  if (!response.ok) throw await failure(response, 'Экстренный доступ не выдан')
+  return response.json()
+}
+
+/** Журнал экстренных доступов за период — владелец и старший администратор. */
+export async function loadBreakGlassLog(from: string, to: string): Promise<BreakGlassGrant[]> {
+  const response = await apiFetch(`/clinical/break-glass?${new URLSearchParams({ from, to })}`)
+  if (!response.ok) throw await failure(response, 'Журнал экстренных доступов недоступен')
+  return response.json()
 }

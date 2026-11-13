@@ -25,7 +25,7 @@ record BotBookingRequest(
     @NotBlank @Size(max = 80) String consentVersion) {
 
   String fullName() {
-    var name = lastName.trim() + " " + firstName.trim();
+    String name = lastName.trim() + " " + firstName.trim();
     return patronymic == null || patronymic.isBlank() ? name : name + " " + patronymic.trim();
   }
 }

@@ -35,10 +35,10 @@ class WebhookChannel {
 
   DeliveryResult send(PatientMessage message) {
     if (secret.isBlank()) return DeliveryResult.notConfigured(NAME, "WEBHOOK_SECRET_MISSING");
-    var body = body(message);
-    var timestamp = Instant.now().getEpochSecond();
+    String body = body(message);
+    long timestamp = Instant.now().getEpochSecond();
     try {
-      var status =
+      int status =
           http.postJson(
               URI.create(url),
               body,
@@ -52,12 +52,14 @@ class WebhookChannel {
     }
   }
 
-  /** Тело вебхука: поля шаблона и готовый текст; из адресов — только chat id Telegram. */
+  /** Тело вебхука: поля шаблона, текст и внешние id подключённых мессенджеров, без телефона. */
   static String body(PatientMessage message) {
-    var recipient = new LinkedHashMap<String, Object>();
+    Map<String, Object> recipient = new LinkedHashMap<>();
     recipient.put("patientId", message.patientId().toString());
     recipient.put("telegramChatId", message.telegramChatId());
-    var fields = new LinkedHashMap<String, Object>();
+    recipient.put("maxUserId", message.maxUserId());
+    recipient.put("preferredMessenger", message.preferredMessenger());
+    Map<String, Object> fields = new LinkedHashMap<>();
     fields.put("idempotencyKey", message.idempotencyKey());
     fields.put("template", message.template());
     fields.put("appointmentId", message.appointmentId().toString());

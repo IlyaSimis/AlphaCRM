@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ChargeItem, ScheduleItem } from '../../api/types'
-import { buildCashierRows, localCharge, totals } from './cashier'
+import { buildCashierRows, localCharge, paymentStructure, totals } from './cashierRules'
 
 const visit = (id: string, date: string, statusCode: ScheduleItem['statusCode'] = 'COMPLETED', amountMinor: number | null = 300000): ScheduleItem => ({
   id, date, time: '09:00', duration: '30 мин', minutes: 30, name: 'Анна', type: 'Повторный приём', status: '', statusCode, tone: '', practitionerId: 'd', patientId: 'p', amountMinor, currency: 'RUB',
@@ -14,11 +14,45 @@ describe('cashier', () => {
       [charge('a', 'PAID'), charge('b', 'PENDING', 450000)],
     )
     expect(rows.map((row) => [row.appointment.id, row.state])).toEqual([['c', 'NO_CHARGE'], ['b', 'PENDING'], ['a', 'PAID']])
-    expect(totals(rows)).toEqual({ pending: 450000, paid: 300000, withoutCharge: 1 })
+    expect(totals(rows)).toEqual({ pending: 450000, paid: 300000, refunded: 0, withoutCharge: 1, awaitingAmount: 0 })
   })
 
   it('a local charge takes the appointment price snapshot', () => {
     expect(localCharge(visit('a', '2026-10-06'))).toMatchObject({ appointmentId: 'a', amountMinor: 300000, status: 'PENDING' })
     expect(localCharge(visit('a', '2026-10-06', 'COMPLETED', null))).toBeNull()
+  })
+
+  it('an open-price visit gets a charge that waits for the amount and sorts before pending ones', () => {
+    const open = { ...visit('o', '2026-10-20', 'COMPLETED', null), priceMode: 'OPEN' as const, estimateMinor: 200000 }
+    expect(localCharge(open)).toMatchObject({ appointmentId: 'o', amountMinor: null, status: 'AWAITING_AMOUNT', estimateMinor: 200000 })
+    const rows = buildCashierRows([visit('b', '2026-10-13'), open], [charge('b', 'PENDING'), { ...charge('o', 'AWAITING_AMOUNT'), amountMinor: null }])
+    expect(rows.map((row) => row.state)).toEqual(['AWAITING_AMOUNT', 'PENDING'])
+    expect(totals(rows).awaitingAmount).toBe(1)
+  })
+
+  it('voided and refunded charges close the row: they sort last and do not count as paid', () => {
+    const rows = buildCashierRows(
+      [visit('p', '2026-10-06'), visit('r', '2026-10-07'), visit('v', '2026-10-08'), visit('n', '2026-10-09')],
+      [charge('p', 'PAID'), charge('r', 'REFUNDED'), { ...charge('v', 'VOIDED'), amountMinor: null }, charge('n', 'PENDING')],
+    )
+    expect(rows.map((row) => [row.appointment.id, row.state])).toEqual([['n', 'PENDING'], ['p', 'PAID'], ['r', 'REFUNDED'], ['v', 'VOIDED']])
+    expect(totals(rows)).toMatchObject({ paid: 300000, refunded: 300000, pending: 300000 })
+  })
+
+  it('groups paid and refunded charges by payment method', () => {
+    const rows = buildCashierRows(
+      [visit('card', '2026-10-06'), visit('sbp', '2026-10-07'), visit('manual', '2026-10-08'), visit('pending', '2026-10-09')],
+      [
+        { ...charge('card', 'PAID'), paymentMethod: 'CARD' },
+        { ...charge('sbp', 'REFUNDED'), paymentMethod: 'SBP' },
+        { ...charge('manual', 'PAID'), paymentMethod: 'MANUAL' },
+        charge('pending', 'PENDING'),
+      ],
+    )
+    expect(paymentStructure(rows)).toEqual({
+      CARD: { count: 1, amountMinor: 300000 },
+      SBP: { count: 1, amountMinor: 300000 },
+      MANUAL: { count: 1, amountMinor: 300000 },
+    })
   })
 })

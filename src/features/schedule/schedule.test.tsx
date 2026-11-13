@@ -3,6 +3,13 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { TEST_CSRF, anna, chooseRole, enterDemo, goOffline, jsonResponse, openSchedule, renderApp, signIn, withAuth } from '../../test/helpers'
 
+type User = ReturnType<typeof userEvent.setup>
+
+async function chooseTime(user: User, time: string) {
+  await user.click(screen.getByRole('combobox', { name: 'Время' }))
+  await user.click(screen.getByRole('option', { name: time }))
+}
+
 describe('schedule', () => {
   it('books an appointment from the schedule', async () => {
     goOffline()
@@ -11,8 +18,8 @@ describe('schedule', () => {
     await enterDemo(user)
     await user.click(screen.getByRole('button', { name: /новая запись/i }))
     expect(screen.getByRole('dialog')).toHaveTextContent('Новая запись')
-    await waitFor(() => expect(screen.getByLabelText('Время')).toHaveValue('13:00'))
-    fireEvent.change(screen.getByLabelText('Время'), { target: { value: '15:45' } })
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Время' })).toHaveTextContent('13:00'))
+    await chooseTime(user, '15:45')
     await user.click(screen.getByRole('button', { name: /создать запись/i }))
     expect(await screen.findByText('15:45')).toBeInTheDocument()
     expect(screen.getByText('Демо-режим: запись видна только до обновления страницы')).toBeInTheDocument()
@@ -40,20 +47,20 @@ describe('schedule', () => {
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /новая запись/i }))
-    await waitFor(() => expect(screen.getByLabelText('Время')).toHaveValue('13:00'))
-    fireEvent.change(screen.getByLabelText('Время'), { target: { value: '16:10' } })
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Время' })).toHaveTextContent('13:00'))
+    await chooseTime(user, '16:00')
     await user.click(screen.getByRole('button', { name: /создать запись/i }))
-    expect(await screen.findByText('16:10')).toBeInTheDocument()
+    expect(await screen.findByText('16:00', { selector: '.schedule-appointment *' })).toBeInTheDocument()
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
 
     await user.click(screen.getByRole('button', { name: /новая запись/i }))
-    await waitFor(() => expect(screen.getByLabelText('Время')).toHaveValue('13:00'))
-    fireEvent.change(screen.getByLabelText('Время'), { target: { value: '16:10' } })
-    expect(screen.getByLabelText('Время')).toHaveValue('16:10')
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Время' })).toHaveTextContent('13:00'))
+    await chooseTime(user, '16:00')
+    expect(screen.getByRole('combobox', { name: 'Время' })).toHaveTextContent('16:00')
     await user.click(screen.getByRole('button', { name: /создать запись/i }))
     expect(await screen.findByText('Интервал врача уже занят')).toBeInTheDocument()
     expect(screen.getByRole('dialog')).toBeInTheDocument()
-    expect(screen.getAllByText('16:10')).toHaveLength(1)
+    expect(screen.getAllByText('16:00', { selector: '.schedule-appointment *' })).toHaveLength(1)
   })
 
   it('switches the schedule day and shows the appointment on the chosen date', async () => {
@@ -69,9 +76,9 @@ describe('schedule', () => {
 
     await user.click(screen.getByRole('button', { name: /новая запись/i }))
     fireEvent.change(screen.getByLabelText('Дата'), { target: { value: '2026-10-22' } })
-    fireEvent.change(screen.getByLabelText('Время'), { target: { value: '14:20' } })
+    await chooseTime(user, '14:15')
     await user.click(screen.getByRole('button', { name: /создать запись/i }))
-    expect(await screen.findByText('14:20')).toBeInTheDocument()
+    expect(await screen.findByText('14:15')).toBeInTheDocument()
     expect(screen.getByLabelText('День расписания')).toHaveValue('2026-10-22')
     expect(screen.queryByText('Дмитрий Волков')).not.toBeInTheDocument()
   })
@@ -101,24 +108,39 @@ describe('schedule', () => {
     await openSchedule(user)
     await user.click(screen.getByRole('button', { name: /новая запись/i }))
     fireEvent.change(screen.getByLabelText('Дата'), { target: { value: '2026-10-22' } })
-    fireEvent.change(screen.getByLabelText('Время'), { target: { value: '15:05' } })
+    await chooseTime(user, '15:00')
     await user.click(screen.getByRole('button', { name: /создать запись/i }))
-    expect(await screen.findByText('15:05')).toBeInTheDocument()
+    expect(await screen.findByText('15:00', { selector: '.schedule-appointment *' })).toBeInTheDocument()
     expect(screen.getByLabelText('День расписания')).toHaveValue('2026-10-22')
     expect(screen.getByText('22 октября 2026, четверг')).toBeInTheDocument()
     first.unmount()
 
     renderApp()
+    expect(await screen.findByText('API подключён')).toBeInTheDocument()
     await openSchedule(user)
-    expect(await screen.findByText('15:05')).toBeInTheDocument()
+    expect(await screen.findByText('15:00', { selector: '.schedule-appointment *' })).toBeInTheDocument()
     expect(screen.getByLabelText('День расписания')).toHaveValue('2026-10-22')
-    expect(screen.getByRole('button', { name: 'Отменить запись 15:05 Анна Михайлова' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Отменить запись 15:00 Анна Михайлова' })).toBeInTheDocument()
     // «Сегодня» есть и в меню, и в расписании — нажимаем кнопку расписания.
     await user.click(within(document.querySelector('.content') as HTMLElement).getByRole('button', { name: 'Сегодня' }))
     const now = new Date()
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     expect(screen.getByLabelText('День расписания')).toHaveValue(today)
-    if (today !== '2026-10-22') expect(screen.queryByText('15:05')).not.toBeInTheDocument()
+    if (today !== '2026-10-22') expect(screen.queryByText('15:00', { selector: '.schedule-appointment *' })).not.toBeInTheDocument()
+  })
+
+  it('uses compact layouts for 30-minute and other sub-hour appointments', async () => {
+    goOffline()
+    const user = userEvent.setup()
+    renderApp()
+    await enterDemo(user)
+
+    const compact = screen.getByText('10:10', { selector: '.schedule-appointment *' }).closest('.schedule-appointment')
+    const short = screen.getByText('09:00', { selector: '.schedule-appointment *' }).closest('.schedule-appointment')
+    expect(compact).toHaveClass('compact')
+    expect(compact).toHaveStyle({ height: '44px' })
+    expect(short).toHaveClass('short')
+    expect(short).toHaveStyle({ height: '76px' })
   })
 
   it('only the administrator cancels an appointment', async () => {
@@ -162,14 +184,15 @@ describe('schedule', () => {
         status = JSON.parse(String(init?.body)).status
         return jsonResponse({ status })
       }
-      if (address.includes('/appointments')) return jsonResponse([{ id: '00000000-0000-0000-0000-000000000301', patientId: anna.id, practitionerId: '00000000-0000-0000-0000-000000000201', startsAt: '2026-10-20T09:00:00Z', endsAt: '2026-10-20T09:50:00Z', serviceName: 'Первичный приём', status }])
+      if (address.includes('/appointments')) return jsonResponse([{ id: '00000000-0000-0000-0000-000000000301', patientId: anna.id, practitionerId: '00000000-0000-0000-0000-000000000201', startsAt: '2026-10-20T09:00:00Z', endsAt: '2026-10-20T09:50:00Z', serviceName: 'Серверный приём', status }])
       return jsonResponse({}, 404)
     }, 't.petrov')
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
+    expect(await screen.findByText('Серверный приём')).toBeInTheDocument()
     await user.click(await screen.findByRole('button', { name: 'Изменить статус 09:00 Анна Михайлова' }))
-    await user.click(screen.getByRole('menuitem', { name: 'Завершить приём' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Завершить приём' }))
     expect(await screen.findByText('Завершён')).toBeInTheDocument()
     const call = fetchMock.mock.calls.find(([url]) => String(url).includes('/status'))
     // Роль и автор — из сессии на сервере; клиент шлёт только cookie и CSRF-заголовок.
@@ -219,26 +242,26 @@ describe('schedule', () => {
     const user = userEvent.setup()
     renderApp()
     await signIn(user, 't.lebedeva')
-    expect(await screen.findByText('API подключён')).toBeInTheDocument()
+    expect((await screen.findAllByText('API подключён')).length).toBeGreaterThan(0)
     expect(screen.getByText('Ольга Лебедева', { selector: '.profile *' })).toBeInTheDocument()
     await user.click(await screen.findByRole('button', { name: 'Изменить статус 15:00 Анна Михайлова' }))
-    await user.click(screen.getByRole('menuitem', { name: 'Завершить приём' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Завершить приём' }))
     expect(await screen.findByText('Завершён')).toBeInTheDocument()
     const call = fetchMock.mock.calls.find(([url]) => String(url).includes('/status'))
     expect(call?.[1]?.headers).not.toHaveProperty('X-Actor-Id')
   })
 
-  it('does not send a booking outside working hours and shows the error', async () => {
+  it('offers only times inside the doctor working hours', async () => {
     const fetchMock = vi.fn().mockRejectedValue(new Error('offline'))
     vi.stubGlobal('fetch', fetchMock)
     const user = userEvent.setup()
     renderApp()
     await enterDemo(user)
     await user.click(screen.getByRole('button', { name: /новая запись/i }))
-    fireEvent.change(screen.getByLabelText('Время'), { target: { value: '19:00' } })
-    expect(screen.getByText('Время вне рабочих часов врача')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: /создать запись/i }))
-    expect(screen.getByRole('dialog')).toHaveTextContent('Время вне рабочих часов врача')
+    await user.click(screen.getByRole('combobox', { name: 'Время' }))
+    expect(screen.getByRole('option', { name: '13:00' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: '19:00' })).not.toBeInTheDocument()
+    await user.keyboard('{Escape}')
     expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === 'POST')).toBe(false)
   })
 
@@ -292,5 +315,33 @@ describe('schedule', () => {
     expect(await screen.findByText('Демо-режим: перенос виден только до обновления страницы')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Перенести запись 16:00 Мария Соколова' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Перенести запись 11:00 Мария Соколова' })).not.toBeInTheDocument()
+  })
+
+  it('creates a full patient card and one linked appointment from a free grid slot', async () => {
+    goOffline()
+    const user = userEvent.setup()
+    renderApp()
+    await enterDemo(user)
+
+    await user.click(screen.getByRole('button', { name: 'Свободное время: Александр Петров, 13:30' }))
+    expect(screen.getByRole('combobox', { name: 'Время' })).toHaveTextContent('13:30')
+    await user.click(screen.getByRole('combobox', { name: 'Пациент' }))
+    await user.click(screen.getByRole('option', { name: 'Новый пациент' }))
+    await user.type(screen.getByLabelText(/^ФИО нового пациента/), 'Сидоров Иван Петрович')
+    await user.click(screen.getByRole('button', { name: 'Далее: карточка пациента' }))
+
+    expect(screen.getByLabelText(/^Фамилия/)).toHaveValue('Сидоров')
+    expect(screen.getByLabelText(/^Имя/)).toHaveValue('Иван')
+    expect(screen.getByLabelText('Отчество')).toHaveValue('Петрович')
+    fireEvent.change(screen.getByLabelText(/^Дата рождения/), { target: { value: '1988-04-16' } })
+    await user.type(screen.getByLabelText(/^Телефон\s*\*?$/), '+7 903 555-44-33')
+    await user.click(screen.getByRole('button', { name: 'Сохранить пациента' }))
+
+    expect(await screen.findByRole('button', { name: 'Сидоров Иван Петрович' })).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await user.click(screen.getByRole('tab', { name: 'Пациенты' }))
+    expect(await screen.findByText('Сидоров Иван Петрович')).toBeInTheDocument()
+    await user.click(screen.getByRole('tab', { name: 'Расписание' }))
+    expect(screen.getAllByRole('button', { name: 'Сидоров Иван Петрович' })).toHaveLength(1)
   })
 })

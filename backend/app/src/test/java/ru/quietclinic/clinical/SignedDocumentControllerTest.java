@@ -59,7 +59,7 @@ class SignedDocumentControllerTest {
 
   /** Петров принимает Марию, подписывает документ и возвращает id приёма и документа. */
   private String[] signedVisit(String startsAt, String endsAt, String diagnosis) throws Exception {
-    var booked =
+    String booked =
         mvc.perform(
                 post("/api/v1/appointments")
                     .with(staff.admin())
@@ -75,7 +75,7 @@ class SignedDocumentControllerTest {
             .getResponse()
             .getContentAsString();
     String appointment = JsonPath.read(booked, "$.id");
-    var started =
+    String started =
         petrov(
                 post("/api/v1/clinical/encounters")
                     .contentType(MediaType.APPLICATION_JSON)
@@ -94,7 +94,7 @@ class SignedDocumentControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(note(diagnosis)))
         .andExpect(status().isOk());
-    var draft =
+    String draft =
         petrov(
                 post("/api/v1/clinical/encounters/" + encounter + "/documents")
                     .contentType(MediaType.APPLICATION_JSON)
@@ -110,9 +110,10 @@ class SignedDocumentControllerTest {
 
   @Test
   void archiveShowsSignedSnapshotNotCurrentNoteAndSignedAmendments() throws Exception {
-    var visit = signedVisit("2026-12-22T16:00:00Z", "2026-12-22T16:30:00Z", "Diagnosis at signing");
-    var encounter = visit[0];
-    var original = visit[1];
+    String[] visit =
+        signedVisit("2026-12-22T16:00:00Z", "2026-12-22T16:30:00Z", "Diagnosis at signing");
+    String encounter = visit[0];
+    String original = visit[1];
 
     // Заметку правят после подписи — в архиве остаётся подписанный текст.
     petrov(
@@ -120,7 +121,7 @@ class SignedDocumentControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(note("Diagnosis after amendment")))
         .andExpect(status().isOk());
-    var amendment =
+    String amendment =
         JsonPath.<String>read(
             petrov(
                     post("/api/v1/clinical/documents/" + original + "/amendments")
@@ -158,7 +159,7 @@ class SignedDocumentControllerTest {
 
   @Test
   void doctorSeesOnlyOwnSignaturesManagerSeesAllAndFilters() throws Exception {
-    var document =
+    String document =
         signedVisit("2026-12-29T16:00:00Z", "2026-12-29T16:30:00Z", "Petrov diagnosis")[1];
 
     mvc.perform(get(ARCHIVE).with(staff.doctor(LEBEDEVA)))
@@ -189,7 +190,7 @@ class SignedDocumentControllerTest {
 
   @Test
   void archiveIsReadOnlyAndAuditedWithoutText() throws Exception {
-    var document =
+    String document =
         signedVisit("2027-01-05T16:00:00Z", "2027-01-05T16:30:00Z", "Secret diagnosis")[1];
     mvc.perform(get(ARCHIVE + "/" + document).with(staff.role("MANAGER")))
         .andExpect(status().isOk());

@@ -3,7 +3,9 @@ package ru.quietclinic.patients;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import java.util.UUID;
 
 @Entity
@@ -11,14 +13,17 @@ import java.util.UUID;
 class Contact {
   @Id UUID id;
 
-  @jakarta.persistence.ManyToOne(optional = false)
+  @ManyToOne(optional = false)
   Patient patient;
 
   @Column(nullable = false)
   String type;
 
-  @Column(name = "contact_value", nullable = false)
-  String value;
+  @Column(name = "contact_value", nullable = false, length = 2048)
+  String encryptedValue;
+
+  /** Заполняется PatientPrivacyService после проверки доступа к сущности. */
+  @Transient String value;
 
   protected Contact() {}
 

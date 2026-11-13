@@ -1,7 +1,7 @@
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-import { jsonResponse, renderApp, withAuth } from '../../test/helpers'
+import { jsonResponse, renderApp, withAuth, openPage } from '../../test/helpers'
 
 describe('audit log', () => {
   it('loads the audit log from the server', async () => {
@@ -15,7 +15,7 @@ describe('audit log', () => {
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Журнал аудита' }))
+    await openPage(user, 'Журнал аудита')
     expect(await screen.findByText('Изменение данных пациента')).toBeInTheDocument()
     // Имя автора подставляет сервер из сотрудников своей клиники.
     expect(screen.getByText('Администратор', { selector: 'td' })).toBeInTheDocument()
@@ -39,7 +39,7 @@ describe('audit log', () => {
     const user = userEvent.setup()
     renderApp()
     expect(await screen.findByText('API подключён')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Журнал аудита' }))
+    await openPage(user, 'Журнал аудита')
     await waitFor(() => expect(screen.getAllByText('Изменение данных пациента')).toHaveLength(20))
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/audit/page?page=0&size=20'))).toBe(true)
     await user.click(screen.getByRole('button', { name: 'Страница 2' }))

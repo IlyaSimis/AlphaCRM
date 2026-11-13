@@ -17,4 +17,10 @@ interface AuditRepository extends JpaRepository<AuditEvent, UUID> {
 
   Page<AuditEvent> findByActorIdInAndResultOrderByOccurredAtDescIdDesc(
       Collection<UUID> actorIds, String result, Pageable page);
+
+  Page<AuditEvent> findByActorIdInAndObjectTypeNotInOrderByOccurredAtDescIdDesc(
+      Collection<UUID> actorIds, Collection<String> hiddenTypes, Pageable page);
+
+  Page<AuditEvent> findByActorIdInAndResultAndObjectTypeNotInOrderByOccurredAtDescIdDesc(
+      Collection<UUID> actorIds, String result, Collection<String> hiddenTypes, Pageable page);
 }

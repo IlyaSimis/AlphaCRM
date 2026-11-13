@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 class MedicalDocumentTest {
   @Test
   void signingLocksExactSnapshotAndProducesHash() {
-    var document = new MedicalDocument(UUID.randomUUID(), null, "v2.4", "encrypted");
+    MedicalDocument document = new MedicalDocument(UUID.randomUUID(), null, "v2.4", "encrypted");
 
     document.sign(UUID.randomUUID(), "{\"diagnosis\":\"synthetic\"}");
 
@@ -21,10 +21,10 @@ class MedicalDocumentTest {
 
   @Test
   void amendmentKeepsReferenceToOriginal() {
-    var original = new MedicalDocument(UUID.randomUUID(), null, "v2.4", "encrypted");
+    MedicalDocument original = new MedicalDocument(UUID.randomUUID(), null, "v2.4", "encrypted");
     original.sign(UUID.randomUUID(), "content");
 
-    var amendment =
+    MedicalDocument amendment =
         new MedicalDocument(original.encounterId, original.id, "v2.4", "encrypted-amendment");
 
     assertThat(amendment.amendsDocumentId).isEqualTo(original.id);
